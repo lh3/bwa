@@ -45,6 +45,7 @@ int bwa_approx_mapQ(const bwa_seq_t *p, int mm);
 void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, int mode, int max_top2);
 bntseq_t *bwa_open_nt(const char *prefix);
 void bwa_print_sam_SQ(const bntseq_t *bns);
+void bwa_print_sam_PG();
 
 pe_opt_t *bwa_init_pe_opt()
 {
@@ -689,6 +690,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 	// core loop
 	bwa_print_sam_SQ(bns);
+	bwa_print_sam_PG();
 	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt.mode & BWA_MODE_COMPREAD, opt.trim_qual)) != 0) {
 		int cnt_chg;
 		isize_info_t ii;
@@ -763,7 +765,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		case 'n': popt->n_multi = atoi(optarg); break;
 		case 'N': popt->N_multi = atoi(optarg); break;
 		case 'c': popt->ap_prior = atof(optarg); break;
-        case 'f': freopen(optarg, "w", stdout); break;
+		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'A': popt->force_isize = 1; break;
 		default: return 1;
 		}

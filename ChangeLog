@@ -1,4 +1,53 @@
 ------------------------------------------------------------------------
+r1605 | lh3 | 2010-12-29 20:20:20 -0500 (Wed, 29 Dec 2010) | 3 lines
+Changed paths:
+   M /branches/prog/bwa/bwtsw2_aux.c
+   M /branches/prog/bwa/main.c
+
+ * bwa-0.5.9rc1-2 (r1605)
+ * fixed a typo/bug in bwasw
+
+------------------------------------------------------------------------
+r1587 | lh3 | 2010-12-21 18:48:30 -0500 (Tue, 21 Dec 2010) | 2 lines
+Changed paths:
+   M /branches/prog/bwa/bwa.1
+
+a typo in the manual
+
+------------------------------------------------------------------------
+r1586 | lh3 | 2010-12-21 18:47:48 -0500 (Tue, 21 Dec 2010) | 3 lines
+Changed paths:
+   M /branches/prog/bwa/bwape.c
+   M /branches/prog/bwa/bwase.c
+   M /branches/prog/bwa/bwtaln.c
+   M /branches/prog/bwa/bwtsw2_main.c
+   M /branches/prog/bwa/main.c
+   M /branches/prog/bwa/utils.c
+   M /branches/prog/bwa/utils.h
+
+ * bwa-0.5.9rc1-1 (r1586)
+ * a few patches by John
+
+------------------------------------------------------------------------
+r1562 | lh3 | 2010-12-10 01:02:06 -0500 (Fri, 10 Dec 2010) | 2 lines
+Changed paths:
+   M /branches/prog/bwa/bwa.1
+   M /branches/prog/bwa/bwape.c
+   M /branches/prog/bwa/bwase.c
+
+documentation on specifying @RG
+
+------------------------------------------------------------------------
+r1561 | lh3 | 2010-12-10 00:45:40 -0500 (Fri, 10 Dec 2010) | 2 lines
+Changed paths:
+   M /branches/prog/bwa/ChangeLog
+   M /branches/prog/bwa/NEWS
+   M /branches/prog/bwa/bwa.1
+   M /branches/prog/bwa/main.c
+
+Release bwa-0.5.9rc1 (r1561)
+
+------------------------------------------------------------------------
 r1560 | lh3 | 2010-12-10 00:29:08 -0500 (Fri, 10 Dec 2010) | 3 lines
 Changed paths:
    M /branches/prog/bwa/bwaseqio.c

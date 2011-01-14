@@ -290,7 +290,7 @@ static void flag_fr(bwtsw2_t *b[2])
 	for (i = 0; i < b[0]->n; ++i) {
 		bsw2hit_t *p = b[0]->hits + i;
 		for (j = 0; j < b[1]->n; ++j) {
-			bsw2hit_t *q = b[1]->hits + i;
+			bsw2hit_t *q = b[1]->hits + j;
 			if (q->beg == p->beg && q->end == p->end && q->k == p->k && q->len == p->len && q->G == p->G) {
 				q->flag |= 0x30000; p->flag |= 0x30000;
 				break;

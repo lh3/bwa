@@ -3,7 +3,7 @@
 #include "main.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.5.9rc1 (r1561)"
+#define PACKAGE_VERSION "0.5.9rc1-2 (r1605)"
 #endif
 
 static int usage()
@@ -29,6 +29,11 @@ static int usage()
 	fprintf(stderr, "         stdsw         standard SW/NW alignment\n");
 	fprintf(stderr, "\n");
 	return 1;
+}
+
+void bwa_print_sam_PG()
+{
+	printf("@PG\tID:bwa\tPN:bwa\tVN:%s\n", PACKAGE_VERSION);
 }
 
 int main(int argc, char *argv[])

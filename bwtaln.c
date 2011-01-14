@@ -268,7 +268,7 @@ int bwa_aln(int argc, char *argv[])
 		case 'q': opt->trim_qual = atoi(optarg); break;
 		case 'c': opt->mode &= ~BWA_MODE_COMPREAD; break;
 		case 'N': opt->mode |= BWA_MODE_NONSTOP; opt->max_top2 = 0x7fffffff; break;
-        case 'f': freopen(optarg, "wb", stdout); break;
+		case 'f': xreopen(optarg, "wb", stdout); break;
 		case 'b': opt->mode |= BWA_MODE_BAM; break;
 		case '0': opt->mode |= BWA_MODE_BAM_SE; break;
 		case '1': opt->mode |= BWA_MODE_BAM_READ1; break;

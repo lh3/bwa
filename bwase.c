@@ -14,6 +14,8 @@
 int g_log_n[256];
 char *bwa_rg_line, *bwa_rg_id;
 
+void bwa_print_sam_PG();
+
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi)
 {
 	int i, cnt, best;
@@ -604,6 +606,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	if (!(opt.mode & BWA_MODE_COMPREAD)) // in color space; initialize ntpac
 		ntbns = bwa_open_nt(prefix);
 	bwa_print_sam_SQ(bns);
+	bwa_print_sam_PG();
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
 	// core loop
@@ -662,7 +665,7 @@ int bwa_sai2sam_se(int argc, char *argv[])
 			}
 			break;
 		case 'n': n_occ = atoi(optarg); break;
-        case 'f': freopen(optarg, "w", stdout); break;
+		case 'f': xreopen(optarg, "w", stdout); break;
 		default: return 1;
 		}
 	}
