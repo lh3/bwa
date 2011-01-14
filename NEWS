@@ -1,0 +1,528 @@
+Beta Release Candidate 0.5.9rc1 (10 December, 2010)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes in bwasw:
+
+ * Output unmapped reads.
+
+ * For a repetitive read, choose a random hit instead of a fixed
+   one. This is not well tested.
+
+Notable changes in bwa-short:
+
+ * Fixed a bug in the SW scoring system, which may lead to unexpected
+   gaps towards the end of a read.
+
+ * Fixed a bug which invalidates the randomness of repetitive reads.
+
+ * Fixed a rare memory leak.
+
+ * Allowed to specify the read group at the command line.
+
+ * Take name-grouped BAM files as input.
+
+Changes to this release are usually safe in that they do not interfere
+with the key functionality. However, the release has only been tested on
+small samples instead of on large-scale real data. If anything weird
+happens, please report the bugs to the bio-bwa-help mailing list.
+
+(0.5.9rc1: 10 December 2010, r1561)
+
+
+
+Beta Release 0.5.8 (8 June, 2010)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes in bwasw:
+
+ * Fixed an issue of missing alignments. This should happen rarely and
+   only when the contig/read alignment is multi-part. Very rarely, bwasw
+   may still miss a segment in a multi-part alignment. This is difficult
+   to fix, although possible.
+
+Notable changes in bwa-short:
+
+ * Discard the SW alignment when the best single-end alignment is much
+   better. Such a SW alignment may caused by structural variations and
+   forcing it to be aligned leads to false alignment. This fix has not
+   been tested thoroughly. It would be great to receive more users
+   feedbacks on this issue.
+
+ * Fixed a typo/bug in sampe which leads to unnecessarily large memory
+   usage in some cases.
+
+ * Further reduced the chance of reporting `weird pairing'.
+
+(0.5.8: 8 June 2010, r1442)
+
+
+
+Beta Release 0.5.7 (1 March, 2010)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This release only has an effect on paired-end data with fat insert-size
+distribution. Users are still recommended to update as the new release
+improves the robustness to poor data.
+
+ * The fix for `weird pairing' was not working in version 0.5.6, pointed
+   out by Carol Scott. It should work now.
+
+ * Optionally output to a normal file rather than to stdout (by Tim
+   Fennel).
+
+(0.5.7: 1 March 2010, r1310)
+
+
+
+Beta Release 0.5.6 (10 Feburary, 2010)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes in bwa-short:
+
+ * Report multiple hits in the SAM format at a new tag XA encoded as:
+   (chr,pos,CIGAR,NM;)*. By default, if a paired or single-end read has
+   4 or fewer hits, they will all be reported; if a read in a anomalous
+   pair has 11 or fewer hits, all of them will be reported.
+
+ * Perform Smith-Waterman alignment also for anomalous read pairs when
+   both ends have quality higher than 17. This reduces false positives
+   for some SV discovery algorithms.
+
+ * Do not report "weird pairing" when the insert size distribution is
+   too fat or has a mean close to zero.
+
+ * If a read is bridging two adjacent chromsomes, flag it as unmapped.
+
+ * Fixed a small but long existing memory leak in paired-end mapping.
+
+ * Multiple bug fixes in SOLiD mapping: a) quality "-1" can be correctly
+   parsed by solid2fastq.pl; b) truncated quality string is resolved; c)
+   SOLiD read mapped to the reverse strand is complemented.
+
+ * Bwa now calculates skewness and kurtosis of the insert size
+   distribution.
+
+ * Deploy a Bayesian method to estimate the maximum distance for a read
+   pair considered to be paired properly. The method is proposed by
+   Gerton Lunter, but bwa only implements a simplified version.
+
+ * Export more functions for Java bindings, by Matt Hanna (See:
+   http://www.broadinstitute.org/gsa/wiki/index.php/Sting_BWA/C_bindings)
+
+ * Abstract bwa CIGAR for further extension, by Rodrigo Goya.
+
+(0.5.6: 10 Feburary 2010, r1303)
+
+
+
+Beta Release 0.5.5 (10 November, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is a bug fix release:
+
+ * Fixed a serious bug/typo in aln which does not occur given short
+   reads, but will lead to segfault for >500bp reads. Of course, the aln
+   command is not recommended for reads longer than 200bp, but this is a
+   bug anyway.
+
+ * Fixed a minor bug/typo which leads to incorrect single-end mapping
+   quality when one end is moved to meet the mate-pair requirement.
+
+ * Fixed a bug in samse for mapping in the color space. This bug is
+   caused by quality filtration added since 0.5.1.
+
+(0.5.5: 10 November 2009, r1273)
+
+
+
+Beta Release 0.5.4 (9 October, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Since this version, the default seed length used in the "aln" command is
+changed to 32.
+
+Notable changes in bwa-short:
+
+ * Added a new tag "XC:i" which gives the length of clipped reads.
+
+ * In sampe, skip alignments in case of a bug in the Smith-Waterman
+   alignment module.
+
+ * In sampe, fixed a bug in pairing when the read sequence is identical
+   to its reverse complement.
+
+ * In sampe, optionally preload the entire FM-index into memory to
+   reduce disk operations.
+
+Notable changes in dBWT-SW/BWA-SW:
+
+ * Changed name dBWT-SW to BWA-SW.
+
+ * Optionally use "hard clipping" in the SAM output.
+
+(0.5.4: 9 October 2009, r1245)
+
+
+
+Beta Release 0.5.3 (15 September, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Fixed a critical bug in bwa-short: reads mapped to the reverse strand
+are not complemented.
+
+(0.5.3: 15 September 2009, r1225)
+
+
+
+Beta Release 0.5.2 (13 September, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes in bwa-short:
+
+ * Optionally trim reads before alignment. See the manual page on `aln
+   -q' for detailed description.
+
+ * Fixed a bug in calculating the NM tag for a gapped alignment.
+
+ * Fixed a bug given a mixture of reads with some longer than the seed
+   length and some shorter.
+
+ * Print SAM header.
+
+Notable changes in dBWT-SW:
+
+ * Changed the default value of -T to 30. As a result, the accuracy is a
+   little higher for short reads at the cost of speed.
+
+(0.5.2: 13 September 2009, r1223)
+
+
+
+Beta Release 0.5.1 (2 September, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes in the short read alignment component:
+
+ * Fixed a bug in samse: do not write mate coordinates.
+
+Notable changes in dBWT-SW:
+
+ * Randomly choose one alignment if the read is a repetitive.
+
+ * Fixed a flaw when a read is mapped across two adjacent reference
+   sequences. However, wrong alignment reports may still occur rarely in
+   this case.
+
+ * Changed the default band width to 50. The speed is slower due to this
+   change.
+
+ * Improved the mapping quality a little given long query sequences.
+
+(0.5.1: 2 September 2009, r1209)
+
+
+
+Beta Release 0.5.0 (20 August, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This release implements a novel algorithm, dBWT-SW, specifically
+designed for long reads. It is 10-50 times faster than SSAHA2, depending
+on the characteristics of the input data, and achieves comparable
+alignment accuracy while allowing chimera detection. In comparison to
+BLAT, dBWT-SW is several times faster and much more accurate especially
+when the error rate is high. Please read the manual page for more
+information.
+
+The dBWT-SW algorithm is kind of developed for future sequencing
+technologies which produce much longer reads with a little higher error
+rate. It is still at its early development stage. Some features are
+missing and it may be buggy although I have evaluated on several
+simulated and real data sets. But following the "release early"
+paradigm, I would like the users to try it first.
+
+Other notable changes in BWA are:
+
+ * Fixed a rare bug in the Smith-Waterman alignment module.
+
+ * Fixed a rare bug about the wrong alignment coordinate when a read is
+   poorly aligned.
+
+ * Fixed a bug in generating the "mate-unmap" SAM tag when both ends in
+   a pair are unmapped.
+
+(0.5.0: 20 August 2009, r1200)
+
+
+
+Beta Release 0.4.9 (19 May, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Interestingly, the integer overflow bug claimed to be fixed in 0.4.7 has
+not in fact. Now I have fixed the bug. Sorry for this and thank Quan
+Long for pointing out the bug (again).
+
+(0.4.9: 19 May 2009, r1075)
+
+
+
+Beta Release 0.4.8 (18 May, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+One change to "aln -R". Now by default, if there are no more than `-R'
+equally best hits, bwa will search for suboptimal hits. This change
+affects the ability in finding SNPs in segmental duplications.
+
+I have not tested this option thoroughly, but this simple change is less
+likely to cause new bugs. Hope I am right.
+
+(0.4.8: 18 May 2009, r1073)
+
+
+
+Beta Release 0.4.7 (12 May, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes:
+
+ * Output SM (single-end mapping quality) and AM (smaller mapping
+   quality among the two ends) tag from sam output.
+
+ * Improved the functionality of stdsw.
+
+ * Made the XN tag more accurate.
+
+ * Fixed a very rare segfault caused by integer overflow.
+
+ * Improve the insert size estimation.
+
+ * Fixed compiling errors for some Linux systems.
+
+(0.4.7: 12 May 2009, r1066)
+
+
+
+Beta Release 0.4.6 (9 March, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This release improves the SOLiD support. First, a script for converting
+SOLiD raw data is provided. This script is adapted from solid2fastq.pl
+in the MAQ package. Second, a nucleotide reference file can be directly
+used with `bwa index'. Third, SOLiD paired-end support is
+completed. Fourth, color-space reads will be converted to nucleotides
+when SAM output is generated. Color errors are corrected in this
+process. Please note that like MAQ, BWA cannot make use of the primer
+base and the first color.
+
+In addition, the calculation of mapping quality is also improved a
+little bit, although end-users may barely observe the difference.
+
+(0.4.6: 9 March 2009, r915)
+
+
+
+Beta Release 0.4.5 (18 Feburary, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Not much happened, but I think it would be good to let the users use the
+latest version.
+
+Notable changes (Thank Bob Handsaker for catching the two bugs):
+
+ * Improved bounary check. Previous version may still give incorrect
+   alignment coordinates in rare cases.
+
+ * Fixed a bug in SW alignment when no residue matches. This only
+   affects the `sampe' command.
+
+ * Robustly estimate insert size without setting the maximum on the
+   command line. Since this release `sampe -a' only has an effect if
+   there are not enough good pairs to infer the insert size
+   distribution.
+
+ * Reduced false PE alignments a little bit by using the inferred insert
+   size distribution. This fix may be more important for long insert
+   size libraries.
+
+(0.4.5: 18 Feburary 2009, r829)
+
+
+
+Beta Release 0.4.4 (15 Feburary, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is mainly a bug fix release. Notable changes are:
+
+ * Imposed boundary check for extracting subsequence from the
+   genome. Previously this causes memory problem in rare cases.
+
+ * Fixed a bug in failing to find whether an alignment overlapping with
+   N on the genome.
+
+ * Changed MD tag to meet the latest SAM specification.
+
+(0.4.4: 15 Feburary 2009, r815)
+
+
+
+Beta Release 0.4.3 (22 January, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes:
+
+ * Treat an ambiguous base N as a mismatch. Previous versions will not
+   map reads containing any N.
+
+ * Automatically choose the maximum allowed number of differences. This
+   is important when reads of different lengths are mixed together.
+
+ * Print mate coordinate if only one end is unmapped.
+
+ * Generate MD tag. This tag encodes the mismatching positions and the
+   reference bases at these positions. Deletions from the reference will
+   also be printed.
+
+ * Optionally dump multiple hits from samse, in another concise format
+   rather than SAM.
+
+ * Optionally disable iterative search. This is VERY SLOOOOW, though.
+
+ * Fixed a bug in generate SAM.
+
+(0.4.3: 22 January 2009, r787)
+
+
+
+Beta Release 0.4.2 (9 January, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Aaron Quinlan found a bug in the indexer: the bwa indexer segfaults if
+there are no comment texts in the FASTA header. This is a critical
+bug. Nothing else was changed.
+
+(0.4.2: 9 January 2009, r769)
+
+
+
+Beta Release 0.4.1 (7 January, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+I am sorry for the quick updates these days. I like to set a milestone
+for BWA and this release seems to be. For paired end reads, BWA also
+does Smith-Waterman alignment for an unmapped read whose mate can be
+mapped confidently. With this strategy BWA achieves similar accuracy to
+maq. Benchmark is also updated accordingly.
+
+(0.4.1: 7 January 2009, r760)
+
+
+
+Beta Release 0.4.0 (6 January, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In comparison to the release two days ago, this release is mainly tuned
+for performance with some tricks I learnt from Bowtie. However, as the
+indexing format has also been changed, I have to increase the version
+number to 0.4.0 to emphasize that *DATABASE MUST BE RE-INDEXED* with
+`bwa index'.
+
+ * Improved the speed by about 20%.
+
+ * Added multi-threading to `bwa aln'.
+
+(0.4.0: 6 January 2009, r756)
+
+
+
+Beta Release 0.3.0 (4 January, 2009)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ * Added paired-end support by separating SA calculation and alignment
+   output.
+
+ * Added SAM output.
+
+ * Added evaluation to the documentation.
+
+(0.3.0: 4 January 2009, r741)
+
+
+
+Beta Release 0.2.0 (15 Augusst, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ * Take the subsequence at the 5'-end as seed. Seeding strategy greatly
+   improves the speed for long reads, at the cost of missing a few true
+   hits that contain many differences in the seed. Seeding also increase
+   the memory by 800MB.
+
+ * Fixed a bug which may miss some gapped alignments. Fixing the bug
+   also slows the speed a little.
+
+(0.2.0: 15 August 2008, r428)
+
+
+
+Beta Release 0.1.6 (08 Augusst, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ * Give accurate CIGAR string.
+
+ * Add a simple interface to SW/NW alignment
+
+(0.1.6: 08 August 2008, r414)
+
+
+
+Beta Release 0.1.5 (27 July, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ * Improve the speed. This version is expected to give the same results.
+
+(0.1.5: 27 July 2008, r400)
+
+
+
+Beta Release 0.1.4 (22 July, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+ * Fixed a bug which may cause missing gapped alignments.
+
+ * More clearly define what alignments can be found by BWA (See
+   manual). Now BWA runs a little slower because it will visit more
+   potential gapped alignments.
+
+ * A bit code clean up.
+
+(0.1.4: 22 July 2008, r387)
+
+
+
+Beta Release 0.1.3 (21 July, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Improve the speed with some tricks on retrieving occurences. The results
+should be exactly the same as that of 0.1.2.
+
+(0.1.3: 21 July 2008, r382)
+
+
+
+Beta Release 0.1.2 (17 July, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Support gapped alignment. Codes for ungapped alignment has been removed.
+
+(0.1.2: 17 July 2008, r371)
+
+
+
+Beta Release 0.1.1 (03 June, 2008)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is the first release of BWA, Burrows-Wheeler Alignment tool. Please
+read man page for more information about this software.
+
+(0.1.1: 03 June 2008, r349)
+
+
+
