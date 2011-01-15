@@ -518,6 +518,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			printf("%s", p->qual);
 		} else printf("*");
+		if (bwa_rg_id) printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->clip_len < p->full_len) printf("\tXC:i:%d", p->clip_len);
 		putchar('\n');
 	}
