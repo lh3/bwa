@@ -587,7 +587,7 @@ int bwa_set_rg(const char *s)
 void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, n_seqs, tot_seqs = 0, m_aln;
+	int i, n_seqs, tot_seqs = 0, m_aln, read_flag = 0;
 	bwt_aln1_t *aln = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
@@ -611,7 +611,9 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
 	// core loop
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt.mode & BWA_MODE_COMPREAD, opt.trim_qual)) != 0) {
+	read_flag |= (opt.mode & BWA_MODE_COMPREAD)? 1 : 0;
+	read_flag |= ((opt.mode & BWA_MODE_IL13)? 1 : 0)<<1;
+	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, read_flag, opt.trim_qual)) != 0) {
 		tot_seqs += n_seqs;
 		t = clock();
 

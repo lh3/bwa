@@ -645,7 +645,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, j, n_seqs, tot_seqs = 0;
+	int i, j, n_seqs, tot_seqs = 0, read_flag = 0;
 	bwa_seq_t *seqs[2];
 	bwa_seqio_t *ks[2];
 	clock_t t;
@@ -691,12 +691,14 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	// core loop
 	bwa_print_sam_SQ(bns);
 	bwa_print_sam_PG();
-	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt.mode & BWA_MODE_COMPREAD, opt.trim_qual)) != 0) {
+	read_flag |= (opt.mode & BWA_MODE_COMPREAD)? 1 : 0;
+	read_flag |= ((opt.mode & BWA_MODE_IL13)? 1 : 0)<<1;
+	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, read_flag, opt.trim_qual)) != 0) {
 		int cnt_chg;
 		isize_info_t ii;
 		ubyte_t *pacseq;
 
-		seqs[1] = bwa_read_seq(ks[1], 0x40000, &n_seqs, opt.mode & BWA_MODE_COMPREAD, opt.trim_qual);
+		seqs[1] = bwa_read_seq(ks[1], 0x40000, &n_seqs, read_flag, opt.trim_qual);
 		tot_seqs += n_seqs;
 		t = clock();
 

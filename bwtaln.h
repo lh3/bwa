@@ -87,6 +87,7 @@ typedef struct {
 #define BWA_MODE_BAM_SE     0x40
 #define BWA_MODE_BAM_READ1  0x80
 #define BWA_MODE_BAM_READ2  0x100
+#define BWA_MODE_IL13       0x200
 
 typedef struct {
 	int s_mm, s_gapo, s_gape;

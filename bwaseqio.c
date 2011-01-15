@@ -139,17 +139,19 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 	return seqs;
 }
 
- bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int is_comp, int trim_qual)
+bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int flag, int trim_qual)
 {
 	bwa_seq_t *seqs, *p;
 	kseq_t *seq = bs->ks;
-	int n_seqs, l, i;
+	int n_seqs, l, i, is_comp = flag&1, is_64 = flag&2;
 	long n_trimmed = 0, n_tot = 0;
 
 	if (bs->is_bam) return bwa_read_bam(bs, n_needed, n, is_comp, trim_qual);
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
 	while ((l = kseq_read(seq)) >= 0) {
+		if (is_64 && seq->qual.l)
+			for (i = 0; i < seq->qual.l; ++i) seq->qual.s[i] -= 31;
 		p = &seqs[n_seqs++];
 		p->tid = -1; // no assigned to a thread
 		p->qual = 0;

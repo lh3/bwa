@@ -172,7 +172,7 @@ bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa)
 
 void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 {
-	int i, n_seqs, tot_seqs = 0;
+	int i, n_seqs, tot_seqs = 0, read_flag = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
 	clock_t t;
@@ -190,7 +190,9 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 
 	// core loop
 	fwrite(opt, sizeof(gap_opt_t), 1, stdout);
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt->mode & BWA_MODE_COMPREAD, opt->trim_qual)) != 0) {
+	read_flag |= (opt->mode & BWA_MODE_COMPREAD)? 1 : 0;
+	read_flag |= ((opt->mode & BWA_MODE_IL13)? 1 : 0)<<1;
+	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, read_flag, opt->trim_qual)) != 0) {
 		tot_seqs += n_seqs;
 		t = clock();
 
@@ -246,7 +248,7 @@ int bwa_aln(int argc, char *argv[])
 	gap_opt_t *opt;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012")) >= 0) {
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012I")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -273,6 +275,7 @@ int bwa_aln(int argc, char *argv[])
 		case '0': opt->mode |= BWA_MODE_BAM_SE; break;
 		case '1': opt->mode |= BWA_MODE_BAM_READ1; break;
 		case '2': opt->mode |= BWA_MODE_BAM_READ2; break;
+		case 'I': opt->mode |= BWA_MODE_IL13; break;
 		default: return 1;
 		}
 	}
@@ -303,6 +306,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
 		fprintf(stderr, "         -N        non-iterative mode: search for all n-difference hits (slooow)\n");
+		fprintf(stderr, "         -I        the input is in the Illumina 1.3+ FASTQ-like format\n");
 		fprintf(stderr, "         -b        the input read file is in the BAM format\n");
 		fprintf(stderr, "         -0        use single-end reads only (effective with -b)\n");
 		fprintf(stderr, "         -1        use the 1st read in a pair (effective with -b)\n");
