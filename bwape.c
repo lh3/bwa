@@ -645,13 +645,13 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, j, n_seqs, tot_seqs = 0, read_flag = 0;
+	int i, j, n_seqs, tot_seqs = 0;
 	bwa_seq_t *seqs[2];
 	bwa_seqio_t *ks[2];
 	clock_t t;
 	bntseq_t *bns, *ntbns = 0;
 	FILE *fp_sa[2];
-	gap_opt_t opt;
+	gap_opt_t opt, opt0;
 	khint_t iter;
 	isize_info_t last_ii; // this is for the last batch of reads
 	char str[1024];
@@ -671,6 +671,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
 	ks[0] = bwa_open_reads(opt.mode, fn_fa[0]);
+	opt0 = opt;
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[1]); // overwritten!
 	ks[1] = bwa_open_reads(opt.mode, fn_fa[1]);
 	if (!(opt.mode & BWA_MODE_COMPREAD)) {
@@ -691,14 +692,12 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	// core loop
 	bwa_print_sam_SQ(bns);
 	bwa_print_sam_PG();
-	read_flag |= (opt.mode & BWA_MODE_COMPREAD)? 1 : 0;
-	read_flag |= ((opt.mode & BWA_MODE_IL13)? 1 : 0)<<1;
-	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, read_flag, opt.trim_qual)) != 0) {
+	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt0.mode, opt0.trim_qual)) != 0) {
 		int cnt_chg;
 		isize_info_t ii;
 		ubyte_t *pacseq;
 
-		seqs[1] = bwa_read_seq(ks[1], 0x40000, &n_seqs, read_flag, opt.trim_qual);
+		seqs[1] = bwa_read_seq(ks[1], 0x40000, &n_seqs, opt.mode, opt.trim_qual);
 		tot_seqs += n_seqs;
 		t = clock();
 

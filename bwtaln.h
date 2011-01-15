@@ -74,6 +74,8 @@ typedef struct {
 	bwa_cigar_t *cigar;
 	// for multi-threading only
 	int tid;
+	// barcode
+	char bc[16]; // null terminated; up to 15 bases
 	// NM and MD tags
 	uint32_t full_len:20, nm:12;
 	char *md;
@@ -91,7 +93,7 @@ typedef struct {
 
 typedef struct {
 	int s_mm, s_gapo, s_gape;
-	int mode;
+	int mode; // bit 24-31 are the barcode length
 	int indel_end_skip, max_del_occ, max_entries;
 	float fnr;
 	int max_diff, max_gapo, max_gape;
@@ -126,7 +128,7 @@ extern "C" {
 	bwa_seqio_t *bwa_bam_open(const char *fn, int which);
 	void bwa_seq_close(bwa_seqio_t *bs);
 	void seq_reverse(int len, ubyte_t *seq, int is_comp);
-	bwa_seq_t *bwa_read_seq(bwa_seqio_t *seq, int n_needed, int *n, int is_comp, int trim_qual);
+	bwa_seq_t *bwa_read_seq(bwa_seqio_t *seq, int n_needed, int *n, int mode, int trim_qual);
 	void bwa_free_read_seq(int n_seqs, bwa_seq_t *seqs);
 
 	int bwa_cal_maxdiff(int l, double err, double thres);

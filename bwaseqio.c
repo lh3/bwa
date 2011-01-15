@@ -1,4 +1,5 @@
 #include <zlib.h>
+#include <ctype.h>
 #include "bwtaln.h"
 #include "utils.h"
 #include "bamlite.h"
@@ -139,20 +140,41 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 	return seqs;
 }
 
-bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int flag, int trim_qual)
+#define BARCODE_LOW_QUAL 13
+
+bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int trim_qual)
 {
 	bwa_seq_t *seqs, *p;
 	kseq_t *seq = bs->ks;
-	int n_seqs, l, i, is_comp = flag&1, is_64 = flag&2;
+	int n_seqs, l, i, is_comp = mode&BWA_MODE_COMPREAD, is_64 = mode&BWA_MODE_IL13, l_bc = mode>>24;
 	long n_trimmed = 0, n_tot = 0;
 
-	if (bs->is_bam) return bwa_read_bam(bs, n_needed, n, is_comp, trim_qual);
+	if (l_bc > 15) {
+		fprintf(stderr, "[%s] the maximum barcode length is 15.\n", __func__);
+		return 0;
+	}
+	if (bs->is_bam) return bwa_read_bam(bs, n_needed, n, is_comp, trim_qual); // l_bc has no effect for BAM input
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
 	while ((l = kseq_read(seq)) >= 0) {
 		if (is_64 && seq->qual.l)
 			for (i = 0; i < seq->qual.l; ++i) seq->qual.s[i] -= 31;
+		if (seq->seq.l <= l_bc) continue; // sequence length equals or smaller than the barcode length
 		p = &seqs[n_seqs++];
+		if (l_bc) { // then trim barcode
+			for (i = 0; i < l_bc; ++i)
+				p->bc[i] = (seq->qual.l && seq->qual.s[i]-33 < BARCODE_LOW_QUAL)? tolower(seq->seq.s[i]) : toupper(seq->seq.s[i]);
+			p->bc[i] = 0;
+			for (; i < seq->seq.l; ++i)
+				seq->seq.s[i - l_bc] = seq->seq.s[i];
+			seq->seq.l -= l_bc; seq->seq.s[seq->seq.l] = 0;
+			if (seq->qual.l) {
+				for (i = l_bc; i < seq->qual.l; ++i)
+					seq->qual.s[i - l_bc] = seq->qual.s[i];
+				seq->qual.l -= l_bc; seq->qual.s[seq->qual.l] = 0;
+			}
+			l = seq->seq.l;
+		} else p->bc[0] = 0;
 		p->tid = -1; // no assigned to a thread
 		p->qual = 0;
 		p->full_len = p->clip_len = p->len = l;

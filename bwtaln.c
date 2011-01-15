@@ -172,7 +172,7 @@ bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa)
 
 void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 {
-	int i, n_seqs, tot_seqs = 0, read_flag = 0;
+	int i, n_seqs, tot_seqs = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
 	clock_t t;
@@ -190,9 +190,7 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 
 	// core loop
 	fwrite(opt, sizeof(gap_opt_t), 1, stdout);
-	read_flag |= (opt->mode & BWA_MODE_COMPREAD)? 1 : 0;
-	read_flag |= ((opt->mode & BWA_MODE_IL13)? 1 : 0)<<1;
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, read_flag, opt->trim_qual)) != 0) {
+	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt->mode, opt->trim_qual)) != 0) {
 		tot_seqs += n_seqs;
 		t = clock();
 
@@ -248,7 +246,7 @@ int bwa_aln(int argc, char *argv[])
 	gap_opt_t *opt;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012I")) >= 0) {
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IB:")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -276,6 +274,7 @@ int bwa_aln(int argc, char *argv[])
 		case '1': opt->mode |= BWA_MODE_BAM_READ1; break;
 		case '2': opt->mode |= BWA_MODE_BAM_READ2; break;
 		case 'I': opt->mode |= BWA_MODE_IL13; break;
+		case 'B': opt->mode |= atoi(optarg) << 24; break;
 		default: return 1;
 		}
 	}
@@ -303,6 +302,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -R INT    stop searching when there are >INT equally best hits [%d]\n", opt->max_top2);
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
         fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
+		fprintf(stderr, "         -B INT    length of barcode\n");
 		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
 		fprintf(stderr, "         -N        non-iterative mode: search for all n-difference hits (slooow)\n");

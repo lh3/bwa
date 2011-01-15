@@ -472,6 +472,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		} else printf("*");
 
 		if (bwa_rg_id) printf("\tRG:Z:%s", bwa_rg_id);
+		if (p->bc[0]) printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) printf("\tXC:i:%d", p->clip_len);
 		if (p->type != BWA_TYPE_NO_MATCH) {
 			int i;
@@ -519,6 +520,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			printf("%s", p->qual);
 		} else printf("*");
 		if (bwa_rg_id) printf("\tRG:Z:%s", bwa_rg_id);
+		if (p->bc[0]) printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) printf("\tXC:i:%d", p->clip_len);
 		putchar('\n');
 	}
@@ -587,7 +589,7 @@ int bwa_set_rg(const char *s)
 void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, n_seqs, tot_seqs = 0, m_aln, read_flag = 0;
+	int i, n_seqs, tot_seqs = 0, m_aln;
 	bwt_aln1_t *aln = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
@@ -611,9 +613,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
 	// core loop
-	read_flag |= (opt.mode & BWA_MODE_COMPREAD)? 1 : 0;
-	read_flag |= ((opt.mode & BWA_MODE_IL13)? 1 : 0)<<1;
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, read_flag, opt.trim_qual)) != 0) {
+	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt.mode, opt.trim_qual)) != 0) {
 		tot_seqs += n_seqs;
 		t = clock();
 
