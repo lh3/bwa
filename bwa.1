@@ -56,10 +56,10 @@ Index database sequences in the FASTA format.
 .B -c
 Build color-space index. The input fast should be in nucleotide space.
 .TP
-.B -p STR
+.BI -p \ STR
 Prefix of the output database [same as db filename]
 .TP
-.B -a STR
+.BI -a \ STR
 Algorithm for constructing BWT index. Available options are:
 .RS
 .TP
@@ -95,47 +95,47 @@ differences are allowed in the whole sequence.
 .B OPTIONS:
 .RS
 .TP 10
-.B -n NUM
+.BI -n \ NUM
 Maximum edit distance if the value is INT, or the fraction of missing
 alignments given 2% uniform base error rate if FLOAT. In the latter
 case, the maximum edit distance is automatically chosen for different
 read lengths. [0.04]
 .TP
-.B -o INT
+.BI -o \ INT
 Maximum number of gap opens [1]
 .TP
-.B -e INT
+.BI -e \ INT
 Maximum number of gap extensions, -1 for k-difference mode (disallowing
 long gaps) [-1]
 .TP
-.B -d INT
+.BI -d \ INT
 Disallow a long deletion within INT bp towards the 3'-end [16]
 .TP
-.B -i INT
+.BI -i \ INT
 Disallow an indel within INT bp towards the ends [5]
 .TP
-.B -l INT
+.BI -l \ INT
 Take the first INT subsequence as seed. If INT is larger than the query
 sequence, seeding will be disabled. For long reads, this option is
 typically ranged from 25 to 35 for `-k 2'. [inf]
 .TP
-.B -k INT
+.BI -k \ INT
 Maximum edit distance in the seed [2]
 .TP
-.B -t INT
+.BI -t \ INT
 Number of threads (multi-threading mode) [1]
 .TP
-.B -M INT
+.BI -M \ INT
 Mismatch penalty. BWA will not search for suboptimal hits with a score
 lower than (bestScore-misMsc). [3]
 .TP
-.B -O INT
+.BI -O \ INT
 Gap open penalty [11]
 .TP
-.B -E INT
+.BI -E \ INT
 Gap extension penalty [4]
 .TP
-.B -R INT
+.BI -R \ INT
 Proceed with suboptimal alignments if there are no more than INT equally
 best hits. This option only affects paired-end mapping. Increasing this
 threshold helps to improve the pairing accuracy at the cost of speed,
@@ -150,10 +150,21 @@ Disable iterative search. All hits with no more than
 .I maxDiff
 differences will be found. This mode is much slower than the default.
 .TP
-.B -q INT
+.BI -q \ INT
 Parameter for read trimming. BWA trims a read down to
 argmax_x{\\sum_{i=x+1}^l(INT-q_i)} if q_l<INT where l is the original
 read length. [0]
+.TP
+.B -I
+The input is in the Illumina 1.3+ read format (quality equals ASCII-64).
+.TP
+.BI -B \ INT
+Length of barcode starting from the 5'-end. When
+.I INT
+is positive, the barcode of each read will be trimmed before mapping and will
+be written at the
+.B BC
+SAM tag. For paired-end reads, the barcode from both ends are concatenated. [0]
 .TP
 .B -b
 Specify the input read sequence file is the BAM format. For paired-end
@@ -256,41 +267,41 @@ Align query sequences in the <in.fq> file.
 .B OPTIONS:
 .RS
 .TP 10
-.B -a INT
+.BI -a \ INT
 Score of a match [1]
 .TP
-.B -b INT
+.BI -b \ INT
 Mismatch penalty [3]
 .TP
-.B -q INT
+.BI -q \ INT
 Gap open penalty [5]
 .TP
-.B -r INT
+.BI -r \ INT
 Gap extension penalty. The penalty for a contiguous gap of size k is
 q+k*r. [2]
 .TP
-.B -t INT
+.BI -t \ INT
 Number of threads in the multi-threading mode [1]
 .TP
-.B -w INT
+.BI -w \ INT
 Band width in the banded alignment [33]
 .TP
-.B -T INT
+.BI -T \ INT
 Minimum score threshold divided by a [37]
 .TP
-.B -c FLOAT
+.BI -c \ FLOAT
 Coefficient for threshold adjustment according to query length. Given an
 l-long query, the threshold for a hit to be retained is
 a*max{T,c*log(l)}. [5.5]
 .TP
-.B -z INT
+.BI -z \ INT
 Z-best heuristics. Higher -z increases accuracy at the cost of speed. [1]
 .TP
-.B -s INT
+.BI -s \ INT
 Maximum SA interval size for initiating a seed. Higher -s increases
 accuracy at the cost of speed. [3]
 .TP
-.B -N INT
+.BI -N \ INT
 Minimum number of seeds supporting the resultant alignment to skip
 reverse alignment. [5]
 .RE
@@ -361,6 +372,7 @@ _
 NM	Edit distance
 MD	Mismatching positions/bases
 AS	Alignment score
+BC	Barcode sequence
 _
 X0	Number of best hits
 X1	Number of suboptimal hits found by BWA
