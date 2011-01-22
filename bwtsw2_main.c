@@ -59,7 +59,11 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -N INT   # seeds to trigger reverse alignment [%d]\n", opt->t_seeds);
 		fprintf(stderr, "         -c FLOAT coefficient of length-threshold adjustment [%.1f]\n", opt->coef);
 		fprintf(stderr, "         -H       in SAM output, use hard clipping rather than soft\n");
-        fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n");
+        fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n\n");
+		fprintf(stderr, "Note: For long Illumina, 454 and Sanger reads, assembly contigs, fosmids and\n");
+		fprintf(stderr, "      BACs, the default setting usually works well. For the current PacBio\n");
+		fprintf(stderr, "      reads (end of 2010), '-b5 -q2 -r1 -z10' is recommended. One may also\n");
+		fprintf(stderr, "      increase '-z' for better sensitivity.\n");
 		fprintf(stderr, "\n");
 
 		if (0) {
