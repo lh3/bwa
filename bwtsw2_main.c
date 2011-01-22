@@ -47,7 +47,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -r INT   gap extension penalty [%d]\n", opt->r);
 //		fprintf(stderr, "         -y FLOAT error recurrence coef. (4..16) [%.1f]\n", opt->yita);
 		fprintf(stderr, "\n");
-		fprintf(stderr, "         -t INT   nmber of threads [%d]\n", opt->n_threads);
+		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "         -s INT   size of a chunk of reads [%d]\n", opt->chunk_size);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "         -w INT   band width [%d]\n", opt->bw);
@@ -62,7 +62,7 @@ int bwa_bwtsw2(int argc, char *argv[])
         fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n");
 		fprintf(stderr, "\n");
 
-		{
+		if (0) {
 			double c, theta, eps, delta;
 			c = opt->a / log(opt->yita);
 			theta = exp(-opt->b / c) / opt->yita;
