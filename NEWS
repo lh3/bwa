@@ -1,3 +1,30 @@
+Beta Release 0.5.9 (24 January, 2011)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes:
+
+ * Feature: barcode support via the `-B' option.
+
+ * Feature: Illumina 1.3+ read format support via the `-I' option.
+
+ * Bugfix: RG tags are not attached to unmapped reads.
+
+ * Bugfix: very rare bwasw mismappings
+
+ * Recommend options for PacBio reads in bwasw help message.
+
+
+Also, since January 13, the BWA master repository has been moved to github:
+
+  https://github.com/lh3/bwa
+
+The revision number has been reset. All recent changes will be first
+committed to this repository.
+
+(0.5.9: 24 January 2011, r16)
+
+
+
 Beta Release Candidate 0.5.9rc1 (10 December, 2010)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
