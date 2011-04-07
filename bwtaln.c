@@ -13,9 +13,7 @@
 #include "utils.h"
 
 #ifdef HAVE_PTHREAD
-#define THREAD_BLOCK_SIZE 1024
 #include <pthread.h>
-static pthread_mutex_t g_seq_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
 gap_opt_t *gap_init_opt()
@@ -98,18 +96,7 @@ void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt[2], int n_seqs, bwa_seq_t *seq
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *p = seqs + i;
 #ifdef HAVE_PTHREAD
-		if (opt->n_threads > 1) {
-			pthread_mutex_lock(&g_seq_lock);
-			if (p->tid < 0) { // unassigned
-				int j;
-				for (j = i; j < n_seqs && j < i + THREAD_BLOCK_SIZE; ++j)
-					seqs[j].tid = tid;
-			} else if (p->tid != tid) {
-				pthread_mutex_unlock(&g_seq_lock);
-				continue;
-			}
-			pthread_mutex_unlock(&g_seq_lock);
-		}
+		if (i % opt->n_threads != tid) continue;
 #endif
 		p->sa = 0; p->type = BWA_TYPE_NO_MATCH; p->c1 = p->c2 = 0; p->n_aln = 0; p->aln = 0;
 		seq[0] = p->seq; seq[1] = p->rseq;

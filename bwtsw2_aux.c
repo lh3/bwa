@@ -309,10 +309,6 @@ typedef struct {
 	bsw2seq1_t *seq;
 } bsw2seq_t;
 
-#ifdef HAVE_PTHREAD
-static pthread_mutex_t g_dbwtsw_lock = PTHREAD_MUTEX_INITIALIZER;
-#endif
-
 static int fix_cigar(const char *qname, const bntseq_t *bns, bsw2hit_t *p, int n_cigar, uint32_t *cigar)
 {
 	// FIXME: this routine does not work if the query bridge three reference sequences
@@ -469,15 +465,7 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 		l = p->l;
 
 #ifdef HAVE_PTHREAD
-		if (_opt->n_threads > 1) {
-			pthread_mutex_lock(&g_dbwtsw_lock);
-			if (p->tid < 0) p->tid = tid;
-			else if (p->tid != tid) {
-				pthread_mutex_unlock(&g_dbwtsw_lock);
-				continue;
-			} // in pinciple else should not happen
-			pthread_mutex_unlock(&g_dbwtsw_lock);
-		}
+		if (x % _opt->n_threads != tid) continue;
 #endif
 
 		// set opt->t
