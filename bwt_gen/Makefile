@@ -15,7 +15,7 @@ SUBDIRS=
 lib:libbwtgen.a
 
 libbwtgen.a:$(OBJS)
-		$(AR) -cru $@ $(OBJS)
+		$(AR) -scru $@ $(OBJS)
 
 cleanlocal:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a
