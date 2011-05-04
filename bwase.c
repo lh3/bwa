@@ -437,15 +437,15 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				if (mate->strand) flag |= SAM_FMR;
 			} else flag |= SAM_FMU;
 		}
-		printf("%s\t%d\t%s\t", p->name, flag, bns->anns[seqid].name);
-		printf("%d\t%d\t", (int)(p->pos - bns->anns[seqid].offset + 1), p->mapQ);
+		err_printf("%s\t%d\t%s\t", p->name, flag, bns->anns[seqid].name);
+		err_printf("%d\t%d\t", (int)(p->pos - bns->anns[seqid].offset + 1), p->mapQ);
 
 		// print CIGAR
 		if (p->cigar) {
 			for (j = 0; j != p->n_cigar; ++j)
-				printf("%d%c", __cigar_len(p->cigar[j]), "MIDS"[__cigar_op(p->cigar[j])]);
-		} else if (p->type == BWA_TYPE_NO_MATCH) printf("*");
-		else printf("%dM", p->len);
+				err_printf("%d%c", __cigar_len(p->cigar[j]), "MIDS"[__cigar_op(p->cigar[j])]);
+		} else if (p->type == BWA_TYPE_NO_MATCH) err_printf("*");
+		else err_printf("%dM", p->len);
 
 		// print mate coordinate
 		if (mate && mate->type != BWA_TYPE_NO_MATCH) {
@@ -454,12 +454,12 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			am = mate->seQ < p->seQ? mate->seQ : p->seQ; // smaller single-end mapping quality
 			// redundant calculation here, but should not matter too much
 			m_is_N = bns_coor_pac2real(bns, mate->pos, mate->len, &m_seqid);
-			printf("\t%s\t", (seqid == m_seqid)? "=" : bns->anns[m_seqid].name);
+			err_printf("\t%s\t", (seqid == m_seqid)? "=" : bns->anns[m_seqid].name);
 			isize = (seqid == m_seqid)? pos_5(mate) - pos_5(p) : 0;
 			if (p->type == BWA_TYPE_NO_MATCH) isize = 0;
-			printf("%d\t%lld\t", (int)(mate->pos - bns->anns[m_seqid].offset + 1), isize);
-		} else if (mate) printf("\t=\t%d\t0\t", (int)(p->pos - bns->anns[seqid].offset + 1));
-		else printf("\t*\t0\t0\t");
+			err_printf("%d\t%lld\t", (int)(mate->pos - bns->anns[m_seqid].offset + 1), isize);
+		} else if (mate) err_printf("\t=\t%d\t0\t", (int)(p->pos - bns->anns[seqid].offset + 1));
+		else err_printf("\t*\t0\t0\t");
 
 		// print sequence and quality
 		if (p->strand == 0)
@@ -468,42 +468,42 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		putchar('\t');
 		if (p->qual) {
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
-			printf("%s", p->qual);
-		} else printf("*");
+			err_printf("%s", p->qual);
+		} else err_printf("*");
 
-		if (bwa_rg_id) printf("\tRG:Z:%s", bwa_rg_id);
-		if (p->bc[0]) printf("\tBC:Z:%s", p->bc);
-		if (p->clip_len < p->full_len) printf("\tXC:i:%d", p->clip_len);
+		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
+		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
+		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
 		if (p->type != BWA_TYPE_NO_MATCH) {
 			int i;
 			// calculate XT tag
 			XT = "NURM"[p->type];
 			if (nn > 10) XT = 'N';
 			// print tags
-			printf("\tXT:A:%c\t%s:i:%d", XT, (mode & BWA_MODE_COMPREAD)? "NM" : "CM", p->nm);
-			if (nn) printf("\tXN:i:%d", nn);
-			if (mate) printf("\tSM:i:%d\tAM:i:%d", p->seQ, am);
+			err_printf("\tXT:A:%c\t%s:i:%d", XT, (mode & BWA_MODE_COMPREAD)? "NM" : "CM", p->nm);
+			if (nn) err_printf("\tXN:i:%d", nn);
+			if (mate) err_printf("\tSM:i:%d\tAM:i:%d", p->seQ, am);
 			if (p->type != BWA_TYPE_MATESW) { // X0 and X1 are not available for this type of alignment
-				printf("\tX0:i:%d", p->c1);
-				if (p->c1 <= max_top2) printf("\tX1:i:%d", p->c2);
+				err_printf("\tX0:i:%d", p->c1);
+				if (p->c1 <= max_top2) err_printf("\tX1:i:%d", p->c2);
 			}
-			printf("\tXM:i:%d\tXO:i:%d\tXG:i:%d", p->n_mm, p->n_gapo, p->n_gapo+p->n_gape);
-			if (p->md) printf("\tMD:Z:%s", p->md);
+			err_printf("\tXM:i:%d\tXO:i:%d\tXG:i:%d", p->n_mm, p->n_gapo, p->n_gapo+p->n_gape);
+			if (p->md) err_printf("\tMD:Z:%s", p->md);
 			// print multiple hits
 			if (p->n_multi) {
-				printf("\tXA:Z:");
+				err_printf("\tXA:Z:");
 				for (i = 0; i < p->n_multi; ++i) {
 					bwt_multi1_t *q = p->multi + i;
 					int k;
 					j = pos_end_multi(q, p->len) - q->pos;
 					nn = bns_coor_pac2real(bns, q->pos, j, &seqid);
-					printf("%s,%c%d,", bns->anns[seqid].name, q->strand? '-' : '+',
+					err_printf("%s,%c%d,", bns->anns[seqid].name, q->strand? '-' : '+',
 						   (int)(q->pos - bns->anns[seqid].offset + 1));
 					if (q->cigar) {
 						for (k = 0; k < q->n_cigar; ++k)
-							printf("%d%c", __cigar_len(q->cigar[k]), "MIDS"[__cigar_op(q->cigar[k])]);
-					} else printf("%dM", p->len);
-					printf(",%d;", q->gap + q->mm);
+							err_printf("%d%c", __cigar_len(q->cigar[k]), "MIDS"[__cigar_op(q->cigar[k])]);
+					} else err_printf("%dM", p->len);
+					err_printf(",%d;", q->gap + q->mm);
 				}
 			}
 		}
@@ -512,16 +512,16 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		ubyte_t *s = p->strand? p->rseq : p->seq;
 		int flag = p->extra_flag | SAM_FSU;
 		if (mate && mate->type == BWA_TYPE_NO_MATCH) flag |= SAM_FMU;
-		printf("%s\t%d\t*\t0\t0\t*\t*\t0\t0\t", p->name, flag);
+		err_printf("%s\t%d\t*\t0\t0\t*\t*\t0\t0\t", p->name, flag);
 		for (j = 0; j != p->len; ++j) putchar("ACGTN"[(int)s[j]]);
 		putchar('\t');
 		if (p->qual) {
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
-			printf("%s", p->qual);
-		} else printf("*");
-		if (bwa_rg_id) printf("\tRG:Z:%s", bwa_rg_id);
-		if (p->bc[0]) printf("\tBC:Z:%s", p->bc);
-		if (p->clip_len < p->full_len) printf("\tXC:i:%d", p->clip_len);
+			err_printf("%s", p->qual);
+		} else err_printf("*");
+		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
+		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
+		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
 		putchar('\n');
 	}
 }
@@ -541,8 +541,8 @@ void bwa_print_sam_SQ(const bntseq_t *bns)
 {
 	int i;
 	for (i = 0; i < bns->n_seqs; ++i)
-		printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
-	if (bwa_rg_line) printf("%s\n", bwa_rg_line);
+		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
+	if (bwa_rg_line) err_printf("%s\n", bwa_rg_line);
 }
 
 void bwase_initialize() 

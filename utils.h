@@ -31,6 +31,15 @@
 #include <stdio.h>
 #include <zlib.h>
 
+#ifdef __GNUC__
+// Tell GCC to validate printf format string and args
+#define ATTRIBUTE(list) __attribute__ (list)
+#else
+#define ATTRIBUTE(list)
+#endif
+
+
+
 #define err_fatal_simple(msg) err_fatal_simple_core(__func__, msg)
 #define xopen(fn, mode) err_xopen_core(__func__, fn, mode)
 #define xreopen(fn, mode, fp) err_xreopen_core(__func__, fn, mode, fp)
@@ -46,6 +55,13 @@ extern "C" {
 	FILE *err_xopen_core(const char *func, const char *fn, const char *mode);
 	FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE *fp);
 	gzFile err_xzopen_core(const char *func, const char *fn, const char *mode);
+    size_t err_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
+	int err_fprintf(FILE *stream, const char *format, ...)
+        ATTRIBUTE((format(printf, 2, 3)));
+	int err_printf(const char *format, ...)
+        ATTRIBUTE((format(printf, 1, 2)));
+	int err_fflush(FILE *stream);
+	int err_fclose(FILE *stream);
 
 #ifdef __cplusplus
 }

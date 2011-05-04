@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include "main.h"
+#include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.5.9-r16"
+#define PACKAGE_VERSION "0.5.9-r18-dev"
 #endif
 
 static int usage()
@@ -59,5 +60,7 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;
 	}
+        err_fflush(stdout);
+        err_fclose(stdout);
 	return 0;
 }

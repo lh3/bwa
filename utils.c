@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
+#include <errno.h>
 #include "utils.h"
 
 FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
@@ -80,3 +81,68 @@ void err_fatal_simple_core(const char *func, const char *msg)
 	fprintf(stderr, "[%s] %s Abort!\n", func, msg);
 	abort();
 }
+
+size_t err_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+    size_t ret = fwrite(ptr, size, nmemb, stream);
+    if (ret != nmemb) 
+    {
+        err_fatal_simple_core("fwrite", strerror(errno));
+    }
+    return ret;
+}
+
+int err_printf(const char *format, ...) 
+{
+    va_list arg;
+    int done;
+
+    va_start(arg, format);
+    done = vfprintf(stdout, format, arg);
+    int saveErrno = errno;
+    va_end(arg);
+
+    if (done < 0) 
+    {
+        err_fatal_simple_core("vfprintf(stdout)", strerror(saveErrno));
+    }
+    return done;
+}
+
+int err_fprintf(FILE *stream, const char *format, ...) 
+{
+    va_list arg;
+    int done;
+
+    va_start(arg, format);
+    done = vfprintf(stream, format, arg);
+    int saveErrno = errno;
+    va_end(arg);
+
+    if (done < 0) 
+    {
+        err_fatal_simple_core("vfprintf", strerror(saveErrno));
+    }
+    return done;
+}
+
+int err_fflush(FILE *stream) 
+{
+    int ret = fflush(stream);
+    if (ret != 0) 
+    {
+        err_fatal_simple_core("fflush", strerror(errno));
+    }
+    return ret;
+}
+
+int err_fclose(FILE *stream) 
+{
+    int ret = fclose(stream);
+    if (ret != 0) 
+    {
+        err_fatal_simple_core("fclose", strerror(errno));
+    }
+    return ret;
+}
+
