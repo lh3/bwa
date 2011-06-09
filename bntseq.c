@@ -163,7 +163,7 @@ void bns_destroy(bntseq_t *bns)
 	}
 }
 
-void bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
+int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 {
 	kseq_t *seq;
 	char name[1024];
@@ -172,6 +172,7 @@ void bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 	int l_buf;
 	unsigned char buf[0x10000];
 	int32_t m_seqs, m_holes, l, i;
+	int64_t ret = -1;
 	FILE *fp;
 
 	// initialization
@@ -235,6 +236,7 @@ void bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 		bns->l_pac += seq->seq.l;
 	}
 	xassert(bns->l_pac, "zero length sequence.");
+	ret = bns->l_pac;
 	{ // finalize .pac file
 		ubyte_t ct;
 		fwrite(buf, 1, (l_buf>>2) + ((l_buf&3) == 0? 0 : 1), fp);
@@ -251,6 +253,7 @@ void bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 	bns_dump(bns, prefix);
 	bns_destroy(bns);
 	kseq_destroy(seq);
+	return ret;
 }
 
 int bwa_fa2pac(int argc, char *argv[])

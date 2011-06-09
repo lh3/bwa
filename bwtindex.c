@@ -42,12 +42,13 @@ void bwa_pac_rev_core(const char *fn, const char *fn_rev);
 int bwa_index(int argc, char *argv[])
 {
 	char *prefix = 0, *str, *str2, *str3;
-	int c, algo_type = 3, is_color = 0;
+	int c, algo_type = 0, is_color = 0;
 	clock_t t;
+	int64_t l_pac;
 
 	while ((c = getopt(argc, argv, "ca:p:")) >= 0) {
 		switch (c) {
-		case 'a':
+		case 'a': // if -a is not set, algo_type will be determined later
 			if (strcmp(optarg, "div") == 0) algo_type = 1;
 			else if (strcmp(optarg, "bwtsw") == 0) algo_type = 2;
 			else if (strcmp(optarg, "is") == 0) algo_type = 3;
@@ -79,7 +80,7 @@ int bwa_index(int argc, char *argv[])
 		gzFile fp = xzopen(argv[optind], "r");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Pack FASTA... ");
-		bns_fasta2bntseq(fp, prefix);
+		l_pac = bns_fasta2bntseq(fp, prefix);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		gzclose(fp);
 	} else { // color indexing
@@ -87,7 +88,7 @@ int bwa_index(int argc, char *argv[])
 		strcat(strcpy(str, prefix), ".nt");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Pack nucleotide FASTA... ");
-		bns_fasta2bntseq(fp, str);
+		l_pac = bns_fasta2bntseq(fp, str);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		gzclose(fp);
 		{
@@ -99,6 +100,11 @@ int bwa_index(int argc, char *argv[])
 			fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		}
 	}
+	if (l_pac > 0xffffffffu) {
+		fprintf(stderr, "[%s] BWA only works with reference sequences shorter than 4GB in total. Abort!\n", __func__);
+		return 1;
+	}
+	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
 	{
 		strcpy(str, prefix); strcat(str, ".pac");
 		strcpy(str2, prefix); strcat(str2, ".rpac");
