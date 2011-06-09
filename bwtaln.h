@@ -22,6 +22,8 @@
 #define BWA_AVG_ERR 0.02
 #define BWA_MIN_RDLEN 35 // for read trimming
 
+#define BWA_MAX_BCLEN 63 // maximum barcode length; 127 is the maximum
+
 #ifndef bns_pac
 #define bns_pac(pac, k) ((pac)[(k)>>2] >> ((~(k)&3)<<1) & 3)
 #endif
@@ -75,7 +77,7 @@ typedef struct {
 	// for multi-threading only
 	int tid;
 	// barcode
-	char bc[16]; // null terminated; up to 15 bases
+	char bc[BWA_MAX_BCLEN+1]; // null terminated; up to BWA_MAX_BCLEN bases
 	// NM and MD tags
 	uint32_t full_len:20, nm:12;
 	char *md;

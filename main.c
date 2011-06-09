@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.5.9-r18-dev"
+#define PACKAGE_VERSION "0.5.9-r19-dev"
 #endif
 
 static int usage()
