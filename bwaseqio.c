@@ -157,6 +157,25 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
 	while ((l = kseq_read(seq)) >= 0) {
+		// skip reads that are marked to be filtered by Casava
+		if (mode & BWA_MODE_CFY) {
+			char *s = rindex(seq->name.s, ' ');
+			if (s) {
+				*s = '\0';
+				for(++s; *s != '\0'; ++s) {
+					if (*s == ':') {
+						++s;
+						break;
+					}
+				}
+				if (*s == 'Y')
+					continue;
+			}
+			if (!s || *s != 'N') {
+				fprintf(stderr, "No Casava filter character found.\n");
+				return 0;
+			}
+		}
 		if (is_64 && seq->qual.l)
 			for (i = 0; i < seq->qual.l; ++i) seq->qual.s[i] -= 31;
 		if (seq->seq.l <= l_bc) continue; // sequence length equals or smaller than the barcode length

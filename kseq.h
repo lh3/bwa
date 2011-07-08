@@ -102,7 +102,7 @@ typedef struct __kstring_t {
 					if (ks->buf[i] == delimiter) break;					\
 			} else {													\
 				for (i = ks->begin; i < ks->end; ++i)					\
-					if (isspace(ks->buf[i])) break;						\
+					if (isspace(ks->buf[i]) && (ks->buf[i] != ' ')) break;						\
 			}															\
 			if (str->m - str->l < i - ks->begin + 1) {					\
 				str->m = str->l + (i - ks->begin) + 1;					\
