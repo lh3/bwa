@@ -86,6 +86,7 @@ typedef struct {
 #define BWA_MODE_GAPE       0x01
 #define BWA_MODE_COMPREAD   0x02
 #define BWA_MODE_LOGGAP     0x04
+#define BWA_MODE_CFY        0x08
 #define BWA_MODE_NONSTOP    0x10
 #define BWA_MODE_BAM        0x20
 #define BWA_MODE_BAM_SE     0x40
