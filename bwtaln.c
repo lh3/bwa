@@ -233,7 +233,7 @@ int bwa_aln(int argc, char *argv[])
 	gap_opt_t *opt;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IB:")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -261,7 +261,6 @@ int bwa_aln(int argc, char *argv[])
 		case '1': opt->mode |= BWA_MODE_BAM_READ1; break;
 		case '2': opt->mode |= BWA_MODE_BAM_READ2; break;
 		case 'I': opt->mode |= BWA_MODE_IL13; break;
-		case 'Y': opt->mode |= BWA_MODE_CFY; break;
 		case 'B': opt->mode |= atoi(optarg) << 24; break;
 		default: return 1;
 		}
@@ -299,7 +298,6 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -0        use single-end reads only (effective with -b)\n");
 		fprintf(stderr, "         -1        use the 1st read in a pair (effective with -b)\n");
 		fprintf(stderr, "         -2        use the 2nd read in a pair (effective with -b)\n");
-		fprintf(stderr, "         -Y        filter Casava-filtered sequences\n");
 		fprintf(stderr, "\n");
 		return 1;
 	}
