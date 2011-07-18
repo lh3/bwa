@@ -142,7 +142,7 @@ inline void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint
 		*ok = n;
 		// calculate *ol
 		j = l >> 5 << 5;
-		for (p += 2; i < j; i += 32, p += 2)
+		for (; i < j; i += 32, p += 2)
 			m += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
 		m += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~l&31)<<1)) - 1), c);
 		if (c == 0) m -= ~l&31; // corrected for the masked bits
