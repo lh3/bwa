@@ -157,17 +157,17 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
 	while ((l = kseq_read(seq)) >= 0) {
+		p = &seqs[n_seqs++];
 		if ((mode & BWA_MODE_CFY) && (seq->comment.l != 0)) {
-			// skip reads that are marked to be filtered by Casava
+			// Flag QC-failing after CASAVA
 			char *s = index(seq->comment.s, ':');
 			if (s && *(++s) == 'Y') {
-				continue;
+				p->extra_flag |= SAM_QCF;
 			}
 		}
 		if (is_64 && seq->qual.l)
 			for (i = 0; i < seq->qual.l; ++i) seq->qual.s[i] -= 31;
 		if (seq->seq.l <= l_bc) continue; // sequence length equals or smaller than the barcode length
-		p = &seqs[n_seqs++];
 		if (l_bc) { // then trim barcode
 			for (i = 0; i < l_bc; ++i)
 				p->bc[i] = (seq->qual.l && seq->qual.s[i]-33 < BARCODE_LOW_QUAL)? tolower(seq->seq.s[i]) : toupper(seq->seq.s[i]);
