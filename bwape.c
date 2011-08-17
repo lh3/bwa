@@ -720,10 +720,6 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 		for (i = 0; i < n_seqs; ++i) {
 			bwa_seq_t *p[2];
 			p[0] = seqs[0] + i; p[1] = seqs[1] + i;
-			if (p[0]->bc[0] || p[1]->bc[0]) {
-				strcat(p[0]->bc, p[1]->bc);
-				strcpy(p[1]->bc, p[0]->bc);
-			}
 			bwa_print_sam1(bns, p[0], p[1], opt.mode, opt.max_top2);
 			bwa_print_sam1(bns, p[1], p[0], opt.mode, opt.max_top2);
 		}

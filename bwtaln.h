@@ -79,7 +79,7 @@ typedef struct {
 	// for multi-threading only
 	int tid;
 	// barcode
-	char bc[BWA_MAX_BCLEN+1]; // null terminated; up to BWA_MAX_BCLEN bases
+	char *bc; // store barcode, if any.
 	// NM and MD tags
 	uint32_t full_len:20, nm:12;
 	char *md;
@@ -98,7 +98,7 @@ typedef struct {
 
 typedef struct {
 	int s_mm, s_gapo, s_gape;
-	int mode; // bit 24-31 are the barcode length
+	uint32_t mode; // bit 24-31 are the barcode length
 	int indel_end_skip, max_del_occ, max_entries;
 	float fnr;
 	int max_diff, max_gapo, max_gape;
