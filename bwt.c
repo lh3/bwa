@@ -33,6 +33,22 @@
 #include "utils.h"
 #include "bwt.h"
 
+static const uint64_t occ_mask[32] = {
+	0xc0000000ull, 	0xf0000000ull, 	0xfc000000ull,
+	0xff000000ull, 	0xffc00000ull, 	0xfff00000ull,
+	0xfffc0000ull, 	0xffff0000ull, 	0xffffc000ull,
+	0xfffff000ull, 	0xfffffc00ull, 	0xffffff00ull,
+	0xffffffc0ull, 	0xfffffff0ull, 	0xfffffffcull,
+	0xffffffffull, 	0xc0000000ffffffffull, 	0xf0000000ffffffffull,
+	0xfc000000ffffffffull, 	0xff000000ffffffffull, 	0xffc00000ffffffffull,
+	0xfff00000ffffffffull, 	0xfffc0000ffffffffull, 	0xffff0000ffffffffull,
+	0xffffc000ffffffffull, 	0xfffff000ffffffffull, 	0xfffffc00ffffffffull,
+	0xffffff00ffffffffull, 	0xffffffc0ffffffffull, 	0xfffffff0ffffffffull,
+	0xfffffffcffffffffull, 0xffffffffffffffffull
+};
+static const uint64_t n_mask[5] = { 0xffffffffffffffffull, 0xaaaaaaaaaaaaaaaaull, 
+		0x5555555555555555ull, 0x0ull, 0xffffffffffffffffull };
+
 void bwt_gen_cnt_table(bwt_t *bwt)
 {
 	int i, j;
@@ -47,7 +63,7 @@ void bwt_gen_cnt_table(bwt_t *bwt)
 // bwt->bwt and bwt->occ must be precalculated
 void bwt_cal_sa(bwt_t *bwt, int intv)
 {
-	bwtint_t isa, sa, i; // S(isa) = sa
+	bwtint_t isa, sa, i, c; // S(isa) = sa
 
 	xassert(bwt->bwt, "bwt_t::bwt is not initialized.");
 
@@ -60,7 +76,12 @@ void bwt_cal_sa(bwt_t *bwt, int intv)
 	for (i = 0; i < bwt->seq_len; ++i) {
 		if (isa % intv == 0) bwt->sa[isa/intv] = sa;
 		--sa;
-		isa = bwt_invPsi(bwt, isa);
+		if (isa == bwt->primary) {
+			isa = 0;
+		} else {
+			c = bwt_B0(bwt, isa < bwt->primary ? isa : isa - 1);
+			isa = bwt->L2[c] + bwt_occ(bwt, n_mask[c], isa, c);
+		}
 	}
 	if (isa % intv == 0) bwt->sa[isa/intv] = sa;
 	bwt->sa[0] = (bwtint_t)-1; // before this line, bwt->sa[0] = bwt->seq_len
@@ -68,45 +89,51 @@ void bwt_cal_sa(bwt_t *bwt, int intv)
 
 bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k)
 {
-	bwtint_t sa = 0;
+	bwtint_t sa = 0, c;
 	while (k % bwt->sa_intv != 0) {
 		++sa;
-		k = bwt_invPsi(bwt, k);
+		if (k == bwt->primary) {
+			k = 0;
+		} else {
+			c = bwt_B0(bwt, k < bwt->primary ? k : k - 1);
+			k = bwt->L2[c] + bwt_occ(bwt, n_mask[c], k, c);
+		}
 	}
 	/* without setting bwt->sa[0] = -1, the following line should be
 	   changed to (sa + bwt->sa[k/bwt->sa_intv]) % (bwt->seq_len + 1) */
 	return sa + bwt->sa[k/bwt->sa_intv];
 }
 
-static inline int __occ_aux(uint64_t y, int c)
+static inline int __occ_aux(uint64_t y)
 {
 	// reduce nucleotide counting to bits counting
-	y = ((c&2)? y : ~y) >> 1 & ((c&1)? y : ~y) & 0x5555555555555555ull;
+	y = (y >> 1) & y;
 	// count the number of 1s in y
-	y = (y & 0x3333333333333333ull) + (y >> 2 & 0x3333333333333333ull);
+	y = (y & 0x1111111111111111ull) + (y >> 2 & 0x1111111111111111ull);
 	return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
 }
 
-inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
+inline bwtint_t bwt_occ(const bwt_t *bwt, const uint64_t x, bwtint_t k, ubyte_t c)
 {
 	bwtint_t n, l, j;
-	uint32_t *p;
+	uint64_t *p;
 
 	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];
 	if (k == (bwtint_t)(-1)) return 0;
 	if (k >= bwt->primary) --k; // because $ is not in bwt
 
 	// retrieve Occ at k/OCC_INTERVAL
-	n = (p = bwt_occ_intv(bwt, k))[c];
-	p += 4; // jump to the start of the first BWT cell
+	p = (uint64_t *)bwt_occ_intv(bwt, k);
+	n = ((uint32_t *)p)[c];
+	p += 2; // jump to the start of the first BWT cell
 
 	// calculate Occ up to the last k/32
 	j = k >> 5 << 5;
-	for (l = k/OCC_INTERVAL*OCC_INTERVAL; l < j; l += 32, p += 2)
-		n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+	for (l = k/OCC_INTERVAL*OCC_INTERVAL; l < j; l += 32, ++p)
+		n += __occ_aux(*p ^ x);
 
 	// calculate Occ
-	n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
+	n += __occ_aux((*p & occ_mask[k&31]) ^ x);
 	if (c == 0) n -= ~k&31; // corrected for the masked bits
 
 	return n;
@@ -115,36 +142,40 @@ inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 // an analogy to bwt_occ() but more efficient, requiring k <= l
 inline void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok, bwtint_t *ol)
 {
+	const uint64_t x = n_mask[c];
 	bwtint_t _k, _l;
 	if (k == l) {
-		*ok = *ol = bwt_occ(bwt, k, c);
+		*ok = *ol = bwt_occ(bwt, x, k, c);
 		return;
 	}
 	_k = (k >= bwt->primary)? k-1 : k;
 	_l = (l >= bwt->primary)? l-1 : l;
 	if (_l/OCC_INTERVAL != _k/OCC_INTERVAL || k == (bwtint_t)(-1) || l == (bwtint_t)(-1)) {
-		*ok = bwt_occ(bwt, k, c);
-		*ol = bwt_occ(bwt, l, c);
+		*ok = bwt_occ(bwt, x, k, c);
+		*ol = bwt_occ(bwt, x, l, c);
 	} else {
 		bwtint_t m, n, i, j;
-		uint32_t *p;
+		uint64_t *p;
 		if (k >= bwt->primary) --k;
 		if (l >= bwt->primary) --l;
-		n = (p = bwt_occ_intv(bwt, k))[c];
-		p += 4;
+		p = (uint64_t *)bwt_occ_intv(bwt, k);
+		n = ((uint32_t *)p)[c];
+		p += 2;
 		// calculate *ok
 		j = k >> 5 << 5;
-		for (i = k/OCC_INTERVAL*OCC_INTERVAL; i < j; i += 32, p += 2)
-			n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+		for (i = k/OCC_INTERVAL*OCC_INTERVAL; i < j; i += 32, ++p)
+			n += __occ_aux(*p ^ x);
+
 		m = n;
-		n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
+		n += __occ_aux((*p & occ_mask[k&31]) ^ x);
 		if (c == 0) n -= ~k&31; // corrected for the masked bits
 		*ok = n;
 		// calculate *ol
 		j = l >> 5 << 5;
-		for (; i < j; i += 32, p += 2)
-			m += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
-		m += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~l&31)<<1)) - 1), c);
+		for (; i < j; i += 32, ++p)
+			m += __occ_aux(*p ^ x);
+
+		m += __occ_aux((*p & occ_mask[l&31]) ^ x);
 		if (c == 0) m -= ~l&31; // corrected for the masked bits
 		*ol = m;
 	}
@@ -169,7 +200,7 @@ inline void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 	j = k >> 4 << 4;
 	for (l = k / OCC_INTERVAL * OCC_INTERVAL, x = 0; l < j; l += 16, ++p)
 		x += __occ_aux4(bwt, *p);
-	x += __occ_aux4(bwt, *p & ~((1U<<((~k&15)<<1)) - 1)) - (~k&15);
+	x += __occ_aux4(bwt, *p & occ_mask[k&15]) - (~k&15);
 	cnt[0] += x&0xff; cnt[1] += x>>8&0xff; cnt[2] += x>>16&0xff; cnt[3] += x>>24;
 }
 
@@ -202,11 +233,12 @@ inline void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4]
 		for (i = k / OCC_INTERVAL * OCC_INTERVAL, x = 0; i < j; i += 16, ++p)
 			x += __occ_aux4(bwt, *p);
 		y = x;
-		x += __occ_aux4(bwt, *p & ~((1U<<((~k&15)<<1)) - 1)) - (~k&15);
+		x += __occ_aux4(bwt, *p & occ_mask[k&15]) - (~k&15);
 		// calculate cntl[] and finalize cntk[]
 		j = l >> 4 << 4;
-		for (; i < j; i += 16, ++p) y += __occ_aux4(bwt, *p);
-		y += __occ_aux4(bwt, *p & ~((1U<<((~l&15)<<1)) - 1)) - (~l&15);
+		for (; i < j; i += 16, ++p)
+			y += __occ_aux4(bwt, *p);
+		y += __occ_aux4(bwt, *p & occ_mask[l&15]) - (~l&15);
 		memcpy(cntl, cntk, 16);
 		cntk[0] += x&0xff; cntk[1] += x>>8&0xff; cntk[2] += x>>16&0xff; cntk[3] += x>>24;
 		cntl[0] += y&0xff; cntl[1] += y>>8&0xff; cntl[2] += y>>16&0xff; cntl[3] += y>>24;
