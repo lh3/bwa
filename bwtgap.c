@@ -128,11 +128,10 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 
 	while (stack->n_entries) {
 		gap_entry_t e;
-		int a, i, m, m_seed = 0, hit_found, allow_diff, allow_M, tmp;
+		int a, i, m, hit_found, allow_diff, allow_M, tmp;
 		bwtint_t k, l, cnt_k[4], cnt_l[4], occ;
 		const bwt_t *bwt;
 		const ubyte_t *str;
-		const bwt_width_t *seed_width = 0;
 		bwt_width_t *width;
 
 		if (max_entries < stack->n_entries) max_entries = stack->n_entries;
@@ -146,11 +145,6 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 		if (opt->mode & BWA_MODE_GAPE) m -= e.n_gape;
 		if (m < 0) continue;
 		bwt = bwts[1-a]; str = seq[a]; width = w[a];
-		if (seed_w) { // apply seeding
-			seed_width = seed_w[a];
-			m_seed = opt->max_seed_diff - (e.n_mm + e.n_gapo);
-			if (opt->mode & BWA_MODE_GAPE) m_seed -= e.n_gape;
-		}
 		//printf("#1\t[%d,%d,%d,%c]\t[%d,%d,%d]\t[%u,%u]\t[%u,%u]\t%d\n", stack->n_entries, a, i, "MID"[e.state], e.n_mm, e.n_gapo, e.n_gape, width[i-1].bid, width[i-1].w, k, l, e.last_diff_pos);
 		if (i > 0 && m < width[i-1].bid) continue;
 
@@ -203,13 +197,18 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 		// test whether diff is allowed
 		allow_diff = allow_M = 1;
 		if (i > 0) {
+			--m;
 			int ii = i - (len - opt->seed_len);
-			if (width[i-1].bid > m-1) allow_M = allow_diff = 0;
-			else if (width[i-1].bid == m-1 && width[i].bid == m-1 && width[i-1].w == width[i].w) allow_M = 0;
+			if (width[i-1].bid > m) allow_M = allow_diff = 0;
+			else if (width[i-1].bid == m && width[i].bid == m && width[i-1].w == width[i].w) allow_M = 0;
 			if (seed_w && ii > 0) {
-				if (seed_width[ii-1].bid > m_seed-1) allow_M = allow_diff = 0;
-				else if (seed_width[ii-1].bid == m_seed-1 && seed_width[ii].bid == m_seed-1
-						 && seed_width[ii-1].w == seed_width[ii].w) allow_M = 0;
+				width = seed_w[a];
+				m += opt->max_seed_diff - max_diff;
+				if (width[ii-1].bid > m) allow_M = allow_diff = 0;
+				else if (width[ii-1].bid == m && width[ii].bid == m
+						 && width[ii-1].w == width[ii].w)
+					allow_M = 0;
+				width = w[a];
 			}
 		}
 		// indels
