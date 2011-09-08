@@ -105,21 +105,20 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 						  bwt_width_t *seed_w[2], const gap_opt_t *opt, int *_n_aln, gap_stack_t *stack)
 {
 	int best_score = aln_score(opt->max_diff+1, opt->max_gapo+1, opt->max_gape+1, opt);
-	int best_diff = opt->max_diff + 1, max_diff = opt->max_diff;
-	int best_cnt = 0;
-	int max_entries = 0, j, _j, n_aln, m_aln;
+	int max_diff = opt->max_diff;
+	int j, m_aln;
 	bwt_aln1_t *aln;
 
-	m_aln = 4; n_aln = 0;
+	m_aln = 4;
 	aln = (bwt_aln1_t*)calloc(m_aln, sizeof(bwt_aln1_t));
 
+	*_n_aln = 0;
 	// check whether there are too many N
-	for (j = _j = 0; j < len; ++j)
-		if (seq[0][j] > 3) ++_j;
-	if (_j > max_diff) {
-		*_n_aln = n_aln;
+	for (j = 0; j < len; ++j)
+		if (seq[0][j] > 3 && !--max_diff)
+			break;
+	if (j < len)
 		return aln;
-	}
 
 	//for (j = 0; j != len; ++j) printf("#0 %d: [%d,%u]\t[%d,%u]\n", j, w[0][j].bid, w[0][j].w, w[1][j].bid, w[1][j].w);
 	gap_reset_stack(stack); // reset stack
@@ -134,8 +133,6 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 		const ubyte_t *str;
 		bwt_width_t *width;
 
-		if (max_entries < stack->n_entries) max_entries = stack->n_entries;
-		if (stack->n_entries > opt->max_entries) break;
 		gap_pop(stack, &e); // get the best entry
 		k = e.k; l = e.l; // SA interval
 		a = e.info>>20&1; i = e.info&0xffff; // strand, length
@@ -156,44 +153,48 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 			else continue; // no hit, skip
 		}
 
+		occ = l - k + 1;
 		if (hit_found) { // action for found hits
 			int score = aln_score(e.n_mm, e.n_gapo, e.n_gape, opt);
-			int do_add = 1;
+			int best_cnt, n_aln = *_n_aln;
 			//printf("#2 hits found: %d:(%u,%u)\n", e.n_mm+e.n_gapo, k, l);
 			if (n_aln == 0) {
-				best_score = score;
-				best_diff = e.n_mm + e.n_gapo;
-				if (opt->mode & BWA_MODE_GAPE) best_diff += e.n_gape;
+				best_score = score + opt->s_mm;
+				best_cnt = e.n_mm + e.n_gapo;
+				if (opt->mode & BWA_MODE_GAPE) best_cnt += e.n_gape;
 				if (!(opt->mode & BWA_MODE_NONSTOP))
-					max_diff = (best_diff + 1 > opt->max_diff)? opt->max_diff : best_diff + 1; // top2 behaviour
-			}
-			if (score == best_score) best_cnt += l - k + 1;
-			else if (best_cnt > opt->max_top2) break; // top2b behaviour
-			if (e.n_gapo) { // check whether the hit has been found. this may happen when a gap occurs in a tandem repeat
-				for (j = 0; j != n_aln; ++j)
-					if (aln[j].k == k && aln[j].l == l) break;
-				if (j < n_aln) do_add = 0;
-			}
-			if (do_add) { // append
-				bwt_aln1_t *p;
-				gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos&0xffff, width);
-				if (n_aln == m_aln) {
-					m_aln <<= 1;
-					aln = (bwt_aln1_t*)realloc(aln, m_aln * sizeof(bwt_aln1_t));
-					memset(aln + m_aln/2, 0, m_aln/2*sizeof(bwt_aln1_t));
+					max_diff = (best_cnt + 1 > opt->max_diff)? opt->max_diff : best_cnt + 1; // top2 behaviour
+				best_cnt = opt->max_top2 - occ;
+			} else {
+				if (best_score == score + opt->s_mm)
+					best_cnt -= occ;
+				else if (best_cnt < 0)
+					break; // top2b behaviour
+				if (e.n_gapo) { // check whether the hit has been found. this may happen when a gap occurs in a tandem repeat
+					for (j = 0; j != n_aln; ++j)
+						if (aln[j].k == k && aln[j].l == l) break;
+					if (j < n_aln) 
+						continue;
 				}
-				p = aln + n_aln;
-				p->n_mm = e.n_mm; p->n_gapo = e.n_gapo; p->n_gape = e.n_gape; p->a = a;
-				p->k = k; p->l = l;
-				p->score = score;
-				++n_aln;
 			}
+			// append
+			bwt_aln1_t *p;
+			gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos&0xffff, width);
+			if (n_aln == m_aln) {
+				m_aln <<= 1;
+				aln = (bwt_aln1_t*)realloc(aln, m_aln * sizeof(bwt_aln1_t));
+				memset(aln + m_aln/2, 0, m_aln/2*sizeof(bwt_aln1_t));
+			}
+			p = aln + n_aln;
+			p->n_mm = e.n_mm; p->n_gapo = e.n_gapo; p->n_gape = e.n_gape; p->a = a;
+			p->k = k; p->l = l;
+			p->score = score;
+			++(*_n_aln);
 			continue;
 		}
 
 		--i;
 		bwt_2occ4(bwt, k - 1, l, cnt_k, cnt_l); // retrieve Occ values
-		occ = l - k + 1;
 		// test whether diff is allowed
 		allow_diff = allow_M = 1;
 		if (i > 0) {
@@ -265,7 +266,6 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 		}
 	}
 
-	*_n_aln = n_aln;
 	//fprintf(stderr, "max_entries = %d\n", max_entries);
 	return aln;
 }
