@@ -42,7 +42,7 @@ static void gap_reset_stack(gap_stack_t *stack)
 	stack->n_entries = 0;
 }
 
-static inline void gap_push(gap_stack_t *stack, int a, int i, bwtint_t k, bwtint_t l, int n_mm, int n_gapo, int n_gape,
+static inline void gap_push(gap_stack_t *stack, int i, bwtint_t k, bwtint_t l, int n_mm, int n_gapo, int n_gape,
 							int state, int is_diff, const gap_opt_t *opt)
 {
 	int score;
@@ -55,7 +55,7 @@ static inline void gap_push(gap_stack_t *stack, int a, int i, bwtint_t k, bwtint
 		q->stack = (gap_entry_t*)realloc(q->stack, sizeof(gap_entry_t) * q->m_entries);
 	}
 	p = q->stack + q->n_entries;
-	p->info = (u_int32_t)score<<21 | a<<20 | i; p->k = k; p->l = l;
+	p->info = (u_int32_t)score<<21 | i; p->k = k; p->l = l;
 	p->n_mm = n_mm; p->n_gapo = n_gapo; p->n_gape = n_gape; p->state = state;
 	if (is_diff) p->last_diff_pos = i;
 	++(q->n_entries);
@@ -123,8 +123,8 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 
 	//for (j = 0; j != len; ++j) printf("#0 %d: [%d,%u]\t[%d,%u]\n", j, w[0][j].bid, w[0][j].w, w[1][j].bid, w[1][j].w);
 	gap_reset_stack(stack); // reset stack
-	gap_push(stack, 0, len, 0, bwts[0]->seq_len, 0, 0, 0, 0, 0, opt);
-	gap_push(stack, 1, len, 0, bwts[0]->seq_len, 0, 0, 0, 0, 0, opt);
+	gap_push(stack, len, 0, bwts[0]->seq_len, 0, 0, 0, 0, 0, opt);
+	gap_push(stack, 1 << 20 | len, 0, bwts[0]->seq_len, 0, 0, 0, 0, 0, opt);
 
 	while (stack->n_entries) {
 		gap_entry_t e;
@@ -182,7 +182,7 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 			}
 			if (do_add) { // append
 				bwt_aln1_t *p;
-				gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos, width);
+				gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos&0xffff, width);
 				if (n_aln == m_aln) {
 					m_aln <<= 1;
 					aln = (bwt_aln1_t*)realloc(aln, m_aln * sizeof(bwt_aln1_t));
@@ -204,57 +204,65 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 		allow_diff = allow_M = 1;
 		if (i > 0) {
 			int ii = i - (len - opt->seed_len);
-			if (width[i-1].bid > m-1) allow_diff = 0;
+			if (width[i-1].bid > m-1) allow_M = allow_diff = 0;
 			else if (width[i-1].bid == m-1 && width[i].bid == m-1 && width[i-1].w == width[i].w) allow_M = 0;
 			if (seed_w && ii > 0) {
-				if (seed_width[ii-1].bid > m_seed-1) allow_diff = 0;
+				if (seed_width[ii-1].bid > m_seed-1) allow_M = allow_diff = 0;
 				else if (seed_width[ii-1].bid == m_seed-1 && seed_width[ii].bid == m_seed-1
 						 && seed_width[ii-1].w == seed_width[ii].w) allow_M = 0;
 			}
 		}
 		// indels
-		tmp = (opt->mode & BWA_MODE_LOGGAP)? int_log2(e.n_gape + e.n_gapo)/2+1 : e.n_gapo + e.n_gape;
-		if (allow_diff && i >= opt->indel_end_skip + tmp && len - i >= opt->indel_end_skip + tmp) {
+		if (allow_diff) {
+			tmp = e.n_gape + e.n_gapo;
+			if (opt->mode & BWA_MODE_LOGGAP)
+				tmp = int_log2(tmp)/2+1;
+			tmp = (i >= opt->indel_end_skip + tmp && len - i >= opt->indel_end_skip + tmp);
+		} else {
+			tmp = 0;
+		}
+		int c = str[i];
+		i = a << 20 | i;
+		if (tmp) {
 			if (e.state == STATE_M) { // gap open
 				if (e.n_gapo < opt->max_gapo) { // gap open is allowed
 					// insertion
-					gap_push(stack, a, i, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, STATE_I, 1, opt);
+					gap_push(stack, i, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, STATE_I, 1, opt);
 					// deletion
 					for (j = 0; j != 4; ++j) {
 						k = bwt->L2[j] + cnt_k[j] + 1;
 						l = bwt->L2[j] + cnt_l[j];
-						if (k <= l) gap_push(stack, a, i + 1, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, STATE_D, 1, opt);
+						if (k <= l) gap_push(stack, i + 1, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, STATE_D, 1, opt);
 					}
 				}
 			} else if (e.state == STATE_I) { // extention of an insertion
 				if (e.n_gape < opt->max_gape) // gap extention is allowed
-					gap_push(stack, a, i, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, STATE_I, 1, opt);
+					gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, STATE_I, 1, opt);
 			} else if (e.state == STATE_D) { // extention of a deletion
 				if (e.n_gape < opt->max_gape) { // gap extention is allowed
 					if (e.n_gape + e.n_gapo < max_diff || occ < opt->max_del_occ) {
 						for (j = 0; j != 4; ++j) {
 							k = bwt->L2[j] + cnt_k[j] + 1;
 							l = bwt->L2[j] + cnt_l[j];
-							if (k <= l) gap_push(stack, a, i + 1, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, STATE_D, 1, opt);
+							if (k <= l) gap_push(stack, i + 1, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, STATE_D, 1, opt);
 						}
 					}
 				}
 			}
 		}
 		// mismatches
-		if (allow_diff && allow_M) { // mismatch is allowed
+		if (allow_M) { // mismatch is allowed
 			for (j = 1; j <= 4; ++j) {
-				int c = (str[i] + j) & 3;
-				int is_mm = (j != 4 || str[i] > 3);
-				k = bwt->L2[c] + cnt_k[c] + 1;
-				l = bwt->L2[c] + cnt_l[c];
-				if (k <= l) gap_push(stack, a, i, k, l, e.n_mm + is_mm, e.n_gapo, e.n_gape, STATE_M, is_mm, opt);
+				int cc = (c + j) & 3;
+				int is_mm = (j != 4 || c > 3);
+				k = bwt->L2[cc] + cnt_k[cc] + 1;
+				l = bwt->L2[cc] + cnt_l[cc];
+				if (k <= l) gap_push(stack, i, k, l, e.n_mm + is_mm, e.n_gapo, e.n_gape, STATE_M, is_mm, opt);
 			}
-		} else if (str[i] < 4) { // try exact match only
-			int c = str[i] & 3;
+		} else if (c < 4) { // try exact match only
 			k = bwt->L2[c] + cnt_k[c] + 1;
 			l = bwt->L2[c] + cnt_l[c];
-			if (k <= l) gap_push(stack, a, i, k, l, e.n_mm, e.n_gapo, e.n_gape, STATE_M, 0, opt);
+			if (k <= l) gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape, STATE_M, 0, opt);
 		}
 	}
 
