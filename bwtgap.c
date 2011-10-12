@@ -57,7 +57,7 @@ static inline void gap_push(gap_stack_t *stack, int a, int i, bwtint_t k, bwtint
 	p = q->stack + q->n_entries;
 	p->info = (u_int32_t)score<<21 | a<<20 | i; p->k = k; p->l = l;
 	p->n_mm = n_mm; p->n_gapo = n_gapo; p->n_gape = n_gape; p->state = state;
-	if (is_diff) p->last_diff_pos = i;
+	p->last_diff_pos = is_diff? i : -1;
 	++(q->n_entries);
 	++(stack->n_entries);
 	if (stack->best > score) stack->best = score;
