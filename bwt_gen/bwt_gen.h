@@ -25,6 +25,11 @@
 #ifndef BWT_GEN_H
 #define BWT_GEN_H
 
+#include <stdint.h>
+
+//typedef int64_t bgint_t;
+typedef unsigned bgint_t;
+
 #define ALPHABET_SIZE				4
 #define BIT_PER_CHAR				2
 #define CHAR_PER_WORD				16
@@ -56,32 +61,17 @@
 #define truncateRight(value, offset)			( (value) >> (offset) << (offset) )
 #define DNA_OCC_SUM_EXCEPTION(sum)			((sum & 0xfefefeff) == 0)
 
-typedef struct SaIndexRange {
-	unsigned int startSaIndex;
-	unsigned int endSaIndex;
-} SaIndexRange;
-
 typedef struct BWT {
-	unsigned int textLength;			// length of the text
-	unsigned int saInterval;			// interval between two SA values stored explicitly
-	unsigned int inverseSaInterval;		// interval between two inverse SA stored explicitly
-	unsigned int inverseSa0;			// SA-1[0]
-	unsigned int *cumulativeFreq;		// cumulative frequency
+	bgint_t textLength;					// length of the text
+	bgint_t inverseSa0;					// SA-1[0]
+	bgint_t *cumulativeFreq;			// cumulative frequency
 	unsigned int *bwtCode;				// BWT code
 	unsigned int *occValue;				// Occurrence values stored explicitly
-	unsigned int *occValueMajor;		// Occurrence values stored explicitly
-	unsigned int *saValue;				// SA values stored explicitly
-	unsigned int *inverseSa;			// Inverse SA stored explicitly
-	SaIndexRange *saIndexRange;			// SA index range
-	int saIndexRangeNumOfChar;			// Number of characters indexed in SA index range
-	unsigned int *saValueOnBoundary;	// Pre-calculated frequently referred data
+	bgint_t *occValueMajor;				// Occurrence values stored explicitly
 	unsigned int *decodeTable;			// For decoding BWT by table lookup
-	unsigned int decodeTableGenerated;	// == TRUE if decode table is generated on load and will be freed
 	unsigned int bwtSizeInWord;			// Temporary variable to hold the memory allocated
 	unsigned int occSizeInWord;			// Temporary variable to hold the memory allocated
 	unsigned int occMajorSizeInWord;	// Temporary variable to hold the memory allocated
-	unsigned int saValueSize;			// Temporary variable to hold the memory allocated
-	unsigned int inverseSaSize;			// Temporary variable to hold the memory allocated
 	unsigned int saIndexRangeSize;		// Temporary variable to hold the memory allocated
 } BWT;
 

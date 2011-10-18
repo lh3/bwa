@@ -257,13 +257,11 @@ BWT *BWTCreate(const unsigned int textLength, unsigned int *decodeTable)
 	bwt = (BWT*)calloc(1, sizeof(BWT));
 
 	bwt->textLength = 0;
-	bwt->inverseSa = 0;
 
 	bwt->cumulativeFreq = (unsigned*)calloc((ALPHABET_SIZE + 1), sizeof(unsigned int*));
 	initializeVAL(bwt->cumulativeFreq, ALPHABET_SIZE + 1, 0);
 
 	bwt->bwtSizeInWord = 0;
-	bwt->saValueOnBoundary = NULL;
 
 	// Generate decode tables
 	if (decodeTable == NULL) {
@@ -278,14 +276,6 @@ BWT *BWTCreate(const unsigned int textLength, unsigned int *decodeTable)
 
 	bwt->occSizeInWord = 0;
 	bwt->occValue = NULL;
-
-	bwt->saInterval = ALL_ONE_MASK;
-	bwt->saValueSize = 0;
-	bwt->saValue = NULL;
-
-	bwt->inverseSaInterval = ALL_ONE_MASK;
-	bwt->inverseSaSize = 0;
-	bwt->inverseSa = NULL;
 
 	return bwt;
 }
@@ -1047,7 +1037,6 @@ void BWTGenerateOccValueFromBwt(const unsigned int*  bwt, unsigned int* __restri
 	wordBetweenOccValue = OCC_INTERVAL / CHAR_PER_WORD;
 
 	// Calculate occValue
-	// [lh3] by default: OCC_INTERVAL_MAJOR=65536, OCC_INTERVAL=256
 	numberOfOccValue = (textLength + OCC_INTERVAL - 1) / OCC_INTERVAL + 1;				// Value at both end for bi-directional encoding
 	numberOfOccIntervalPerMajor = OCC_INTERVAL_MAJOR / OCC_INTERVAL;
 	numberOfOccValueMajor = (numberOfOccValue + numberOfOccIntervalPerMajor - 1) / numberOfOccIntervalPerMajor;
@@ -1464,11 +1453,7 @@ void BWTFree(BWT *bwt)
 	free(bwt->bwtCode);
 	free(bwt->occValue);
 	free(bwt->occValueMajor);
-	free(bwt->saValue);
-	free(bwt->inverseSa);
 	free(bwt->decodeTable);
-	free(bwt->saIndexRange);
-	free(bwt->saValueOnBoundary);
 	free(bwt);
 }
 
@@ -1503,19 +1488,6 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 	bwtLength = BWTFileSizeInWord(bwt->textLength);
 	fwrite(bwt->bwtCode, sizeof(unsigned int), bwtLength, bwtFile);
 	fclose(bwtFile);
-/*
-	occValueFile = (FILE*)fopen(occValueFileName, "wb");
-	if (occValueFile == NULL) {
-		fprintf(stderr, "BWTSaveBwtCodeAndOcc(): Cannot open occ value file!\n");
-		exit(1);
-	}
-
-	fwrite(&bwt->inverseSa0, sizeof(unsigned int), 1, occValueFile);
-	fwrite(bwt->cumulativeFreq + 1, sizeof(unsigned int), ALPHABET_SIZE, occValueFile);
-	fwrite(bwt->occValue, sizeof(unsigned int), bwt->occSizeInWord, occValueFile);
-	fwrite(bwt->occValueMajor, sizeof(unsigned int), bwt->occMajorSizeInWord, occValueFile);
-	fclose(occValueFile);
-*/
 }
 
 void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
