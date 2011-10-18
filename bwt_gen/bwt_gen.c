@@ -306,7 +306,6 @@ BWTInc *BWTIncCreate(const unsigned int textLength, const float targetNBit,
 		bwtInc->packedShift[i] = BITS_IN_WORD - (i+1) * BIT_PER_CHAR;
 	}
 
-	bwtInc->targetTextLength = textLength;
 	bwtInc->availableWord = (unsigned int)((textLength + OCC_INTERVAL - 1) / OCC_INTERVAL * OCC_INTERVAL / BITS_IN_WORD * bwtInc->targetNBit);
 	if (bwtInc->availableWord < BWTResidentSizeInWord(textLength) + BWTOccValueMinorSizeInWord(textLength)) {
 		fprintf(stderr, "BWTIncCreate() : targetNBit is too low!\n");

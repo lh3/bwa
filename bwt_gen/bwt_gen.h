@@ -72,7 +72,6 @@ typedef struct BWT {
 	unsigned int bwtSizeInWord;			// Temporary variable to hold the memory allocated
 	unsigned int occSizeInWord;			// Temporary variable to hold the memory allocated
 	unsigned int occMajorSizeInWord;	// Temporary variable to hold the memory allocated
-	unsigned int saIndexRangeSize;		// Temporary variable to hold the memory allocated
 } BWT;
 
 typedef struct BWTInc {
@@ -80,7 +79,6 @@ typedef struct BWTInc {
 	unsigned int numberOfIterationDone;
 	unsigned int *cumulativeCountInCurrentBuild;
 	unsigned int availableWord;
-	unsigned int targetTextLength;
 	float targetNBit;
 	unsigned int buildSize;
 	unsigned int initialMaxBuildSize;
