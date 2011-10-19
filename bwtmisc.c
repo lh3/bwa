@@ -125,20 +125,20 @@ void bwt_bwtupdate_core(bwt_t *bwt)
 	uint32_t *buf;
 
 	n_occ = (bwt->seq_len + OCC_INTERVAL - 1) / OCC_INTERVAL + 1;
-	bwt->bwt_size += n_occ * 4; // the new size
+	bwt->bwt_size += n_occ * sizeof(bwtint_t); // the new size
 	buf = (uint32_t*)calloc(bwt->bwt_size, 4); // will be the new bwt
 	c[0] = c[1] = c[2] = c[3] = 0;
 	for (i = k = 0; i < bwt->seq_len; ++i) {
 		if (i % OCC_INTERVAL == 0) {
 			memcpy(buf + k, c, sizeof(bwtint_t) * 4);
-			k += 4;
+			k += sizeof(bwtint_t); // in fact: sizeof(bwtint_t)=4*(sizeof(bwtint_t)/4)
 		}
-		if (i % 16 == 0) buf[k++] = bwt->bwt[i/16];
+		if (i % 16 == 0) buf[k++] = bwt->bwt[i/16]; // 16 == sizeof(uint32_t)/2
 		++c[bwt_B00(bwt, i)];
 	}
 	// the last element
 	memcpy(buf + k, c, sizeof(bwtint_t) * 4);
-	xassert(k + 4 == bwt->bwt_size, "inconsistent bwt_size");
+	xassert(k + sizeof(bwtint_t) == bwt->bwt_size, "inconsistent bwt_size");
 	// update bwt
 	free(bwt->bwt); bwt->bwt = buf;
 }

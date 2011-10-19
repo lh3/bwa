@@ -475,7 +475,7 @@ bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *qu
 		// get Occ for the DAG
 		bwtl_2occ4(target, v->tk - 1, v->tl, tcntk, tcntl);
 		for (tj = 0; tj != 4; ++tj) { // descend to the children
-			uint32_t qcntk[4], qcntl[4];
+			bwtint_t qcntk[4], qcntl[4];
 			int qj, *curr_score_mat = score_mat + tj * 4;
 			khiter_t iter;
 			bsw2entry_t *u;

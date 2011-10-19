@@ -1545,7 +1545,7 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
 {
 	BWTInc *bwtInc;
-	bwtInc = BWTIncConstructFromPacked(fn_pac, 4.4, 10000000, 10000000);
+	bwtInc = BWTIncConstructFromPacked(fn_pac, 3.7, 10000000, 10000000);
 	printf("[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
 	BWTSaveBwtCodeAndOcc(bwtInc->bwt, fn_bwt, 0);
 	BWTIncFree(bwtInc);

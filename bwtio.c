@@ -10,7 +10,7 @@ void bwt_dump_bwt(const char *fn, const bwt_t *bwt)
 	fp = xopen(fn, "wb");
 	fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
 	fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
-	fwrite(bwt->bwt, sizeof(bwtint_t), bwt->bwt_size, fp);
+	fwrite(bwt->bwt, 4, bwt->bwt_size, fp);
 	fclose(fp);
 }
 

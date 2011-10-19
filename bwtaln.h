@@ -51,8 +51,8 @@ typedef uint16_t bwa_cigar_t;
 #define __cigar_create(__op, __len) ((__op)<<CIGAR_OP_SHIFT | (__len))
 
 typedef struct {
-	uint32_t pos;
 	uint32_t n_cigar:15, gap:8, mm:8, strand:1;
+	bwtint_t pos;
 	bwa_cigar_t *cigar;
 } bwt_multi1_t;
 
