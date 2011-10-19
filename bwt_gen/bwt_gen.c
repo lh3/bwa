@@ -161,7 +161,7 @@ static void BWTIncSetBuildSizeAndTextAddr(BWTInc *bwtInc)
 	if (bwtInc->bwt->textLength == 0) {
 		// initial build
 		// Minus 2 because n+1 entries of seq and rank needed for n char
-		maxBuildSize = (bwtInc->availableWord - 2 * (sizeof(bgint_t) / 4) - OCC_INTERVAL / CHAR_PER_WORD)
+		maxBuildSize = (bwtInc->availableWord - (2 + OCC_INTERVAL / CHAR_PER_WORD) * (sizeof(bgint_t) / 4))
 							/ (2 * CHAR_PER_WORD + 1) * CHAR_PER_WORD / (sizeof(bgint_t) / 4);
 		if (bwtInc->initialMaxBuildSize > 0) {
 			bwtInc->buildSize = min(bwtInc->initialMaxBuildSize, maxBuildSize);
@@ -171,8 +171,8 @@ static void BWTIncSetBuildSizeAndTextAddr(BWTInc *bwtInc)
 	} else {
 		// Minus 3 because n+1 entries of sorted rank, seq and rank needed for n char
 		// Minus numberOfIterationDone because bwt slightly shift to left in each iteration
-		maxBuildSize = (bwtInc->availableWord - bwtInc->bwt->bwtSizeInWord - bwtInc->bwt->occSizeInWord - 3 * (sizeof(bgint_t) / 4)
-							 - bwtInc->numberOfIterationDone * OCC_INTERVAL / BIT_PER_CHAR) 
+		maxBuildSize = (bwtInc->availableWord - bwtInc->bwt->bwtSizeInWord - bwtInc->bwt->occSizeInWord
+							 - (3 + bwtInc->numberOfIterationDone * OCC_INTERVAL / BIT_PER_CHAR) * (sizeof(bgint_t) / 4)) 
 							 / 3 / (sizeof(bgint_t) / 4);
 		if (maxBuildSize < CHAR_PER_WORD) {
 			fprintf(stderr, "BWTIncSetBuildSizeAndTextAddr(): Not enough space allocated to continue construction!\n");
@@ -1399,7 +1399,7 @@ static void BWTIncConstruct(BWTInc *bwtInc, const bgint_t numChar)
 
 		// Merge BWT; relativeRank may be overwritten by mergedBwt
 		mergedBwt = bwtInc->workingMemory + bwtInc->availableWord - mergedBwtSizeInWord 
-				    - bwtInc->numberOfIterationDone * OCC_INTERVAL / BIT_PER_CHAR; // minus numberOfIteration * occInterval to create a buffer for merging
+				    - bwtInc->numberOfIterationDone * OCC_INTERVAL / BIT_PER_CHAR * (sizeof(bgint_t) / 4); // minus numberOfIteration * occInterval to create a buffer for merging
 		assert(mergedBwt >= insertBwt + numChar);
 		BWTIncMergeBwt(sortedRank, bwtInc->bwt->bwtCode, insertBwt, mergedBwt, bwtInc->bwt->textLength, numChar);
 	}
@@ -1545,7 +1545,7 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
 {
 	BWTInc *bwtInc;
-	bwtInc = BWTIncConstructFromPacked(fn_pac, 5.0, 10000000, 10000000);
+	bwtInc = BWTIncConstructFromPacked(fn_pac, 4.4, 10000000, 10000000);
 	printf("[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
 	BWTSaveBwtCodeAndOcc(bwtInc->bwt, fn_bwt, 0);
 	BWTIncFree(bwtInc);
