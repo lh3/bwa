@@ -83,7 +83,6 @@ typedef struct BWTInc {
 	unsigned int numberOfIterationDone;
 	bgint_t *cumulativeCountInCurrentBuild;
 	bgint_t availableWord;
-	float targetNBit;
 	bgint_t buildSize;
 	bgint_t initialMaxBuildSize;
 	bgint_t incMaxBuildSize;
@@ -362,18 +361,16 @@ BWTInc *BWTIncCreate(const unsigned int textLength, const float targetNBit,
 	bwtInc->bwt = BWTCreate(textLength, NULL);
 	bwtInc->initialMaxBuildSize = initialMaxBuildSize;
 	bwtInc->incMaxBuildSize = incMaxBuildSize;
-	bwtInc->targetNBit = targetNBit;
 	bwtInc->cumulativeCountInCurrentBuild = (bgint_t*)calloc((ALPHABET_SIZE + 1), sizeof(bgint_t));
 	initializeVAL_bg(bwtInc->cumulativeCountInCurrentBuild, ALPHABET_SIZE + 1, 0);
 
 	// Build frequently accessed data
 	bwtInc->packedShift = (unsigned*)calloc(CHAR_PER_WORD, sizeof(unsigned int));
-	for (i=0; i<CHAR_PER_WORD; i++) {
+	for (i=0; i<CHAR_PER_WORD; i++)
 		bwtInc->packedShift[i] = BITS_IN_WORD - (i+1) * BIT_PER_CHAR;
-	}
 
-	bwtInc->availableWord = (bgint_t)((textLength + OCC_INTERVAL - 1) / OCC_INTERVAL * OCC_INTERVAL / BITS_IN_WORD * bwtInc->targetNBit);
-	if (bwtInc->availableWord < MIN_AVAILABLE_WORD) bwtInc->availableWord = MIN_AVAILABLE_WORD;
+	bwtInc->availableWord = (bgint_t)((textLength + OCC_INTERVAL - 1) / OCC_INTERVAL * OCC_INTERVAL / BITS_IN_WORD * targetNBit);
+	if (bwtInc->availableWord < MIN_AVAILABLE_WORD) bwtInc->availableWord = MIN_AVAILABLE_WORD; // lh3: otherwise segfaul when availableWord is too small
 	if (bwtInc->availableWord < BWTResidentSizeInWord(textLength) + BWTOccValueMinorSizeInWord(textLength)) {
 		fprintf(stderr, "BWTIncCreate() : targetNBit is too low!\n");
 		exit(1);
@@ -1317,8 +1314,13 @@ static void BWTIncConstruct(BWTInc *bwtInc, const bgint_t numChar)
 		// Set address
 		seq = (bgint_t*)bwtInc->workingMemory;
 		relativeRank = seq + bwtInc->buildSize + 1;
+		// mergedBwt and packedTex may share memory
 		mergedBwt = insertBwt = bwtInc->workingMemory + bwtInc->availableWord - mergedBwtSizeInWord;	// build in place
 
+		assert((void*)(relativeRank + bwtInc->buildSize + 1) <= (void*)bwtInc->packedText);
+		assert((void*)(relativeRank + bwtInc->buildSize + 1) <= (void*)mergedBwt);
+
+		// ->packedText is not used any more and may be overwritten by mergedBwt
 		BWTIncPutPackedTextToRank(bwtInc->packedText, relativeRank, bwtInc->cumulativeCountInCurrentBuild, numChar);
 
 		firstCharInThisIteration = relativeRank[0];
@@ -1342,7 +1344,10 @@ static void BWTIncConstruct(BWTInc *bwtInc, const bgint_t numChar)
 		sortedRank = (bgint_t*)bwtInc->workingMemory;
 		seq = sortedRank + bwtInc->buildSize + 1;
 		insertBwt = (unsigned*)seq; // insertBwt and seq share memory
+		// relativeRank and ->packedText may share memory
 		relativeRank = seq + bwtInc->buildSize + 1;
+
+		assert((void*)relativeRank <= (void*)bwtInc->packedText);
 
 		// Store the first character of this iteration
 		firstCharInThisIteration = bwtInc->packedText[0] >> (BITS_IN_WORD - BIT_PER_CHAR);
@@ -1357,6 +1362,7 @@ static void BWTIncConstruct(BWTInc *bwtInc, const bgint_t numChar)
 
 		// Get rank of new suffix among processed suffix
 		// The seq array is built into ALPHABET_SIZE + 2 groups; ALPHABET_SIZE groups + 1 group divided into 2 by inverseSa0 + inverseSa0 as 1 group
+		// ->packedText is not used any more and will be overwritten by relativeRank
 		oldInverseSa0RelativeRank = BWTIncGetAbsoluteRank(bwtInc->bwt, sortedRank, seq, bwtInc->packedText, 
 														  numChar, bwtInc->cumulativeCountInCurrentBuild, bwtInc->firstCharInLastIteration);
 
@@ -1388,15 +1394,14 @@ static void BWTIncConstruct(BWTInc *bwtInc, const bgint_t numChar)
 
 		sortedRank[newInverseSa0RelativeRank] = 0;	// a special value so that this is skipped in the merged bwt
 
-		// Build BWT
+		// Build BWT; seq is overwritten by insertBwt
 		BWTIncBuildBwt(insertBwt, relativeRank, numChar, bwtInc->cumulativeCountInCurrentBuild);
 
-		// Merge BWT
+		// Merge BWT; relativeRank may be overwritten by mergedBwt
 		mergedBwt = bwtInc->workingMemory + bwtInc->availableWord - mergedBwtSizeInWord 
-				    - bwtInc->numberOfIterationDone * OCC_INTERVAL / BIT_PER_CHAR;
-					// minus numberOfIteration * occInterval to create a buffer for merging
+				    - bwtInc->numberOfIterationDone * OCC_INTERVAL / BIT_PER_CHAR; // minus numberOfIteration * occInterval to create a buffer for merging
+		assert(mergedBwt >= insertBwt + numChar);
 		BWTIncMergeBwt(sortedRank, bwtInc->bwt->bwtCode, insertBwt, mergedBwt, bwtInc->bwt->textLength, numChar);
-
 	}
 
 	// Build auxiliary structure and update info and pointers in BWT
