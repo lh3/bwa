@@ -151,10 +151,10 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	for (y = 1.0; y < 10.0; y += 0.01)
 		if (.5 * erfc(y / M_SQRT2) < ap_prior / L * (y * ii->std + ii->avg)) break;
 	ii->high_bayesian = (bwtint_t)(y * ii->std + ii->avg + .499);
-	fprintf(stderr, "[infer_isize] low and high boundaries: %d and %d for estimating avg and std\n", ii->low, ii->high);
+	fprintf(stderr, "[infer_isize] low and high boundaries: %ld and %ld for estimating avg and std\n", (long)ii->low, (long)ii->high);
 	fprintf(stderr, "[infer_isize] inferred external isize from %d pairs: %.3lf +/- %.3lf\n", n, ii->avg, ii->std);
 	fprintf(stderr, "[infer_isize] skewness: %.3lf; kurtosis: %.3lf; ap_prior: %.2e\n", skewness, kurtosis, ii->ap_prior);
-	fprintf(stderr, "[infer_isize] inferred maximum insert size: %d (%.2lf sigma)\n", ii->high_bayesian, y);
+	fprintf(stderr, "[infer_isize] inferred maximum insert size: %ld (%.2lf sigma)\n", (long)ii->high_bayesian, y);
 	return 0;
 }
 
