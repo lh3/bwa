@@ -27,8 +27,8 @@
 
 #include <stdint.h>
 
-//typedef int64_t bgint_t;
-typedef unsigned bgint_t;
+typedef uint64_t bgint_t;
+typedef int64_t sbgint_t;
 
 #define ALPHABET_SIZE				4
 #define BIT_PER_CHAR				2
@@ -69,20 +69,20 @@ typedef struct BWT {
 	unsigned int *occValue;				// Occurrence values stored explicitly
 	bgint_t *occValueMajor;				// Occurrence values stored explicitly
 	unsigned int *decodeTable;			// For decoding BWT by table lookup
-	unsigned int bwtSizeInWord;			// Temporary variable to hold the memory allocated
-	unsigned int occSizeInWord;			// Temporary variable to hold the memory allocated
-	unsigned int occMajorSizeInWord;	// Temporary variable to hold the memory allocated
+	bgint_t bwtSizeInWord;				// Temporary variable to hold the memory allocated
+	bgint_t occSizeInWord;				// Temporary variable to hold the memory allocated
+	bgint_t occMajorSizeInWord;			// Temporary variable to hold the memory allocated
 } BWT;
 
 typedef struct BWTInc {
 	BWT *bwt;
 	unsigned int numberOfIterationDone;
-	unsigned int *cumulativeCountInCurrentBuild;
-	unsigned int availableWord;
+	bgint_t *cumulativeCountInCurrentBuild;
+	bgint_t availableWord;
 	float targetNBit;
-	unsigned int buildSize;
-	unsigned int initialMaxBuildSize;
-	unsigned int incMaxBuildSize;
+	bgint_t buildSize;
+	bgint_t initialMaxBuildSize;
+	bgint_t incMaxBuildSize;
 	unsigned int firstCharInLastIteration;
 	unsigned int *workingMemory;
 	unsigned int *packedText;
