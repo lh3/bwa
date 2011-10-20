@@ -9,6 +9,7 @@
 #include "bntseq.h"
 #include "utils.h"
 #include "stdaln.h"
+#include "bwase.h"
 
 typedef struct {
 	int n;
@@ -37,10 +38,8 @@ typedef struct {
 extern int g_log_n[256]; // in bwase.c
 static kh_64_t *g_hash;
 
-void bwase_initialize();
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi);
 void bwa_aln2seq(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s);
-void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, bntseq_t *ntbns);
 int bwa_approx_mapQ(const bwa_seq_t *p, int mm);
 void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, int mode, int max_top2);
 bntseq_t *bwa_open_nt(const char *prefix);
@@ -277,12 +276,12 @@ typedef struct {
 	kvec_t(bwt_aln1_t) aln;
 } aln_buf_t;
 
-int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa_seq_t *seqs[2], FILE *fp_sa[2], isize_info_t *ii,
+int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bwt, int n_seqs, bwa_seq_t *seqs[2], FILE *fp_sa[2], isize_info_t *ii,
 					   const pe_opt_t *opt, const gap_opt_t *gopt, const isize_info_t *last_ii)
 {
 	int i, j, cnt_chg = 0;
 	char str[1024];
-	bwt_t *bwt[2];
+	bwt_t *bwt;
 	pe_data_t *d;
 	aln_buf_t *buf[2];
 
@@ -290,12 +289,10 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 	buf[0] = (aln_buf_t*)calloc(n_seqs, sizeof(aln_buf_t));
 	buf[1] = (aln_buf_t*)calloc(n_seqs, sizeof(aln_buf_t));
 
-	if (_bwt[0] == 0) { // load forward SA
-		strcpy(str, prefix); strcat(str, ".bwt");  bwt[0] = bwt_restore_bwt(str);
-		strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt[0]);
-		strcpy(str, prefix); strcat(str, ".rbwt"); bwt[1] = bwt_restore_bwt(str);
-		strcpy(str, prefix); strcat(str, ".rsa"); bwt_restore_sa(str, bwt[1]);
-	} else bwt[0] = _bwt[0], bwt[1] = _bwt[1];
+	if (_bwt == 0) { // load forward SA
+		strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
+		strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
+	} else bwt = _bwt;
 
 	// SE
 	for (i = 0; i != n_seqs; ++i) {
@@ -314,16 +311,17 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 			// generate SE alignment and mapping quality
 			bwa_aln2seq(n_aln, d->aln[j].a, p[j]);
 			if (p[j]->type == BWA_TYPE_UNIQUE || p[j]->type == BWA_TYPE_REPEAT) {
+				int strand;
 				int max_diff = gopt->fnr > 0.0? bwa_cal_maxdiff(p[j]->len, BWA_AVG_ERR, gopt->fnr) : gopt->max_diff;
-				p[j]->pos = p[j]->strand? bwt_sa(bwt[0], p[j]->sa)
-					: bwt[1]->seq_len - (bwt_sa(bwt[1], p[j]->sa) + p[j]->len);
 				p[j]->seQ = p[j]->mapQ = bwa_approx_mapQ(p[j], max_diff);
+				p[j]->pos = bwa_sa2pos(bns, bwt, p[j]->sa, p[j]->len, &strand);
+				p[j]->strand = strand;
 			}
 		}
 	}
 
 	// infer isize
-	infer_isize(n_seqs, seqs, ii, opt->ap_prior, bwt[0]->seq_len);
+	infer_isize(n_seqs, seqs, ii, opt->ap_prior, bwt->seq_len/2);
 	if (ii->avg < 0.0 && last_ii->avg > 0.0) *ii = *last_ii;
 	if (opt->force_isize) {
 		fprintf(stderr, "[%s] discard insert size estimate as user's request.\n", __func__);
@@ -361,8 +359,11 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 							poslist_t *z = &kh_val(g_hash, iter);
 							z->n = r->l - r->k + 1;
 							z->a = (bwtint_t*)malloc(sizeof(bwtint_t) * z->n);
-							for (l = r->k; l <= r->l; ++l)
-								z->a[l - r->k] = r->a? bwt_sa(bwt[0], l) : bwt[1]->seq_len - (bwt_sa(bwt[1], l) + p[j]->len);
+							for (l = r->k; l <= r->l; ++l) {
+								int strand;
+								z->a[l - r->k] = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
+								r->a = strand;
+							}
 						}
 						for (l = 0; l < kh_val(g_hash, iter).n; ++l) {
 							x = kh_val(g_hash, iter).a[l];
@@ -371,7 +372,9 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 						}
 					} else { // then calculate on the fly
 						for (l = r->k; l <= r->l; ++l) {
-							x = r->a? bwt_sa(bwt[0], l) : bwt[1]->seq_len - (bwt_sa(bwt[1], l) + p[j]->len);
+							int strand;
+							x = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
+							r->a = strand;
 							x = x<<32 | k<<1 | j;
 							kv_push(uint64_t, d->arr, x);
 						}
@@ -389,8 +392,10 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 						bwa_aln2seq_core(d->aln[j].n, d->aln[j].a, p[j], 0, p[j]->c1+p[j]->c2-1 > opt->N_multi? opt->n_multi : opt->N_multi);
 					} else bwa_aln2seq_core(d->aln[j].n, d->aln[j].a, p[j], 0, opt->n_multi);
 					for (k = 0; k < p[j]->n_multi; ++k) {
+						int strand;
 						bwt_multi1_t *q = p[j]->multi + k;
-						q->pos = q->strand? bwt_sa(bwt[0], q->pos) : bwt[1]->seq_len - (bwt_sa(bwt[1], q->pos) + p[j]->len);
+						q->pos = bwa_sa2pos(bns, bwt, q->pos, p[j]->len, &strand);
+						q->strand = strand;
 					}
 				}
 			}
@@ -403,9 +408,7 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 		kv_destroy(buf[1][i].aln);
 	}
 	free(buf[0]); free(buf[1]);
-	if (_bwt[0] == 0) {
-		bwt_destroy(bwt[0]); bwt_destroy(bwt[1]);
-	}
+	if (_bwt == 0) bwt_destroy(bwt);
 	kv_destroy(d->arr);
 	kv_destroy(d->pos[0]); kv_destroy(d->pos[1]);
 	kv_destroy(d->aln[0]); kv_destroy(d->aln[1]);
@@ -655,12 +658,12 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	khint_t iter;
 	isize_info_t last_ii; // this is for the last batch of reads
 	char str[1024];
-	bwt_t *bwt[2];
+	bwt_t *bwt;
 	uint8_t *pac;
 
 	// initialization
 	bwase_initialize(); // initialize g_log_n[] in bwase.c
-	pac = 0; bwt[0] = bwt[1] = 0;
+	pac = 0; bwt = 0;
 	for (i = 1; i != 256; ++i) g_log_n[i] = (int)(4.343 * log(i) + 0.5);
 	bns = bns_restore(prefix);
 	srand48(bns->seed);
@@ -679,10 +682,8 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 		ntbns = bwa_open_nt(prefix);
 	} else { // for Illumina alignment only
 		if (popt->is_preload) {
-			strcpy(str, prefix); strcat(str, ".bwt");  bwt[0] = bwt_restore_bwt(str);
-			strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt[0]);
-			strcpy(str, prefix); strcat(str, ".rbwt"); bwt[1] = bwt_restore_bwt(str);
-			strcpy(str, prefix); strcat(str, ".rsa"); bwt_restore_sa(str, bwt[1]);
+			strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
+			strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
 			pac = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
 			rewind(bns->fp_pac);
 			fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
@@ -702,7 +703,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 		t = clock();
 
 		fprintf(stderr, "[bwa_sai2sam_pe_core] convert to sequence coordinate... \n");
-		cnt_chg = bwa_cal_pac_pos_pe(prefix, bwt, n_seqs, seqs, fp_sa, &ii, popt, &opt, &last_ii);
+		cnt_chg = bwa_cal_pac_pos_pe(bns, prefix, bwt, n_seqs, seqs, fp_sa, &ii, popt, &opt, &last_ii);
 		fprintf(stderr, "[bwa_sai2sam_pe_core] time elapses: %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 		fprintf(stderr, "[bwa_sai2sam_pe_core] changing coordinates of %d alignments.\n", cnt_chg);
 
@@ -746,7 +747,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 		if (kh_exist(g_hash, iter)) free(kh_val(g_hash, iter).a);
 	kh_destroy(64, g_hash);
 	if (pac) {
-		free(pac); bwt_destroy(bwt[0]); bwt_destroy(bwt[1]);
+		free(pac); bwt_destroy(bwt);
 	}
 }
 

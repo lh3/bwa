@@ -294,6 +294,7 @@ int bns_coor_pac2real(const bntseq_t *bns, int64_t pac_coor, int len, int32_t *r
 		} else right = mid;
 	}
 	*real_seq = mid;
+	if (len == 0) return 0;
 	// binary search for holes
 	left = 0; right = bns->n_holes; nn = 0;
 	while (left < right) {
