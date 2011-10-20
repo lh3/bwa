@@ -49,22 +49,22 @@ int bwa_cal_maxdiff(int l, double err, double thres)
 }
 
 // width must be filled as zero
-static int bwt_cal_width(const bwt_t *rbwt, int len, const ubyte_t *str, bwt_width_t *width)
+static int bwt_cal_width(const bwt_t *bwt, int len, const ubyte_t *str, bwt_width_t *width)
 {
 	bwtint_t k, l, ok, ol;
 	int i, bid;
 	bid = 0;
-	k = 0; l = rbwt->seq_len;
+	k = 0; l = bwt->seq_len;
 	for (i = 0; i < len; ++i) {
 		ubyte_t c = str[i];
 		if (c < 4) {
-			bwt_2occ(rbwt, k - 1, l, c, &ok, &ol);
-			k = rbwt->L2[c] + ok + 1;
-			l = rbwt->L2[c] + ol;
+			bwt_2occ(bwt, k - 1, l, c, &ok, &ol);
+			k = bwt->L2[c] + ok + 1;
+			l = bwt->L2[c] + ol;
 		}
 		if (k > l || c > 3) { // then restart
 			k = 0;
-			l = rbwt->seq_len;
+			l = bwt->seq_len;
 			++bid;
 		}
 		width[i].w = l - k + 1;
@@ -75,12 +75,11 @@ static int bwt_cal_width(const bwt_t *rbwt, int len, const ubyte_t *str, bwt_wid
 	return bid;
 }
 
-void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt[2], int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt)
+void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt)
 {
-	int i, max_l = 0, max_len;
+	int i, j, max_l = 0, max_len;
 	gap_stack_t *stack;
-	bwt_width_t *w[2], *seed_w[2];
-	const ubyte_t *seq[2];
+	bwt_width_t *w, *seed_w;
 	gap_opt_t local_opt = *opt;
 
 	// initiate priority stack
@@ -90,46 +89,40 @@ void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt[2], int n_seqs, bwa_seq_t *seq
 	if (local_opt.max_diff < local_opt.max_gapo) local_opt.max_gapo = local_opt.max_diff;
 	stack = gap_init_stack(local_opt.max_diff, local_opt.max_gapo, local_opt.max_gape, &local_opt);
 
-	seed_w[0] = (bwt_width_t*)calloc(opt->seed_len+1, sizeof(bwt_width_t));
-	seed_w[1] = (bwt_width_t*)calloc(opt->seed_len+1, sizeof(bwt_width_t));
-	w[0] = w[1] = 0;
+	seed_w = (bwt_width_t*)calloc(opt->seed_len+1, sizeof(bwt_width_t));
+	w = 0;
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *p = seqs + i;
 #ifdef HAVE_PTHREAD
 		if (i % opt->n_threads != tid) continue;
 #endif
 		p->sa = 0; p->type = BWA_TYPE_NO_MATCH; p->c1 = p->c2 = 0; p->n_aln = 0; p->aln = 0;
-		seq[0] = p->seq; seq[1] = p->rseq;
 		if (max_l < p->len) {
 			max_l = p->len;
-			w[0] = (bwt_width_t*)realloc(w[0], (max_l + 1) * sizeof(bwt_width_t));
-			w[1] = (bwt_width_t*)realloc(w[1], (max_l + 1) * sizeof(bwt_width_t));
-			memset(w[0], 0, (max_l + 1) * sizeof(bwt_width_t));
-			memset(w[1], 0, (max_l + 1) * sizeof(bwt_width_t));
+			w = (bwt_width_t*)realloc(w, (max_l + 1) * sizeof(bwt_width_t));
+			memset(w, 0, (max_l + 1) * sizeof(bwt_width_t));
 		}
-		bwt_cal_width(bwt[0], p->len, seq[0], w[0]);
-		bwt_cal_width(bwt[1], p->len, seq[1], w[1]);
+		bwt_cal_width(bwt, p->len, p->seq, w);
 		if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff(p->len, BWA_AVG_ERR, opt->fnr);
 		local_opt.seed_len = opt->seed_len < p->len? opt->seed_len : 0x7fffffff;
-		if (p->len > opt->seed_len) {
-			bwt_cal_width(bwt[0], opt->seed_len, seq[0] + (p->len - opt->seed_len), seed_w[0]);
-			bwt_cal_width(bwt[1], opt->seed_len, seq[1] + (p->len - opt->seed_len), seed_w[1]);
-		}
+		if (p->len > opt->seed_len)
+			bwt_cal_width(bwt, opt->seed_len, p->seq + (p->len - opt->seed_len), seed_w);
 		// core function
-		p->aln = bwt_match_gap(bwt, p->len, seq, w, p->len <= opt->seed_len? 0 : seed_w, &local_opt, &p->n_aln, stack);
-		// store the alignment
+		for (j = 0; j < p->len; ++j) // we need to complement
+			p->seq[j] = p->seq[j] > 3? 4 : 3 - p->seq[j];
+		p->aln = bwt_match_gap(bwt, p->len, p->seq, w, p->len <= opt->seed_len? 0 : seed_w, &local_opt, &p->n_aln, stack);
+		// clean up the record
 		free(p->name); free(p->seq); free(p->rseq); free(p->qual);
 		p->name = 0; p->seq = p->rseq = p->qual = 0;
 	}
-	free(seed_w[0]); free(seed_w[1]);
-	free(w[0]); free(w[1]);
+	free(seed_w); free(w);
 	gap_destroy_stack(stack);
 }
 
 #ifdef HAVE_PTHREAD
 typedef struct {
 	int tid;
-	bwt_t *bwt[2];
+	bwt_t *bwt;
 	int n_seqs;
 	bwa_seq_t *seqs;
 	const gap_opt_t *opt;
@@ -163,15 +156,15 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
 	clock_t t;
-	bwt_t *bwt[2];
+	bwt_t *bwt;
 
 	// initialization
 	ks = bwa_open_reads(opt->mode, fn_fa);
 
 	{ // load BWT
+		extern uint8_t nst_nt4_table[];
 		char *str = (char*)calloc(strlen(prefix) + 10, 1);
-		strcpy(str, prefix); strcat(str, ".bwt");  bwt[0] = bwt_restore_bwt(str);
-		strcpy(str, prefix); strcat(str, ".rbwt"); bwt[1] = bwt_restore_bwt(str);
+		strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
 		free(str);
 	}
 
@@ -223,7 +216,7 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	}
 
 	// destroy
-	bwt_destroy(bwt[0]); bwt_destroy(bwt[1]);
+	bwt_destroy(bwt);
 	bwa_seq_close(ks);
 }
 

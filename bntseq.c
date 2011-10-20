@@ -178,7 +178,7 @@ static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *
 	p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
 	p->n_ambs = 0;
 	for (i = lasts = 0; i < seq->seq.l; ++i) {
-		int c = nst_nt4_table[(int)seq->seq.s[i]];
+		int c = seq->seq.s[i];
 		if (c >= 4) { // N
 			if (lasts == seq->seq.s[i]) { // contiguous N
 				++(*q)->len;
@@ -218,7 +218,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 	char name[1024];
 	bntseq_t *bns;
 	unsigned char buf[0x10000];
-	int32_t l_buf, m_seqs, m_holes;
+	int32_t i, l_buf, m_seqs, m_holes;
 	int64_t ret = -1;
 	bntamb1_t *q;
 	FILE *fp;
@@ -238,6 +238,8 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 	memset(buf, 0, 0x10000);
 	// read sequences
 	while (kseq_read(seq) >= 0) {
+		for (i = 0; i < seq->seq.l; ++i) // convert to 2-bit encoding
+			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
 		seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 1);
 		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
