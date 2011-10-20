@@ -162,7 +162,6 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	ks = bwa_open_reads(opt->mode, fn_fa);
 
 	{ // load BWT
-		extern uint8_t nst_nt4_table[];
 		char *str = (char*)calloc(strlen(prefix) + 10, 1);
 		strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
 		free(str);
