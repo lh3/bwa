@@ -196,7 +196,7 @@ inline void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4]
 		j = l >> 4 << 4;
 		for (; i < j; i += 16, ++p) y += __occ_aux4(bwt, *p);
 		y += __occ_aux4(bwt, *p & ~((1U<<((~l&15)<<1)) - 1)) - (~l&15);
-		memcpy(cntl, cntk, 16);
+		memcpy(cntl, cntk, 4 * sizeof(bwtint_t));
 		cntk[0] += x&0xff; cntk[1] += x>>8&0xff; cntk[2] += x>>16&0xff; cntk[3] += x>>24;
 		cntl[0] += y&0xff; cntl[1] += y>>8&0xff; cntl[2] += y>>16&0xff; cntl[3] += y>>24;
 	}
