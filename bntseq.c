@@ -163,16 +163,63 @@ void bns_destroy(bntseq_t *bns)
 	}
 }
 
+static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *l_buf, int *m_seqs, int *m_holes, bntamb1_t **q)
+{
+	bntann1_t *p;
+	int i, lasts;
+	if (bns->n_seqs == *m_seqs) {
+		*m_seqs <<= 1;
+		bns->anns = (bntann1_t*)realloc(bns->anns, *m_seqs * sizeof(bntann1_t));
+	}
+	p = bns->anns + bns->n_seqs;
+	p->name = strdup((char*)seq->name.s);
+	p->anno = seq->comment.s? strdup((char*)seq->comment.s) : strdup("(null)");
+	p->gi = 0; p->len = seq->seq.l;
+	p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
+	p->n_ambs = 0;
+	for (i = lasts = 0; i < seq->seq.l; ++i) {
+		int c = nst_nt4_table[(int)seq->seq.s[i]];
+		if (c >= 4) { // N
+			if (lasts == seq->seq.s[i]) { // contiguous N
+				++(*q)->len;
+			} else {
+				if (bns->n_holes == *m_holes) {
+					(*m_holes) <<= 1;
+					bns->ambs = (bntamb1_t*)realloc(bns->ambs, (*m_holes) * sizeof(bntamb1_t));
+				}
+				*q = bns->ambs + bns->n_holes;
+				(*q)->len = 1;
+				(*q)->offset = p->offset + i;
+				(*q)->amb = seq->seq.s[i];
+				++p->n_ambs;
+				++bns->n_holes;
+			}
+		}
+		lasts = seq->seq.s[i];
+		{ // fill buffer
+			if (c >= 4) c = lrand48()&0x3;
+			if (*l_buf == 0x40000) {
+				fwrite(buf, 1, 0x10000, fp);
+				memset(buf, 0, 0x10000);
+				*l_buf = 0;
+			}
+			buf[*l_buf>>2] |= c << ((3 - (*l_buf&3)) << 1);
+			++(*l_buf);
+		}
+	}
+	++bns->n_seqs;
+	bns->l_pac += seq->seq.l;
+}
+
 int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 {
 	kseq_t *seq;
 	char name[1024];
 	bntseq_t *bns;
-	bntamb1_t *q;
-	int l_buf;
 	unsigned char buf[0x10000];
-	int32_t m_seqs, m_holes, l, i;
+	int32_t l_buf, m_seqs, m_holes;
 	int64_t ret = -1;
+	bntamb1_t *q;
 	FILE *fp;
 
 	// initialization
@@ -189,51 +236,8 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 	fp = xopen(name, "wb");
 	memset(buf, 0, 0x10000);
 	// read sequences
-	while ((l = kseq_read(seq)) >= 0) {
-		bntann1_t *p;
-		int lasts;
-		if (bns->n_seqs == m_seqs) {
-			m_seqs <<= 1;
-			bns->anns = (bntann1_t*)realloc(bns->anns, m_seqs * sizeof(bntann1_t));
-		}
-		p = bns->anns + bns->n_seqs;
-		p->name = strdup((char*)seq->name.s);
-		p->anno = seq->comment.s? strdup((char*)seq->comment.s) : strdup("(null)");
-		p->gi = 0; p->len = l;
-		p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
-		p->n_ambs = 0;
-		for (i = 0, lasts = 0; i < l; ++i) {
-			int c = nst_nt4_table[(int)seq->seq.s[i]];
-			if (c >= 4) { // N
-				if (lasts == seq->seq.s[i]) { // contiguous N
-					++q->len;
-				} else {
-					if (bns->n_holes == m_holes) {
-						m_holes <<= 1;
-						bns->ambs = (bntamb1_t*)realloc(bns->ambs, m_holes * sizeof(bntamb1_t));
-					}
-					q = bns->ambs + bns->n_holes;
-					q->len = 1;
-					q->offset = p->offset + i;
-					q->amb = seq->seq.s[i];
-					++p->n_ambs;
-					++bns->n_holes;
-				}
-			}
-			lasts = seq->seq.s[i];
-			{ // fill buffer
-				if (c >= 4) c = lrand48()&0x3;
-				if (l_buf == 0x40000) {
-					fwrite(buf, 1, 0x10000, fp);
-					memset(buf, 0, 0x10000);
-					l_buf = 0;
-				}
-				buf[l_buf>>2] |= c << ((3 - (l_buf&3)) << 1);
-				++l_buf;
-			}
-		}
-		++bns->n_seqs;
-		bns->l_pac += seq->seq.l;
+	while (kseq_read(seq) >= 0) {
+		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
 	}
 	xassert(bns->l_pac, "zero length sequence.");
 	ret = bns->l_pac;
