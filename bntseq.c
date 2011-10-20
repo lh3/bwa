@@ -213,6 +213,7 @@ static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *
 
 int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 {
+	extern void seq_reverse(int len, ubyte_t *seq, int is_comp); // in bwaseqio.c
 	kseq_t *seq;
 	char name[1024];
 	bntseq_t *bns;
@@ -237,6 +238,8 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 	memset(buf, 0, 0x10000);
 	// read sequences
 	while (kseq_read(seq) >= 0) {
+		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
+		seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 1);
 		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
 	}
 	xassert(bns->l_pac, "zero length sequence.");

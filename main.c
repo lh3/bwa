@@ -24,7 +24,6 @@ static int usage()
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
 	fprintf(stderr, "         pac2bwtgen    alternative algorithm for generating BWT\n");
 	fprintf(stderr, "         bwtupdate     update .bwt to the new format\n");
-	fprintf(stderr, "         pac_rev       generate reverse PAC\n");
 	fprintf(stderr, "         bwt2sa        generate SA from BWT and Occ\n");
 	fprintf(stderr, "         pac2cspac     convert PAC to color-space PAC\n");
 	fprintf(stderr, "         stdsw         standard SW/NW alignment\n");
@@ -44,7 +43,6 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "pac2bwt") == 0) return bwa_pac2bwt(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwtgen") == 0) return bwt_bwtgen_main(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwtupdate") == 0) return bwa_bwtupdate(argc-1, argv+1);
-	else if (strcmp(argv[1], "pac_rev") == 0) return bwa_pac_rev(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwt2sa") == 0) return bwa_bwt2sa(argc-1, argv+1);
 	else if (strcmp(argv[1], "index") == 0) return bwa_index(argc-1, argv+1);
 	else if (strcmp(argv[1], "aln") == 0) return bwa_aln(argc-1, argv+1);

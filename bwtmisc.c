@@ -157,43 +157,6 @@ int bwa_bwtupdate(int argc, char *argv[])
 	return 0;
 }
 
-void bwa_pac_rev_core(const char *fn, const char *fn_rev)
-{
-	int64_t seq_len, i;
-	bwtint_t pac_len, j;
-	ubyte_t *bufin, *bufout, ct;
-	FILE *fp;
-	seq_len = bwa_seq_len(fn);
-	pac_len = (seq_len >> 2) + 1;
-	bufin = (ubyte_t*)calloc(pac_len, 1);
-	bufout = (ubyte_t*)calloc(pac_len, 1);
-	fp = xopen(fn, "rb");
-	fread(bufin, 1, pac_len, fp);
-	fclose(fp);
-	for (i = seq_len - 1, j = 0; i >= 0; --i) {
-		int c = bufin[i>>2] >> ((~i&3)<<1) & 3;
-		bwtint_t j = seq_len - 1 - i;
-		bufout[j>>2] |= c << ((~j&3)<<1);
-	}
-	free(bufin);
-	fp = xopen(fn_rev, "wb");
-	fwrite(bufout, 1, pac_len, fp);
-	ct = seq_len % 4;
-	fwrite(&ct, 1, 1, fp);
-	fclose(fp);
-	free(bufout);
-}
-
-int bwa_pac_rev(int argc, char *argv[])
-{
-	if (argc < 3) {
-		fprintf(stderr, "Usage: bwa pac_rev <in.pac> <out.pac>\n");
-		return 1;
-	}
-	bwa_pac_rev_core(argv[1], argv[2]);
-	return 0;
-}
-
 const int nst_color_space_table[] = { 4, 0, 0, 1, 0, 2, 3, 4, 0, 3, 2, 4, 1, 4, 4, 4};
 
 /* this function is not memory efficient, but this will make life easier

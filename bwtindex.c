@@ -107,31 +107,9 @@ int bwa_index(int argc, char *argv[])
 	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
 	{
 		strcpy(str, prefix); strcat(str, ".pac");
-		strcpy(str2, prefix); strcat(str2, ".rpac");
-		t = clock();
-		fprintf(stderr, "[bwa_index] Reverse the packed sequence... ");
-		bwa_pac_rev_core(str, str2);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-	}
-	{
-		strcpy(str, prefix); strcat(str, ".pac");
 		strcpy(str2, prefix); strcat(str2, ".bwt");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Construct BWT for the packed sequence...\n");
-		if (algo_type == 2) bwt_bwtgen(str, str2);
-		else if (algo_type == 1 || algo_type == 3) {
-			bwt_t *bwt;
-			bwt = bwt_pac2bwt(str, algo_type == 3);
-			bwt_dump_bwt(str2, bwt);
-			bwt_destroy(bwt);
-		}
-		fprintf(stderr, "[bwa_index] %.2f seconds elapse.\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-	}
-	{
-		strcpy(str, prefix); strcat(str, ".rpac");
-		strcpy(str2, prefix); strcat(str2, ".rbwt");
-		t = clock();
-		fprintf(stderr, "[bwa_index] Construct BWT for the reverse packed sequence...\n");
 		if (algo_type == 2) bwt_bwtgen(str, str2);
 		else if (algo_type == 1 || algo_type == 3) {
 			bwt_t *bwt;
@@ -154,33 +132,10 @@ int bwa_index(int argc, char *argv[])
 	}
 	{
 		bwt_t *bwt;
-		strcpy(str, prefix); strcat(str, ".rbwt");
-		t = clock();
-		fprintf(stderr, "[bwa_index] Update reverse BWT... ");
-		bwt = bwt_restore_bwt(str);
-		bwt_bwtupdate_core(bwt);
-		bwt_dump_bwt(str, bwt);
-		bwt_destroy(bwt);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-	}
-	{
-		bwt_t *bwt;
 		strcpy(str, prefix); strcat(str, ".bwt");
 		strcpy(str3, prefix); strcat(str3, ".sa");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Construct SA from BWT and Occ... ");
-		bwt = bwt_restore_bwt(str);
-		bwt_cal_sa(bwt, 32);
-		bwt_dump_sa(str3, bwt);
-		bwt_destroy(bwt);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-	}
-	{
-		bwt_t *bwt;
-		strcpy(str, prefix); strcat(str, ".rbwt");
-		strcpy(str3, prefix); strcat(str3, ".rsa");
-		t = clock();
-		fprintf(stderr, "[bwa_index] Construct SA from reverse BWT and Occ... ");
 		bwt = bwt_restore_bwt(str);
 		bwt_cal_sa(bwt, 32);
 		bwt_dump_sa(str3, bwt);
