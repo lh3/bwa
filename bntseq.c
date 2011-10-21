@@ -286,36 +286,44 @@ int bwa_fa2pac(int argc, char *argv[])
 	return 0;
 }
 
-int bns_coor_pac2real(const bntseq_t *bns, int64_t pac_coor, int len, int32_t *real_seq)
+int64_t bns_pos2refId(const bntseq_t *bns, int64_t pos, int is_fr, int *ref_id, int *is_rev)
 {
-	int left, mid, right, nn;
-	if (pac_coor >= bns->l_pac)
-		err_fatal("bns_coor_pac2real", "bug! Coordinate is longer than sequence (%lld>=%lld).", pac_coor, bns->l_pac);
-	// binary search for the sequence ID. Note that this is a bit different from the following one...
+	int left, mid, right;
+	is_fr = is_fr? 1 : 0;
 	left = 0; mid = 0; right = bns->n_seqs;
 	while (left < right) {
 		mid = (left + right) >> 1;
-		if (pac_coor >= bns->anns[mid].offset) {
+		if (pos >= bns->anns[mid].offset<<is_fr) {
 			if (mid == bns->n_seqs - 1) break;
-			if (pac_coor < bns->anns[mid+1].offset) break;
+			if (pos < bns->anns[mid+1].offset<<is_fr) break; // bracketed
 			left = mid + 1;
 		} else right = mid;
 	}
-	*real_seq = mid;
-	if (len == 0) return 0;
-	// binary search for holes
+	*ref_id = mid;
+	if (is_fr) { // then compute the forward-only position
+		bntann1_t *p = &bns->anns[mid];
+		if (pos - (p->offset<<1) < p->len) *is_rev = 0, pos -= p->offset;
+		else *is_rev = 1, pos = p->len - (pos - (p->offset<<1) - p->len) + p->offset;
+	}
+	return pos;
+}
+
+int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
+{
+	int left, mid, right, nn;
+	if (ref_id) bns_pos2refId(bns, pos_f, 0, ref_id, 0);
 	left = 0; right = bns->n_holes; nn = 0;
 	while (left < right) {
-		int64_t mid = (left + right) >> 1;
-		if (pac_coor >= bns->ambs[mid].offset + bns->ambs[mid].len) left = mid + 1;
-		else if (pac_coor + len <= bns->ambs[mid].offset) right = mid;
+		mid = (left + right) >> 1;
+		if (pos_f >= bns->ambs[mid].offset + bns->ambs[mid].len) left = mid + 1;
+		else if (pos_f + len <= bns->ambs[mid].offset) right = mid;
 		else { // overlap
-			if (pac_coor >= bns->ambs[mid].offset) {
-				nn += bns->ambs[mid].offset + bns->ambs[mid].len < pac_coor + len?
-					bns->ambs[mid].offset + bns->ambs[mid].len - pac_coor : len;
+			if (pos_f >= bns->ambs[mid].offset) {
+				nn += bns->ambs[mid].offset + bns->ambs[mid].len < pos_f + len?
+					bns->ambs[mid].offset + bns->ambs[mid].len - pos_f : len;
 			} else {
-				nn += bns->ambs[mid].offset + bns->ambs[mid].len < pac_coor + len?
-					bns->ambs[mid].len : len - (bns->ambs[mid].offset - pac_coor);
+				nn += bns->ambs[mid].offset + bns->ambs[mid].len < pos_f + len?
+					bns->ambs[mid].len : len - (bns->ambs[mid].offset - pos_f);
 			}
 			break;
 		}

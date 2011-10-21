@@ -111,17 +111,16 @@ int bwa_approx_mapQ(const bwa_seq_t *p, int mm)
 
 bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int len, int *strand)
 {
-	bwtint_t pacpos;
-	int32_t ref_id;
-	pacpos = bwt_sa(bwt, sapos);
-	bns_coor_pac2real(bns, pacpos, 0, &ref_id);
-	*strand = !(ref_id&1);
+	bwtint_t pos_fr, pos_f;
+	int is_rev, ref_id;
+	pos_fr = bwt_sa(bwt, sapos);
+	pos_f = bns_pos2refId(bns, pos_fr, 1, &ref_id, &is_rev); // pos_f
+	*strand = !is_rev;
 	/* NB: For gapped alignment, pacpos may not be correct, which will be fixed
 	 * in refine_gapped_core(). This line also determines the way "x" is
 	 * calculated in refine_gapped_core() when (ext < 0 && is_end == 0). */
-	if (ref_id&1) // mapped to the forward strand
-		pacpos = bns->anns[ref_id].len - (pacpos + len - bns->anns[ref_id].offset) + bns->anns[ref_id-1].offset;
-	return pacpos;
+	if (is_rev) pos_f = pos_f < len? 0 : pos_f - len; // mapped to the forward strand
+	return pos_f; // FIXME: it is possible that pos_f < bns->anns[ref_id].offset
 }
 
 /**
@@ -423,7 +422,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		} else j = pos_end(p) - p->pos; // j is the length of the reference in the alignment
 
 		// get seqid
-		nn = bns_coor_pac2real(bns, p->pos, j, &seqid);
+		nn = bns_cnt_ambi(bns, p->pos, j, &seqid);
 		if (p->type != BWA_TYPE_NO_MATCH && p->pos + j - bns->anns[seqid].offset > bns->anns[seqid].len)
 			flag |= SAM_FSU; // flag UNMAP as this alignment bridges two adjacent reference sequences
 
@@ -450,7 +449,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			long long isize;
 			am = mate->seQ < p->seQ? mate->seQ : p->seQ; // smaller single-end mapping quality
 			// redundant calculation here, but should not matter too much
-			m_is_N = bns_coor_pac2real(bns, mate->pos, mate->len, &m_seqid);
+			m_is_N = bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
 			err_printf("\t%s\t", (seqid == m_seqid)? "=" : bns->anns[m_seqid].name);
 			isize = (seqid == m_seqid)? pos_5(mate) - pos_5(p) : 0;
 			if (p->type == BWA_TYPE_NO_MATCH) isize = 0;
@@ -493,7 +492,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 					bwt_multi1_t *q = p->multi + i;
 					int k;
 					j = pos_end_multi(q, p->len) - q->pos;
-					nn = bns_coor_pac2real(bns, q->pos, j, &seqid);
+					nn = bns_cnt_ambi(bns, q->pos, j, &seqid);
 					err_printf("%s,%c%d,", bns->anns[seqid].name, q->strand? '-' : '+',
 						   (int)(q->pos - bns->anns[seqid].offset + 1));
 					if (q->cigar) {

@@ -314,7 +314,7 @@ static int fix_cigar(const char *qname, const bntseq_t *bns, bsw2hit_t *p, int n
 	// FIXME: this routine does not work if the query bridge three reference sequences
 	int32_t coor, refl, lq;
 	int x, y, i, seqid;
-	bns_coor_pac2real(bns, p->k, p->len, &seqid);
+	bns_cnt_ambi(bns, p->k, p->len, &seqid);
 	coor = p->k - bns->anns[seqid].offset;
 	refl = bns->anns[seqid].len;
 	x = coor; y = 0;
@@ -404,7 +404,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		int beg, end;
 		if (p->l == 0) {
 			b->n_cigar[i] = fix_cigar(ks->name, bns, p, b->n_cigar[i], b->cigar[i]);
-			nn = bns_coor_pac2real(bns, p->k, p->len, &seqid);
+			nn = bns_cnt_ambi(bns, p->k, p->len, &seqid);
 			coor = p->k - bns->anns[seqid].offset;
 		}
 		ksprintf(&str, "%s\t%d", ks->name, p->flag&0x10);
