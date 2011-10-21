@@ -211,7 +211,7 @@ static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *
 	bns->l_pac += seq->seq.l;
 }
 
-int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
+int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 {
 	extern void seq_reverse(int len, ubyte_t *seq, int is_comp); // in bwaseqio.c
 	kseq_t *seq;
@@ -241,8 +241,10 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 		for (i = 0; i < seq->seq.l; ++i) // convert to 2-bit encoding
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
-		seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 1);
-		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
+		if (!for_only) {
+			seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 1);
+			add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
+		}
 	}
 	xassert(bns->l_pac, "zero length sequence.");
 	ret = bns->l_pac;
@@ -267,13 +269,19 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix)
 
 int bwa_fa2pac(int argc, char *argv[])
 {
+	int c, for_only = 0;
 	gzFile fp;
-	if (argc < 2) {
-		fprintf(stderr, "Usage: bwa fa2pac <in.fasta> [<out.prefix>]\n");
+	while ((c = getopt(argc, argv, "f")) >= 0) {
+		switch (c) {
+			case 'f': for_only = 1; break;
+		}
+	}
+	if (argc == optind) {
+		fprintf(stderr, "Usage: bwa fa2pac [-f] <in.fasta> [<out.prefix>]\n");
 		return 1;
 	}
-	fp = xzopen(argv[1], "r");
-	bns_fasta2bntseq(fp, (argc < 3)? argv[1] : argv[2]);
+	fp = xzopen(argv[optind], "r");
+	bns_fasta2bntseq(fp, (optind+1 < argc)? argv[optind+1] : argv[optind], for_only);
 	gzclose(fp);
 	return 0;
 }
