@@ -8,7 +8,15 @@
 #include "bwt.h"
 #include "kvec.h"
 
+typedef struct {
+	bwtint_t k, l;
+} qintv_t;
+
+#define qintv_eq(a, b) ((a).k == (b).k && (a).l == (b).l)
+#define qintv_hash(a) ((a).k>>7^(a).l<<17)
+
 #include "khash.h"
+KHASH_INIT(qintv, qintv_t, uint64_t, 1, qintv_hash, qintv_eq)
 KHASH_MAP_INIT_INT64(64, uint64_t)
 
 #define MINUS_INF -0x3fffffff
@@ -17,7 +25,7 @@ KHASH_MAP_INIT_INT64(64, uint64_t)
 struct __mempool_t;
 static void mp_destroy(struct __mempool_t*);
 typedef struct {
-	uint32_t qk, ql;
+	bwtint_t qk, ql;
 	int I, D, G;
 	uint32_t pj:2, qlen:30;
 	int tlen;
@@ -34,7 +42,7 @@ static const bsw2cell_t g_default_cell = { 0, 0, MINUS_INF, MINUS_INF, MINUS_INF
 
 typedef struct {
 	int n, max;
-	uint32_t tk, tl;
+	uint32_t tk, tl; // this is fine
 	bsw2cell_t *array;
 } bsw2entry_t, *bsw2entry_p;
 
@@ -87,7 +95,7 @@ static void mp_destroy(struct __mempool_t *mp)
 static khash_t(64) *bsw2_connectivity(const bwtl_t *b)
 {
 	khash_t(64) *h;
-	uint32_t k, l, cntk[4], cntl[4];
+	uint32_t k, l, cntk[4], cntl[4]; // this is fine
 	uint64_t x;
 	khiter_t iter;
 	int j, ret;
@@ -144,17 +152,17 @@ static void cut_tail(bsw2entry_t *u, int T, bsw2entry_t *aux)
 	}
 }
 // remove duplicated cells
-static inline void remove_duplicate(bsw2entry_t *u, khash_t(64) *hash)
+static inline void remove_duplicate(bsw2entry_t *u, khash_t(qintv) *hash)
 {
 	int i, ret, j;
 	khiter_t k;
-	uint64_t key;
-	kh_clear(64, hash);
+	qintv_t key;
+	kh_clear(qintv, hash);
 	for (i = 0; i != u->n; ++i) {
 		bsw2cell_t *p = u->array + i;
 		if (p->ql == 0) continue;
-		key = (uint64_t)p->qk << 32 | p->ql;
-		k = kh_put(64, hash, key, &ret);
+		key.k = p->qk; key.l = p->ql;
+		k = kh_put(qintv, hash, key, &ret);
 		j = -1;
 		if (ret == 0) {
 			if ((uint32_t)kh_value(hash, k) >= p->G) j = i;
@@ -211,7 +219,7 @@ static inline double time_elapse(const struct rusage *curr, const struct rusage 
 static void save_hits(const bwtl_t *bwt, int thres, bsw2hit_t *hits, bsw2entry_t *u)
 {
 	int i;
-	uint32_t k;
+	uint32_t k; // this is fine
 	for (i = 0; i < u->n; ++i) {
 		bsw2cell_t *p = u->array + i;
 		if (p->G < thres) continue;
@@ -432,7 +440,8 @@ bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *qu
 	bwtsw2_t *b, *b1, **b_ret;
 	int i, j, score_mat[16], *heap, heap_size, n_tot = 0;
 	struct rusage curr, last;
-	khash_t(64) *rhash, *chash;
+	khash_t(qintv) *rhash;
+	khash_t(64) *chash;
 
 	// initialize connectivity hash (chash)
 	chash = bsw2_connectivity(target);
@@ -441,7 +450,7 @@ bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *qu
 		for (j = 0; j != 4; ++j)
 			score_mat[i<<2|j] = (i == j)? opt->a : -opt->b;
 	// initialize other variables
-	rhash = kh_init(64);
+	rhash = kh_init(qintv);
 	init_bwtsw2(target, query, stack);
 	heap_size = opt->z;
 	heap = calloc(heap_size, sizeof(int));
@@ -587,7 +596,7 @@ bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *qu
 	//fprintf(stderr, "stats: %.3lf sec; %d elems\n", time_elapse(&curr, &last), n_tot);
 	// free
 	free(heap);
-	kh_destroy(64, rhash);
+	kh_destroy(qintv, rhash);
 	kh_destroy(64, chash);
 	stack->pending.n = stack->stack0.n = 0;
 	return b_ret;

@@ -77,7 +77,7 @@ void bsw2_destroy(bwtsw2_t *b)
 
 #define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
 
-void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq, uint8_t *pac, uint32_t l_pac, int is_rev, uint8_t *_mem)
+void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq, uint8_t *pac, bwtint_t l_pac, int is_rev, uint8_t *_mem)
 {
 	int i, matrix[25];
 	bwtint_t k;
@@ -128,10 +128,10 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 	free(query); free(target);
 }
 
-void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq, uint8_t *pac, uint32_t l_pac, int is_rev, uint8_t *_mem)
+void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq, uint8_t *pac, bwtint_t l_pac, int is_rev, uint8_t *_mem)
 {
 	int i, matrix[25];
-	uint32_t k;
+	bwtint_t k;
 	uint8_t *target;
 	AlnParam par;
 	
@@ -189,7 +189,7 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], uint8_t *pa
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		uint8_t *query;
-		uint32_t k;
+		bwtint_t k;
 		int score, path_len, beg, end;
 		if (p->l) continue;
 		beg = (p->flag & 0x10)? lq - p->end : p->beg;
@@ -223,7 +223,7 @@ void bsw2_debug_hits(const bwtsw2_t *b)
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		if (p->l == 0)
-			printf("%d, %d, %d, %u, %u\n", p->G, p->beg, p->end, p->k, p->l);
+			printf("%d, %d, %d, %lu, %lu\n", p->G, p->beg, p->end, (long)p->k, (long)p->l);
 	}
 }
 
@@ -328,7 +328,8 @@ static int fix_cigar(const char *qname, const bntseq_t *bns, bsw2hit_t *p, int n
 	lq = y; // length of the query sequence
 	if (x > refl) { // then fix it
 		int j, nc, mq[2], nlen[2];
-		uint32_t *cn, kk = 0;
+		uint32_t *cn;
+		bwtint_t kk = 0;
 		nc = mq[0] = mq[1] = nlen[0] = nlen[1] = 0;
 		cn = calloc(n_cigar + 3, 4);
 		x = coor; y = 0;

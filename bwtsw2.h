@@ -14,7 +14,8 @@ typedef struct {
 } bsw2opt_t;
 
 typedef struct {
-	uint32_t k, l, flag:18, n_seeds:14;
+	bwtint_t k, l;
+	uint32_t flag:18, n_seeds:14;
 	int len, G, G2;
 	int beg, end;
 } bsw2hit_t;
