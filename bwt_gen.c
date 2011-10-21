@@ -345,17 +345,14 @@ BWT *BWTCreate(const bgint_t textLength, unsigned int *decodeTable)
 	return bwt;
 }
 
-BWTInc *BWTIncCreate(const unsigned int textLength, const float targetNBit,
-					 const unsigned int initialMaxBuildSize, const unsigned int incMaxBuildSize)
+BWTInc *BWTIncCreate(const bgint_t textLength, unsigned int initialMaxBuildSize, unsigned int incMaxBuildSize)
 {
 	BWTInc *bwtInc;
-	unsigned int i;
+	unsigned int i, n_iter;
 
-	if (targetNBit == 0) {
-		fprintf(stderr, "BWTIncCreate() : targetNBit = 0!\n");
-		exit(1);
-	}
-	
+	if (textLength < incMaxBuildSize) incMaxBuildSize = textLength;
+	if (textLength < initialMaxBuildSize) initialMaxBuildSize = textLength;
+
 	bwtInc = (BWTInc*)calloc(1, sizeof(BWTInc));
 	bwtInc->numberOfIterationDone = 0;
 	bwtInc->bwt = BWTCreate(textLength, NULL);
@@ -369,16 +366,15 @@ BWTInc *BWTIncCreate(const unsigned int textLength, const float targetNBit,
 	for (i=0; i<CHAR_PER_WORD; i++)
 		bwtInc->packedShift[i] = BITS_IN_WORD - (i+1) * BIT_PER_CHAR;
 
-	bwtInc->availableWord = (bgint_t)((textLength + OCC_INTERVAL - 1) / OCC_INTERVAL * OCC_INTERVAL / BITS_IN_WORD * targetNBit);
+	n_iter = (textLength - initialMaxBuildSize) / incMaxBuildSize + 1;
+	bwtInc->availableWord = BWTResidentSizeInWord(textLength) + BWTOccValueMinorSizeInWord(textLength) // minimal memory requirement
+		+ OCC_INTERVAL / BIT_PER_CHAR * n_iter * 2 * (sizeof(bgint_t) / 4) // buffer at the end of occ array 
+		+ incMaxBuildSize/5 * 3 * (sizeof(bgint_t) / 4); // space for the 3 temporary arrays in each iteration
 	if (bwtInc->availableWord < MIN_AVAILABLE_WORD) bwtInc->availableWord = MIN_AVAILABLE_WORD; // lh3: otherwise segfaul when availableWord is too small
-	if (bwtInc->availableWord < BWTResidentSizeInWord(textLength) + BWTOccValueMinorSizeInWord(textLength)) {
-		fprintf(stderr, "BWTIncCreate() : targetNBit is too low!\n");
-		exit(1);
-	}
+	fprintf(stderr, "[%s] textLength=%ld, availableWord=%ld\n", __func__, (long)textLength, (long)bwtInc->availableWord);
 	bwtInc->workingMemory = (unsigned*)calloc(bwtInc->availableWord, BYTES_IN_WORD);
 
 	return bwtInc;
-
 }
 // for BWTIncConstruct()
 static void BWTIncPutPackedTextToRank(const unsigned int *packedText, bgint_t* __restrict rank,
@@ -699,7 +695,7 @@ static void BWTIncSortKey(bgint_t* __restrict key, bgint_t* __restrict seq, cons
 	int stackDepth;
 	int64_t i, j;
 	bgint_t tempSeq, tempKey;
-	int numberOfEqualKey;
+	int64_t numberOfEqualKey;
 
 	if (numItem < 2) return;
 
@@ -1432,8 +1428,7 @@ static void BWTIncConstruct(BWTInc *bwtInc, const bgint_t numChar)
 
 }
 
-BWTInc *BWTIncConstructFromPacked(const char *inputFileName, const float targetNBit,
-								  bgint_t initialMaxBuildSize, bgint_t incMaxBuildSize)
+BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxBuildSize, bgint_t incMaxBuildSize)
 {
 
 	FILE *packedFile;
@@ -1457,7 +1452,7 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, const float targetN
 	fread(&lastByteLength, sizeof(unsigned char), 1, packedFile);
 	totalTextLength = TextLengthFromBytePacked(packedFileLen, BIT_PER_CHAR, lastByteLength);
 
-	bwtInc = BWTIncCreate(totalTextLength, targetNBit, initialMaxBuildSize, incMaxBuildSize);
+	bwtInc = BWTIncCreate(totalTextLength, initialMaxBuildSize, incMaxBuildSize);
 
 	BWTIncSetBuildSizeAndTextAddr(bwtInc);
 
@@ -1545,7 +1540,7 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
 {
 	BWTInc *bwtInc;
-	bwtInc = BWTIncConstructFromPacked(fn_pac, 3.7, 10000000, 10000000);
+	bwtInc = BWTIncConstructFromPacked(fn_pac, 10000000, 10000000);
 	printf("[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
 	BWTSaveBwtCodeAndOcc(bwtInc->bwt, fn_bwt, 0);
 	BWTIncFree(bwtInc);

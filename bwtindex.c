@@ -100,10 +100,6 @@ int bwa_index(int argc, char *argv[])
 			fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		}
 	}
-	if (l_pac > 0xffffffffu) {
-		fprintf(stderr, "[%s] BWA only works with reference sequences shorter than 4GB in total. Abort!\n", __func__);
-		return 1;
-	}
 	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
 	{
 		strcpy(str, prefix); strcat(str, ".pac");
