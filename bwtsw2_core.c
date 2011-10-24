@@ -284,6 +284,7 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 			bsw2hit_t *p = old_hits + i;
 			if (p->l - p->k + 1 <= IS) { // the hit is no so repetitive
 				bwtint_t k;
+				if (p->G == 0 && p->k == 0 && p->l == 0 && p->len == 0) continue;
 				for (k = p->k; k <= p->l; ++k) {
 					b->hits[j] = *p;
 					b->hits[j].k = bns_pos2refId(bns, bwt_sa(bwt, k), 1, &ref_id, &is_rev);

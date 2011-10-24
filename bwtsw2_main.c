@@ -48,7 +48,6 @@ int bwa_bwtsw2(int argc, char *argv[])
 //		fprintf(stderr, "         -y FLOAT error recurrence coef. (4..16) [%.1f]\n", opt->yita);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
-		fprintf(stderr, "         -s INT   size of a chunk of reads [%d]\n", opt->chunk_size);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "         -w INT   band width [%d]\n", opt->bw);
 		fprintf(stderr, "         -m FLOAT mask level [%.2f]\n", opt->mask_level);

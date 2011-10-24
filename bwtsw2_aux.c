@@ -223,7 +223,7 @@ void bsw2_debug_hits(const bwtsw2_t *b)
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		if (p->l == 0)
-			printf("%d, %d, %d, %lu, %lu\n", p->G, p->beg, p->end, (long)p->k, (long)p->l);
+			printf("G=%d, [%d,%d), k=%lu, l=%lu\n", p->G, p->beg, p->end, (long)p->k, (long)p->l);
 	}
 }
 
@@ -264,21 +264,31 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 		bb[k][0] = calloc(1, sizeof(bwtsw2_t));
 		bb[k][1] = calloc(1, sizeof(bwtsw2_t));
 	}
-	fprintf(stderr, "here!\n");
 	for (k = 0; k < 2; ++k) { // separate _b into bb[2] based on the strand
 		for (j = 0; j < _b[k]->n; ++j) {
-			p = bb[k][_b[k]->hits[j].is_rev];
+			bsw2hit_t *q;
+			p = bb[_b[k]->hits[j].is_rev][k];
 			if (p->n == p->max) {
 				p->max = p->max? p->max<<1 : 8;
 				p->hits = realloc(p->hits, p->max * sizeof(bsw2hit_t));
 			}
-			p->hits[p->n++] = _b[k]->hits[j];
+			q = &p->hits[p->n++];
+			*q = _b[k]->hits[j];
+			if (_b[k]->hits[j].is_rev) {
+				int x = q->beg;
+				q->beg = l - q->end;
+				q->end = l - x;
+				q->k -= q->len;
+			}
 		}
 	}
+	//bsw2_debug_hits(bb[0][1]);
+	bsw2_debug_hits(bb[1][1]);
 	b[0] = bb[0][1]; b[1] = bb[1][1]; // bb[*][1] are "narrow SA hits"
 	bsw2_chain_filter(opt, l, b);
 	for (k = 0; k < 2; ++k) {
 		bsw2_extend_left(opt, bb[k][1], seq[k], l, pac, bns->l_pac, is_rev, pool->aln_mem);
+		if (k == 1) bsw2_debug_hits(bb[k][1]);
 		merge_hits(bb[k], l, 0); // bb[k][1] is merged to bb[k][0] here
 		bsw2_resolve_duphits(0, 0, bb[k][0], 0);
 		bsw2_extend_rght(opt, bb[k][0], seq[k], l, pac, bns->l_pac, is_rev, pool->aln_mem);
@@ -510,8 +520,8 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			if (c >= 4) { c = (int)(drand48() * 4); ++k; } // FIXME: ambiguous bases are not properly handled
 			seq[0][i] = c;
 			seq[1][l-1-i] = 3 - c;
-			rseq[0][l-1-i] = c;
-			rseq[1][i] = 3 - c;
+			rseq[0][l-1-i] = 3 - c;
+			rseq[1][i] = c;
 		}
 		if (l - k < opt.t) { // too few unambiguous bases
 			print_hits(bns, &opt, p, 0);
