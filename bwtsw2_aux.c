@@ -518,8 +518,13 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			if (b[0]->hits[k].n_seeds < opt.t_seeds) break;
 		if (k < b[0]->n) {
 			b[1] = bsw2_aln1_core(&opt, bns, pac, target, l, rseq, pool);
-			for (i = 0; i < b[1]->n; ++i) // flip the strand flag
-				b[1]->hits[i].flag ^= 0x10, b[1]->hits[i].is_rev ^= 1;
+			for (i = 0; i < b[1]->n; ++i) {
+				bsw2hit_t *p = &b[1]->hits[i];
+				int x = p->beg;
+				p->flag ^= 0x10, p->is_rev ^= 1; // flip the strand
+				p->beg = l - p->end;
+				p->end = l - x;
+			}
 			flag_fr(b);
 			merge_hits(b, l, 0);
 			bsw2_resolve_duphits(0, 0, b[0], 0);
