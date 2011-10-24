@@ -35,7 +35,7 @@ typedef struct {
 
 #include "ksort.h"
 KSORT_INIT_GENERIC(int)
-#define __hitG_lt(a, b) ((a).G > (b).G)
+#define __hitG_lt(a, b) ((a).n_seeds > (b).n_seeds || ((a).n_seeds == (b).n_seeds && (a).G > (b).G))
 KSORT_INIT(hitG, bsw2hit_t, __hitG_lt)
 
 static const bsw2cell_t g_default_cell = { 0, 0, MINUS_INF, MINUS_INF, MINUS_INF, 0, 0, 0, -1, -1, {-1, -1, -1, -1} };
@@ -270,10 +270,10 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 {
 	int i, j, n, ref_id, is_rev;
 	if (b->n == 0) return 0;
-	if (bwt && bns) { // convert to chromosomal coordinates if suitable
+	if (bwt && bns) { // convert to chromosomal coordinates if requested
 		int old_n = b->n;
 		bsw2hit_t *old_hits = b->hits;
-		for (i = n = 0; i < b->n; ++i) { // compute memory needed to be allocated
+		for (i = n = 0; i < b->n; ++i) { // compute the memory to allocated
 			bsw2hit_t *p = old_hits + i;
 			if (p->l - p->k + 1 <= IS) n += p->l - p->k + 1;
 			else if (p->G > 0) ++n;
@@ -290,6 +290,7 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 					b->hits[j].k = bns_pos2refId(bns, bwt_sa(bwt, k), 1, &ref_id, &is_rev);
 					b->hits[j].l = 0;
 					b->hits[j].is_rev = is_rev;
+					if (is_rev) b->hits[j].k -= p->len;
 					++j;
 				}
 			} else if (p->G > 0) {
@@ -298,25 +299,28 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 				b->hits[j].l = 0;
 				b->hits[j].flag |= 1;
 				b->hits[j].is_rev = is_rev;
+				if (is_rev) b->hits[j].k -= p->len;
 				++j;
 			}
 		}
 		free(old_hits);
 	}
+	for (i = j = 0; i < b->n; ++i) // squeeze out empty elements
+		if (b->hits[i].G) b->hits[j++] = b->hits[i];
+	b->n = j;
 	ks_introsort(hitG, b->n, b->hits);
 	for (i = 1; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
-		if (p->G == 0) break;
 		for (j = 0; j < i; ++j) {
 			bsw2hit_t *q = b->hits + j;
 			int compatible = 1;
-			if (q->G == 0) continue;
+			if (p->is_rev != q->is_rev) continue; // hits from opposite strands are not duplicates
 			if (p->l == 0 && q->l == 0) {
-				int qol = (p->end < q->end? p->end : q->end) - (p->beg > q->beg? p->beg : q->beg);
+				int qol = (p->end < q->end? p->end : q->end) - (p->beg > q->beg? p->beg : q->beg); // length of query overlap
 				if (qol < 0) qol = 0;
 				if ((float)qol / (p->end - p->beg) > MASK_LEVEL || (float)qol / (q->end - q->beg) > MASK_LEVEL) {
 					int64_t tol = (int64_t)(p->k + p->len < q->k + q->len? p->k + p->len : q->k + q->len)
-						- (int64_t)(p->k > q->k? p->k : q->k);
+						- (int64_t)(p->k > q->k? p->k : q->k); // length of target overlap
 					if ((double)tol / p->len > MASK_LEVEL || (double)tol / q->len > MASK_LEVEL)
 						compatible = 0;
 				}
@@ -594,6 +598,9 @@ bwtsw2_t **bsw2_core(const bntseq_t *bns, const bsw2opt_t *opt, const bwtl_t *ta
 		mp_free(stack->pool, v);
 	} // while(top)
 	getrusage(0, &curr);
+	for (i = 0; i < 2; ++i)
+		for (j = 0; j < b_ret[i]->n; ++j)
+			b_ret[i]->hits[j].n_seeds = 0;
 	bsw2_resolve_duphits(bns, query, b, opt->is);
 	bsw2_resolve_duphits(bns, query, b1, opt->is);
 	//fprintf(stderr, "stats: %.3lf sec; %d elems\n", time_elapse(&curr, &last), n_tot);

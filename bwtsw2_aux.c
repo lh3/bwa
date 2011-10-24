@@ -75,9 +75,7 @@ void bsw2_destroy(bwtsw2_t *b)
 		(par).row = 5; (par).band_width = opt->bw;				\
 	} while (0)
 
-#define __rpac(pac, l, i) (pac[(l-i-1)>>2] >> (~(l-i-1)&3)*2 & 0x3)
-
-void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq, uint8_t *pac, bwtint_t l_pac, int is_rev, uint8_t *_mem)
+void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq, uint8_t *pac, bwtint_t l_pac, uint8_t *_mem)
 {
 	int i, matrix[25];
 	bwtint_t k;
@@ -103,19 +101,14 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 		for (j = score = 0; j < i; ++j) {
 			bsw2hit_t *q = b->hits + j;
 			if (q->beg <= p->beg && q->k <= p->k && q->k + q->len >= p->k + p->len) {
-				if (q->n_seeds < (1<<14) - 2) ++q->n_seeds;
+				if (q->n_seeds < (1<<13) - 2) ++q->n_seeds;
 				++score;
 			}
 		}
 		if (score) continue;
 		if (lt > p->k) lt = p->k;
-		if (is_rev) {
-			for (k = p->k - 1, j = 0; k > 0 && j < lt; --k) // FIXME: k=0 not considered!
-				target[j++] = __rpac(pac, l_pac, k);
-		} else {
-			for (k = p->k - 1, j = 0; k > 0 && j < lt; --k) // FIXME: k=0 not considered!
-				target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
-		}
+		for (k = p->k - 1, j = 0; k > 0 && j < lt; --k) // FIXME: k=0 not considered!
+			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
 		score = aln_extend_core(target, lt, query + lq - p->beg, p->beg, &par, &path, 0, p->G, _mem);
 		if (score > p->G) { // extensible
@@ -128,7 +121,7 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 	free(query); free(target);
 }
 
-void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq, uint8_t *pac, bwtint_t l_pac, int is_rev, uint8_t *_mem)
+void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq, uint8_t *pac, bwtint_t l_pac, uint8_t *_mem)
 {
 	int i, matrix[25];
 	bwtint_t k;
@@ -144,13 +137,8 @@ void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq,
 		int j, score;
 		path_t path;
 		if (p->l) continue;
-		if (is_rev) {
-			for (k = p->k, j = 0; k < p->k + lt && k < l_pac; ++k)
-				target[j++] = __rpac(pac, l_pac, k);
-		} else {
-			for (k = p->k, j = 0; k < p->k + lt && k < l_pac; ++k)
-				target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
-		}
+		for (k = p->k, j = 0; k < p->k + lt && k < l_pac; ++k)
+			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
 		score = aln_extend_core(target, lt, query + p->beg, lq - p->beg, &par, &path, 0, 1, _mem);
 //		if (score < p->G) fprintf(stderr, "[bsw2_extend_hits] %d < %d\n", score, p->G);
@@ -222,8 +210,8 @@ void bsw2_debug_hits(const bwtsw2_t *b)
 	printf("# raw hits: %d\n", b->n);
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
-		if (p->l == 0)
-			printf("G=%d, [%d,%d), k=%lu, l=%lu\n", p->G, p->beg, p->end, (long)p->k, (long)p->l);
+		if (p->G > 0)
+			printf("G=%d, len=%d, [%d,%d), k=%lu, l=%lu, #seeds=%d, is_rev=%d\n", p->G, p->len, p->beg, p->end, (long)p->k, (long)p->l, p->n_seeds, p->is_rev);
 	}
 }
 
@@ -250,7 +238,7 @@ static void merge_hits(bwtsw2_t *b[2], int l, int is_reverse)
 }
 /* seq[0] is the forward sequence and seq[1] is the reverse complement. */
 static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target,
-								int l, uint8_t *seq[2], int is_rev, bsw2global_t *pool)
+								int l, uint8_t *seq[2], bsw2global_t *pool)
 {
 	extern void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2]);
 	bwtsw2_t *b[2], **bb[2], **_b, *p;
@@ -278,20 +266,16 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 				int x = q->beg;
 				q->beg = l - q->end;
 				q->end = l - x;
-				q->k -= q->len;
 			}
 		}
 	}
-	//bsw2_debug_hits(bb[0][1]);
-	bsw2_debug_hits(bb[1][1]);
 	b[0] = bb[0][1]; b[1] = bb[1][1]; // bb[*][1] are "narrow SA hits"
 	bsw2_chain_filter(opt, l, b);
 	for (k = 0; k < 2; ++k) {
-		bsw2_extend_left(opt, bb[k][1], seq[k], l, pac, bns->l_pac, is_rev, pool->aln_mem);
-		if (k == 1) bsw2_debug_hits(bb[k][1]);
+		bsw2_extend_left(opt, bb[k][1], seq[k], l, pac, bns->l_pac, pool->aln_mem);
 		merge_hits(bb[k], l, 0); // bb[k][1] is merged to bb[k][0] here
 		bsw2_resolve_duphits(0, 0, bb[k][0], 0);
-		bsw2_extend_rght(opt, bb[k][0], seq[k], l, pac, bns->l_pac, is_rev, pool->aln_mem);
+		bsw2_extend_rght(opt, bb[k][0], seq[k], l, pac, bns->l_pac, pool->aln_mem);
 		b[k] = bb[k][0];
 		free(bb[k]);		
 	}
@@ -528,18 +512,13 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			free(seq[0]); continue;
 		}
 		// alignment
-		b[0] = bsw2_aln1_core(&opt, bns, pac, target, l, seq, 0, pool);
+		b[0] = bsw2_aln1_core(&opt, bns, pac, target, l, seq, pool);
 		for (k = 0; k < b[0]->n; ++k)
 			if (b[0]->hits[k].n_seeds < opt.t_seeds) break;
-		if (0 && k < b[0]->n) {
-			b[1] = bsw2_aln1_core(&opt, bns, pac, target, l, rseq, 1, pool);
-			for (i = 0; i < b[1]->n; ++i) {
-				bsw2hit_t *p = b[1]->hits + i;
-				int x = p->beg;
-				p->beg = l - p->end;
-				p->end = l - x;
-				if (p->l == 0) p->k = bns->l_pac - (p->k + p->len);
-			}
+		if (k < b[0]->n) {
+			b[1] = bsw2_aln1_core(&opt, bns, pac, target, l, rseq, pool);
+			for (i = 0; i < b[1]->n; ++i) // flip the strand flag
+				b[1]->hits[i].flag ^= 0x10, b[1]->hits[i].is_rev ^= 1;
 			flag_fr(b);
 			merge_hits(b, l, 0);
 			bsw2_resolve_duphits(0, 0, b[0], 0);
