@@ -428,6 +428,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 				if (p->n_seeds < 2) c *= .2;
 				qual = (int)(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a) + .499);
 				if (qual > 250) qual = 250;
+				if (qual < 0) qual = 0;
 				if (p->flag&1) qual = 0;
 			}
 			ksprintf(&str, "\t%d\t", qual);

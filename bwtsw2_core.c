@@ -35,7 +35,7 @@ typedef struct {
 
 #include "ksort.h"
 KSORT_INIT_GENERIC(int)
-#define __hitG_lt(a, b) ((a).n_seeds > (b).n_seeds || ((a).n_seeds == (b).n_seeds && (a).G > (b).G))
+#define __hitG_lt(a, b) (((a).G + ((int)(a).n_seeds<<2)) > (b).G + ((int)(b).n_seeds<<2))
 KSORT_INIT(hitG, bsw2hit_t, __hitG_lt)
 
 static const bsw2cell_t g_default_cell = { 0, 0, MINUS_INF, MINUS_INF, MINUS_INF, 0, 0, 0, -1, -1, {-1, -1, -1, -1} };
