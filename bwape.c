@@ -21,22 +21,31 @@ typedef struct {
 	bwtint_t low, high, high_bayesian;
 } isize_info_t;
 
+typedef struct {
+	uint64_t x, y;
+} b128_t;
+
+#define b128_lt(a, b) ((a).x < (b).x)
+#define b128_eq(a, b) ((a).x == (b).x && (a).y == (b).y)
+#define b128_hash(a) ((uint32_t)(a).x)
+
 #include "khash.h"
-KHASH_MAP_INIT_INT64(64, poslist_t)
+KHASH_INIT(b128, b128_t, poslist_t, 1, b128_hash, b128_eq)
 
 #include "ksort.h"
+KSORT_INIT(b128, b128_t, b128_lt)
 KSORT_INIT_GENERIC(uint64_t)
 
 typedef struct {
-	kvec_t(uint64_t) arr;
-	kvec_t(uint64_t) pos[2];
+	kvec_t(b128_t) arr;
+	kvec_t(b128_t) pos[2];
 	kvec_t(bwt_aln1_t) aln[2];
 } pe_data_t;
 
 #define MIN_HASH_WIDTH 1000
 
 extern int g_log_n[256]; // in bwase.c
-static kh_64_t *g_hash;
+static kh_b128_t *g_hash;
 
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi);
 void bwa_aln2seq(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s);
@@ -160,68 +169,69 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm, const isize_info_t *ii)
 {
 	int i, j, o_n, subo_n, cnt_chg = 0, low_bound = ii->low, max_len;
-	uint64_t last_pos[2][2], o_pos[2], subo_score, o_score;
+	uint64_t o_score, subo_score;
+	b128_t last_pos[2][2], o_pos[2];
 	max_len = p[0]->full_len;
 	if (max_len < p[1]->full_len) max_len = p[1]->full_len;
 	if (low_bound < max_len) low_bound = max_len;
 
 	// here v>=u. When ii is set, we check insert size with ii; otherwise with opt->max_isize
-#define __pairing_aux(u,v) do {											\
-		bwtint_t l = ((v)>>32) + p[(v)&1]->len - ((u)>>32);				\
-		if ((u) != (uint64_t)-1 && (v)>>32 > (u)>>32 && l >= max_len	\
+#define __pairing_aux(u,v) do { \
+		bwtint_t l = (v).x + p[(v).y&1]->len - ((u).x); \
+		if ((u).x != (uint64_t)-1 && (v).x > (u).x && l >= max_len \
 			&& ((ii->high && l <= ii->high_bayesian) || (ii->high == 0 && l <= opt->max_isize))) \
-		{																\
-			uint64_t s = d->aln[(v)&1].a[(uint32_t)(v)>>1].score + d->aln[(u)&1].a[(uint32_t)(u)>>1].score; \
-			s *= 10;													\
+		{ \
+			uint64_t s = d->aln[(v).y&1].a[(v).y>>2].score + d->aln[(u).y&1].a[(u).y>>2].score; \
+			s *= 10; \
 			if (ii->high) s += (int)(-4.343 * log(.5 * erfc(M_SQRT1_2 * fabs(l - ii->avg) / ii->std)) + .499); \
-			s = s<<32 | (uint32_t)hash_64((u)>>32<<32 | (v)>>32);		\
-			if (s>>32 == o_score>>32) ++o_n;							\
-			else if (s>>32 < o_score>>32) { subo_n += o_n; o_n = 1; }	\
-			else ++subo_n;												\
-			if (s < o_score) subo_score = o_score, o_score = s, o_pos[(u)&1] = (u), o_pos[(v)&1] = (v); \
-			else if (s < subo_score) subo_score = s;					\
-		}																\
+			s = s<<32 | (uint32_t)hash_64((u).x<<32 | (v).x); \
+			if (s>>32 == o_score>>32) ++o_n; \
+			else if (s>>32 < o_score>>32) { subo_n += o_n; o_n = 1; } \
+			else ++subo_n; \
+			if (s < o_score) subo_score = o_score, o_score = s, o_pos[(u).y&1] = (u), o_pos[(v).y&1] = (v); \
+			else if (s < subo_score) subo_score = s; \
+		} \
 	} while (0)
 
-#define __pairing_aux2(q, w) do {										\
-		const bwt_aln1_t *r = d->aln[(w)&1].a + ((uint32_t)(w)>>1);		\
-		(q)->extra_flag |= SAM_FPP;										\
-		if ((q)->pos != (w)>>32 || (q)->strand != r->a) {				\
-			(q)->n_mm = r->n_mm; (q)->n_gapo = r->n_gapo; (q)->n_gape = r->n_gape; (q)->strand = r->a; \
-			(q)->score = r->score;										\
-			(q)->pos = (w)>>32;											\
-			if ((q)->mapQ > 0) ++cnt_chg;								\
-		}																\
+#define __pairing_aux2(q, w) do { \
+		const bwt_aln1_t *r = d->aln[(w).y&1].a + ((w).y>>2); \
+		(q)->extra_flag |= SAM_FPP; \
+		if ((q)->pos != (w).x || (q)->strand != ((w).y>>1&1)) { \
+			(q)->n_mm = r->n_mm; (q)->n_gapo = r->n_gapo; (q)->n_gape = r->n_gape; (q)->strand = (w).y>>1&1; \
+			(q)->score = r->score; \
+			(q)->pos = (w).x; \
+			if ((q)->mapQ > 0) ++cnt_chg; \
+		} \
 	} while (0)
 
 	o_score = subo_score = (uint64_t)-1;
 	o_n = subo_n = 0;
-	ks_introsort(uint64_t, d->arr.n, d->arr.a);
-	for (j = 0; j < 2; ++j) last_pos[j][0] = last_pos[j][1] = (uint64_t)-1;
+	ks_introsort(b128, d->arr.n, d->arr.a);
+	for (j = 0; j < 2; ++j) last_pos[j][0].x = last_pos[j][0].y = last_pos[j][1].x = last_pos[j][1].y = (uint64_t)-1;
 	if (opt->type == BWA_PET_STD) {
 		for (i = 0; i < d->arr.n; ++i) {
-			uint64_t x = d->arr.a[i];
-			int strand = d->aln[x&1].a[(uint32_t)x>>1].a;
+			b128_t x = d->arr.a[i];
+			int strand = x.y>>1&1;
 			if (strand == 1) { // reverse strand, then check
-				int y = 1 - (x&1);
+				int y = 1 - (x.y&1);
 				__pairing_aux(last_pos[y][1], x);
 				__pairing_aux(last_pos[y][0], x);
 			} else { // forward strand, then push
-				last_pos[x&1][0] = last_pos[x&1][1];
-				last_pos[x&1][1] = x;
+				last_pos[x.y&1][0] = last_pos[x.y&1][1];
+				last_pos[x.y&1][1] = x;
 			}
 		}
 	} else if (opt->type == BWA_PET_SOLID) {
 		for (i = 0; i < d->arr.n; ++i) {
-			uint64_t x = d->arr.a[i];
-			int strand = d->aln[x&1].a[(uint32_t)x>>1].a;
-			if ((strand^x)&1) { // push
-				int y = 1 - (x&1);
+			b128_t x = d->arr.a[i];
+			int strand = x.y>>1&1;
+			if ((strand^x.y)&1) { // push
+				int y = 1 - (x.y&1);
 				__pairing_aux(last_pos[y][1], x);
 				__pairing_aux(last_pos[y][0], x);
 			} else { // check
-				last_pos[x&1][0] = last_pos[x&1][1];
-				last_pos[x&1][1] = x;
+				last_pos[x.y&1][0] = last_pos[x.y&1][1];
+				last_pos[x.y&1][1] = x;
 			}
 		}
 	} else {
@@ -229,10 +239,9 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 		exit(1);
 	}
 	// set pairing
-	//fprintf(stderr, "[%d, %d, %d, %d]\n", d->arr.n, (int)(o_score>>32), (int)(subo_score>>32), o_n);
+	//fprintf(stderr, "[%ld, %d, %d, %d]\n", d->arr.n, (int)(o_score>>32), (int)(subo_score>>32), o_n);
 	if (o_score != (uint64_t)-1) {
 		int mapQ_p = 0; // this is the maximum mapping quality when one end is moved
-		int rr[2];
 		//fprintf(stderr, "%d, %d\n", o_n, subo_n);
 		if (o_n == 1) {
 			if (subo_score == (uint64_t)-1) mapQ_p = 29; // no sub-optimal pair
@@ -243,9 +252,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 				if (mapQ_p < 0) mapQ_p = 0;
 			}
 		}
-		rr[0] = d->aln[o_pos[0]&1].a[(uint32_t)o_pos[0]>>1].a;
-		rr[1] = d->aln[o_pos[1]&1].a[(uint32_t)o_pos[1]>>1].a;
-		if ((p[0]->pos == o_pos[0]>>32 && p[0]->strand == rr[0]) && (p[1]->pos == o_pos[1]>>32 && p[1]->strand == rr[1])) { // both ends not moved
+		if ((p[0]->pos == o_pos[0].x && p[0]->strand == (o_pos[0].y>>1&1)) && (p[1]->pos == o_pos[1].x && p[1]->strand == (o_pos[1].y>>1&1))) { // both ends not moved
 			if (p[0]->mapQ > 0 && p[1]->mapQ > 0) {
 				int mapQ = p[0]->mapQ + p[1]->mapQ;
 				if (mapQ > 60) mapQ = 60;
@@ -254,10 +261,10 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 				if (p[0]->mapQ == 0) p[0]->mapQ = (mapQ_p + 7 < p[1]->mapQ)? mapQ_p + 7 : p[1]->mapQ;
 				if (p[1]->mapQ == 0) p[1]->mapQ = (mapQ_p + 7 < p[0]->mapQ)? mapQ_p + 7 : p[0]->mapQ;
 			}
-		} else if (p[0]->pos == o_pos[0]>>32 && p[0]->strand == rr[0]) { // [1] moved
+		} else if (p[0]->pos == o_pos[0].x && p[0]->strand == (o_pos[0].y>>1&1)) { // [1] moved
 			p[1]->seQ = 0; p[1]->mapQ = p[0]->mapQ;
 			if (p[1]->mapQ > mapQ_p) p[1]->mapQ = mapQ_p;
-		} else if (p[1]->pos == o_pos[1]>>32 && p[1]->strand == rr[1]) { // [0] moved
+		} else if (p[1]->pos == o_pos[1].x && p[1]->strand == (o_pos[1].y>>1&1)) { // [0] moved
 			p[0]->seQ = 0; p[0]->mapQ = p[1]->mapQ;
 			if (p[0]->mapQ > mapQ_p) p[0]->mapQ = mapQ_p;
 		} else { // both ends moved
@@ -338,7 +345,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 		if ((p[0]->type == BWA_TYPE_UNIQUE || p[0]->type == BWA_TYPE_REPEAT)
 			&& (p[1]->type == BWA_TYPE_UNIQUE || p[1]->type == BWA_TYPE_REPEAT))
 		{ // only when both ends mapped
-			uint64_t x;
+			b128_t x;
 			int j, k, n_occ[2];
 			for (j = 0; j < 2; ++j) {
 				n_occ[j] = 0;
@@ -351,32 +358,32 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 				for (k = 0; k < d->aln[j].n; ++k) {
 					bwt_aln1_t *r = d->aln[j].a + k;
 					bwtint_t l;
-					if (r->l - r->k + 1 >= MIN_HASH_WIDTH) { // then check hash table
-						uint64_t key = (uint64_t)r->k<<32 | r->l;
+					if (0 && r->l - r->k + 1 >= MIN_HASH_WIDTH) { // then check hash table
+						b128_t key;
 						int ret;
-						khint_t iter = kh_put(64, g_hash, key, &ret);
+						key.x = r->k; key.y = r->l;
+						khint_t iter = kh_put(b128, g_hash, key, &ret);
 						if (ret) { // not in the hash table; ret must equal 1 as we never remove elements
 							poslist_t *z = &kh_val(g_hash, iter);
 							z->n = r->l - r->k + 1;
 							z->a = (bwtint_t*)malloc(sizeof(bwtint_t) * z->n);
 							for (l = r->k; l <= r->l; ++l) {
 								int strand;
-								z->a[l - r->k] = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
-								r->a = strand;
+								z->a[l - r->k] = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand)<<1;
+								z->a[l - r->k] |= strand;
 							}
 						}
 						for (l = 0; l < kh_val(g_hash, iter).n; ++l) {
-							x = kh_val(g_hash, iter).a[l];
-							x = x<<32 | k<<1 | j;
-							kv_push(uint64_t, d->arr, x);
+							x.x = kh_val(g_hash, iter).a[l]>>1;
+							x.y = k<<2 | (kh_val(g_hash, iter).a[l]&1)<<1 | j;
+							kv_push(b128_t, d->arr, x);
 						}
 					} else { // then calculate on the fly
 						for (l = r->k; l <= r->l; ++l) {
 							int strand;
-							x = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
-							r->a = strand;
-							x = x<<32 | k<<1 | j;
-							kv_push(uint64_t, d->arr, x);
+							x.x = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
+							x.y = k<<2 | strand<<1 | j;
+							kv_push(b128_t, d->arr, x);
 						}
 					}
 				}
@@ -669,7 +676,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	srand48(bns->seed);
 	fp_sa[0] = xopen(fn_sa[0], "r");
 	fp_sa[1] = xopen(fn_sa[1], "r");
-	g_hash = kh_init(64);
+	g_hash = kh_init(b128);
 	last_ii.avg = -1.0;
 
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
@@ -745,7 +752,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	}
 	for (iter = kh_begin(g_hash); iter != kh_end(g_hash); ++iter)
 		if (kh_exist(g_hash, iter)) free(kh_val(g_hash, iter).a);
-	kh_destroy(64, g_hash);
+	kh_destroy(b128, g_hash);
 	if (pac) {
 		free(pac); bwt_destroy(bwt);
 	}

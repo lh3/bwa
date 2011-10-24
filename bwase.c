@@ -31,7 +31,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 			const bwt_aln1_t *p = aln + i;
 			if (p->score > best) break;
 			if (drand48() * (p->l - p->k + 1 + cnt) > (double)cnt) {
-				s->n_mm = p->n_mm; s->n_gapo = p->n_gapo; s->n_gape = p->n_gape; s->strand = p->a;
+				s->n_mm = p->n_mm; s->n_gapo = p->n_gapo; s->n_gape = p->n_gape;
 				s->score = p->score;
 				s->sa = p->k + (bwtint_t)((p->l - p->k + 1) * drand48());
 			}
@@ -67,8 +67,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 				for (l = q->k; l <= q->l; ++l) {
 					s->multi[z].pos = l;
 					s->multi[z].gap = q->n_gapo + q->n_gape;
-					s->multi[z].mm = q->n_mm;
-					s->multi[z++].strand = q->a;
+					s->multi[z++].mm = q->n_mm;
 				}
 				rest -= q->l - q->k + 1;
 			} else { // Random sampling (http://code.activestate.com/recipes/272884/). In fact, we never come here. 
@@ -78,18 +77,19 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 					while (x < p) p -= p * j / (i--);
 					s->multi[z].pos = q->l - i;
 					s->multi[z].gap = q->n_gapo + q->n_gape;
-					s->multi[z].mm = q->n_mm;
-					s->multi[z++].strand = q->a;
+					s->multi[z++].mm = q->n_mm;
 				}
 				rest = 0;
 				break;
 			}
 		}
 		s->n_multi = z;
+		/*// the following code removes the primary hit, but this leads to a bug in the PE mode
 		for (k = z = 0; k < s->n_multi; ++k)
 			if (s->multi[k].pos != s->sa)
 				s->multi[z++] = s->multi[k];
 		s->n_multi = z < n_multi? z : n_multi;
+		*/
 	}
 }
 

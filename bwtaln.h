@@ -34,7 +34,7 @@ typedef struct {
 } bwt_width_t;
 
 typedef struct {
-	uint32_t n_mm:8, n_gapo:8, n_gape:8, a:1;
+	uint32_t n_mm:16, n_gapo:8, n_gape:8;
 	bwtint_t k, l;
 	int score;
 } bwt_aln1_t;
