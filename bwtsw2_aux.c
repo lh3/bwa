@@ -410,7 +410,8 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 	}
 	for (i = 0; b && i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
-		int32_t seqid = -1, coor = -1;
+		int seqid = -1;
+		int64_t coor = -1;
 		int j, qual, nn = 0;
 		int beg, end;
 		if (p->l == 0) {
@@ -419,7 +420,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 			coor = p->k - bns->anns[seqid].offset;
 		}
 		ksprintf(&str, "%s\t%d", ks->name, p->flag&0x10);
-		ksprintf(&str, "\t%s\t%d", seqid>=0? bns->anns[seqid].name : "*", coor + 1);
+		ksprintf(&str, "\t%s\t%ld", seqid>=0? bns->anns[seqid].name : "*", (long)coor + 1);
 		if (p->l == 0) {
 			{ // estimate mapping quality
 				float c = 1.0;	
