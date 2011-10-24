@@ -474,7 +474,8 @@ bwtsw2_t **bsw2_core(const bntseq_t *bns, const bsw2opt_t *opt, const bwtl_t *ta
 	while (!stack_isempty(stack)) {
 		int old_n, tj;
 		bsw2entry_t *v;
-		uint32_t k, l, tcntk[4], tcntl[4];
+		uint32_t tcntk[4], tcntl[4];
+		bwtint_t k, l;
 
 		v = stack_pop(stack); old_n = v->n;
 		n_tot += v->n;
