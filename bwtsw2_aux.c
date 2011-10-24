@@ -42,7 +42,7 @@ unsigned char nt_comp_table[256] = {
 	'N','N','N','N', 'N','N','N','N', 'N','N','N','N', 'N','N','N','N'
 };
 
-extern int bsw2_resolve_duphits(const bwt_t *bwt, bwtsw2_t *b, int IS);
+extern int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS);
 extern int bsw2_resolve_query_overlaps(bwtsw2_t *b, float mask_level);
 
 bsw2opt_t *bsw2_init_opt()
@@ -253,25 +253,41 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 								int l, uint8_t *seq[2], int is_rev, bsw2global_t *pool)
 {
 	extern void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2]);
-	bwtsw2_t *b[2], **bb[2];
-	int k;
+	bwtsw2_t *b[2], **bb[2], **_b, *p;
+	int k, j;
+	bwtl_t *query;
+	query = bwtl_seq2bwtl(l, seq[0]);
+	_b = bsw2_core(bns, opt, query, target, pool);
+	bwtl_destroy(query);
 	for (k = 0; k < 2; ++k) {
-		bwtl_t *query = bwtl_seq2bwtl(l, seq[k]);
-		bb[k] = bsw2_core(opt, query, target, pool);
-		bwtl_destroy(query);
+		bb[k] = calloc(2, sizeof(void*));
+		bb[k][0] = calloc(1, sizeof(bwtsw2_t));
+		bb[k][1] = calloc(1, sizeof(bwtsw2_t));
+	}
+	fprintf(stderr, "here!\n");
+	for (k = 0; k < 2; ++k) { // separate _b into bb[2] based on the strand
+		for (j = 0; j < _b[k]->n; ++j) {
+			p = bb[k][_b[k]->hits[j].is_rev];
+			if (p->n == p->max) {
+				p->max = p->max? p->max<<1 : 8;
+				p->hits = realloc(p->hits, p->max * sizeof(bsw2hit_t));
+			}
+			p->hits[p->n++] = _b[k]->hits[j];
+		}
 	}
 	b[0] = bb[0][1]; b[1] = bb[1][1]; // bb[*][1] are "narrow SA hits"
 	bsw2_chain_filter(opt, l, b);
 	for (k = 0; k < 2; ++k) {
 		bsw2_extend_left(opt, bb[k][1], seq[k], l, pac, bns->l_pac, is_rev, pool->aln_mem);
 		merge_hits(bb[k], l, 0); // bb[k][1] is merged to bb[k][0] here
-		bsw2_resolve_duphits(0, bb[k][0], 0);
+		bsw2_resolve_duphits(0, 0, bb[k][0], 0);
 		bsw2_extend_rght(opt, bb[k][0], seq[k], l, pac, bns->l_pac, is_rev, pool->aln_mem);
 		b[k] = bb[k][0];
 		free(bb[k]);		
 	}
 	merge_hits(b, l, 1); // again, b[1] is merged to b[0]
 	bsw2_resolve_query_overlaps(b[0], opt->mask_level);
+	bsw2_destroy(_b[0]); bsw2_destroy(_b[1]); free(_b);
 	return b[0];
 }
 
@@ -453,7 +469,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 
 /* Core routine to align reads in _seq. It is separated from
  * process_seqs() to realize multi-threading */ 
-static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, bwt_t * const target[2])
+static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, bwt_t * const target)
 {
 	int x;
 	bsw2opt_t opt = *_opt;
@@ -502,11 +518,11 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			free(seq[0]); continue;
 		}
 		// alignment
-		b[0] = bsw2_aln1_core(&opt, bns, pac, target[0], l, seq, 0, pool);
+		b[0] = bsw2_aln1_core(&opt, bns, pac, target, l, seq, 0, pool);
 		for (k = 0; k < b[0]->n; ++k)
 			if (b[0]->hits[k].n_seeds < opt.t_seeds) break;
-		if (k < b[0]->n) {
-			b[1] = bsw2_aln1_core(&opt, bns, pac, target[1], l, rseq, 1, pool);
+		if (0 && k < b[0]->n) {
+			b[1] = bsw2_aln1_core(&opt, bns, pac, target, l, rseq, 1, pool);
 			for (i = 0; i < b[1]->n; ++i) {
 				bsw2hit_t *p = b[1]->hits + i;
 				int x = p->beg;
@@ -516,7 +532,7 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			}
 			flag_fr(b);
 			merge_hits(b, l, 0);
-			bsw2_resolve_duphits(0, b[0], 0);
+			bsw2_resolve_duphits(0, 0, b[0], 0);
 			bsw2_resolve_query_overlaps(b[0], opt.mask_level);
 		} else b[1] = 0;
 		// generate CIGAR and print SAM
@@ -536,7 +552,7 @@ typedef struct {
 	const bsw2opt_t *_opt;
 	const bntseq_t *bns;
 	uint8_t *pac;
-	bwt_t *target[2];
+	bwt_t *target;
 } thread_aux_t;
 
 /* another interface to bsw2_aln_core() to facilitate pthread_create() */
@@ -550,7 +566,7 @@ static void *worker(void *data)
 
 /* process sequences stored in _seq, generate SAM lines for these
  * sequences and reset _seq afterwards. */
-static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *bns, uint8_t *pac, bwt_t * const target[2])
+static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *bns, uint8_t *pac, bwt_t * const target)
 {
 	int i;
 
@@ -569,7 +585,7 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 		for (j = 0; j < opt->n_threads; ++j) {
 			thread_aux_t *p = data + j;
 			p->tid = j; p->_seq = _seq; p->_opt = opt; p->bns = bns;
-			p->pac = pac; p->target[0] = target[0]; p->target[1] = target[1];
+			p->pac = pac; p->target = target;
 			pthread_create(&tid[j], &attr, worker, p);
 		}
 		for (j = 0; j < opt->n_threads; ++j) pthread_join(tid[j], 0);
@@ -591,7 +607,7 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 	_seq->n = 0;
 }
 
-void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target[2], const char *fn)
+void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, const char *fn)
 {
 	gzFile fp;
 	kseq_t *ks;

@@ -15,7 +15,7 @@ typedef struct {
 
 typedef struct {
 	bwtint_t k, l;
-	uint32_t flag:18, n_seeds:14;
+	uint32_t flag:18, n_seeds:13, is_rev:1;
 	int len, G, G2;
 	int beg, end;
 } bsw2hit_t;
@@ -38,8 +38,8 @@ extern "C" {
 #endif
 
 	bsw2opt_t *bsw2_init_opt();
-	bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *query, bsw2global_t *pool);
-	void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target[2], const char *fn);
+	bwtsw2_t **bsw2_core(const bntseq_t *bns, const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *query, bsw2global_t *pool);
+	void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, const char *fn);
 	void bsw2_destroy(bwtsw2_t *b);
 
 	bsw2global_t *bsw2_global_init();

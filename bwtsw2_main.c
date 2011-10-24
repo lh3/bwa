@@ -10,7 +10,7 @@
 int bwa_bwtsw2(int argc, char *argv[])
 {
 	bsw2opt_t *opt;
-	bwt_t *target[2];
+	bwt_t *target;
 	char buf[1024];
 	bntseq_t *bns;
 	int c;
@@ -82,16 +82,14 @@ int bwa_bwtsw2(int argc, char *argv[])
 	opt->t *= opt->a;
 	opt->coef *= opt->a;
 
-	strcpy(buf, argv[optind]); target[0] = bwt_restore_bwt(strcat(buf, ".bwt"));
-	strcpy(buf, argv[optind]); bwt_restore_sa(strcat(buf, ".sa"), target[0]);
-	strcpy(buf, argv[optind]); target[1] = bwt_restore_bwt(strcat(buf, ".rbwt"));
-	strcpy(buf, argv[optind]); bwt_restore_sa(strcat(buf, ".rsa"), target[1]);
+	strcpy(buf, argv[optind]); target = bwt_restore_bwt(strcat(buf, ".bwt"));
+	strcpy(buf, argv[optind]); bwt_restore_sa(strcat(buf, ".sa"), target);
 	bns = bns_restore(argv[optind]);
 
 	bsw2_aln(opt, bns, target, argv[optind+1]);
 
 	bns_destroy(bns);
-	bwt_destroy(target[0]); bwt_destroy(target[1]);
+	bwt_destroy(target);
 	free(opt);
 	
 	return 0;

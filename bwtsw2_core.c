@@ -266,14 +266,14 @@ static void save_narrow_hits(const bwtl_t *bwtl, bsw2entry_t *u, bwtsw2_t *b1, i
 }
 /* after this, "narrow SA hits" will be expanded and the coordinates
  * will be obtained and stored in b->hits[*].k. */
-int bsw2_resolve_duphits(const bwt_t *bwt, bwtsw2_t *b, int IS)
+int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS)
 {
-	int i, j, n;
+	int i, j, n, ref_id, is_rev;
 	if (b->n == 0) return 0;
-	if (bwt) { // convert to chromosomal coordinates if suitable
+	if (bwt && bns) { // convert to chromosomal coordinates if suitable
 		int old_n = b->n;
 		bsw2hit_t *old_hits = b->hits;
-		for (i = n = 0; i < b->n; ++i) {
+		for (i = n = 0; i < b->n; ++i) { // compute memory needed to be allocated
 			bsw2hit_t *p = old_hits + i;
 			if (p->l - p->k + 1 <= IS) n += p->l - p->k + 1;
 			else if (p->G > 0) ++n;
@@ -282,19 +282,21 @@ int bsw2_resolve_duphits(const bwt_t *bwt, bwtsw2_t *b, int IS)
 		b->hits = calloc(b->max, sizeof(bsw2hit_t));
 		for (i = j = 0; i < old_n; ++i) {
 			bsw2hit_t *p = old_hits + i;
-			if (p->l - p->k + 1 <= IS) {
+			if (p->l - p->k + 1 <= IS) { // the hit is no so repetitive
 				bwtint_t k;
 				for (k = p->k; k <= p->l; ++k) {
 					b->hits[j] = *p;
-					b->hits[j].k = bwt_sa(bwt, k);
+					b->hits[j].k = bns_pos2refId(bns, bwt_sa(bwt, k), 1, &ref_id, &is_rev);
 					b->hits[j].l = 0;
+					b->hits[j].is_rev = is_rev;
 					++j;
 				}
 			} else if (p->G > 0) {
 				b->hits[j] = *p;
-				b->hits[j].k = bwt_sa(bwt, p->k);
+				b->hits[j].k = bns_pos2refId(bns, bwt_sa(bwt, p->k), 1, &ref_id, &is_rev);
 				b->hits[j].l = 0;
 				b->hits[j].flag |= 1;
+				b->hits[j].is_rev = is_rev;
 				++j;
 			}
 		}
@@ -434,7 +436,7 @@ static void init_bwtsw2(const bwtl_t *target, const bwt_t *query, bsw2stack_t *s
 	stack_push0(s, u);
 }
 /* On return, ret[1] keeps not-so-repetitive hits (narrow SA hits); ret[0] keeps all hits (right?) */
-bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *query, bsw2global_t *pool)
+bwtsw2_t **bsw2_core(const bntseq_t *bns, const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *query, bsw2global_t *pool)
 {
 	bsw2stack_t *stack = (bsw2stack_t*)pool->stack;
 	bwtsw2_t *b, *b1, **b_ret;
@@ -591,8 +593,8 @@ bwtsw2_t **bsw2_core(const bsw2opt_t *opt, const bwtl_t *target, const bwt_t *qu
 		mp_free(stack->pool, v);
 	} // while(top)
 	getrusage(0, &curr);
-	bsw2_resolve_duphits(query, b, opt->is);
-	bsw2_resolve_duphits(query, b1, opt->is);
+	bsw2_resolve_duphits(bns, query, b, opt->is);
+	bsw2_resolve_duphits(bns, query, b1, opt->is);
 	//fprintf(stderr, "stats: %.3lf sec; %d elems\n", time_elapse(&curr, &last), n_tot);
 	// free
 	free(heap);
