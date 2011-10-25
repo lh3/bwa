@@ -81,7 +81,7 @@ typedef struct { size_t n, m; bwtintv_t *a; } bwtintv_v;
 	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
 	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
 
-#define bwt_set_intv(bwt, c, ik) ((ik).x[0] = (bwt)->L2[(int)(c)], (ik).x[2] = (bwt)->L2[(int)(c)+1] - (bwt)->L2[(int)(c)], (ik).x[1] = (bwt)->L2[3-(c)], (ik).info = 0)
+#define bwt_set_intv(bwt, c, ik) ((ik).x[0] = (bwt)->L2[(int)(c)]+1, (ik).x[2] = (bwt)->L2[(int)(c)+1]-(bwt)->L2[(int)(c)], (ik).x[1] = (bwt)->L2[3-(c)]+1, (ik).info = 0)
 
 #ifdef __cplusplus
 extern "C" {

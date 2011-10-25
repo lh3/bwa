@@ -40,7 +40,9 @@ int main_fastmap(int argc, char *argv[])
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		{
-			int beg = 98;
+			int beg = 97;
+			uint8_t str[3];
+			bwtint_t b, e;
 			bwtintv_t ik, ok[4];
 			bwt_set_intv(bwt, seq->seq.s[seq->seq.l - 1], ik);
 			for (i = seq->seq.l - 2; i >= beg; --i) {
@@ -50,6 +52,7 @@ int main_fastmap(int argc, char *argv[])
 				if (ik.x[2] == 0) break;
 			}
 			printf("[%lld,%lld,%lld] @ %d\n", ik.x[0], ik.x[1], ik.x[2], i+1);
+			//str[0] = '\1'; str[1] = '\3'; bwt_match_exact(bwt, 2, str, &b, &e); printf("%lld,%lld,%lld\n", b, e, e-b+1);
 			printf("======================== %lld, [%lld,%lld,%lld,%lld]\n", bwt->primary, bwt->L2[1], bwt->L2[2]-bwt->L2[1], bwt->L2[3]-bwt->L2[2], bwt->L2[4]-bwt->L2[3]);
 			bwt_set_intv(bwt, seq->seq.s[beg], ik);
 			for (i = beg + 1; i < seq->seq.l; ++i) {
@@ -59,6 +62,7 @@ int main_fastmap(int argc, char *argv[])
 				if (ik.x[2] == 0) break;
 			}
 			printf("[%lld,%lld,%lld] @ %d\n", ik.x[0], ik.x[1], ik.x[2], i-1);
+			//str[0] = '\0'; str[1] = '\2'; bwt_match_exact(bwt, 2, str, &b, &e); printf("%lld,%lld,%lld\n", b, e, e-b+1);
 		}
 		bwt_smem(bwt, seq->seq.l, (uint8_t*)seq->seq.s, &mem, tvec);
 		printf(">%s\t%ld\n", seq->name.s, mem.n);

@@ -34,6 +34,7 @@ bwt1away.o:bwt.h bwtaln.h
 bwt2fmv.o:bwt.h
 bntseq.o:bntseq.h
 bwtgap.o:bwtgap.h bwtaln.h bwt.h
+fastmap:bwt.h
 
 bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
 bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h

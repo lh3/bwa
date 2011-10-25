@@ -249,13 +249,13 @@ void bwt_extend(const bwt_t *bwt, const bwtintv_t *ik, bwtintv_t ok[4], int is_b
 	int i;
 	bwt_2occ4(bwt, ik->x[!is_back] - 1, ik->x[!is_back] - 1 + ik->x[2], tk, tl);
 	for (i = 0; i != 4; ++i) {
-		ok[i].x[!is_back] = bwt->L2[i] + tk[i] + 1;
-		ok[i].x[2] = (tl[i] -= tk[i]);
+		ok[i].x[!is_back] = bwt->L2[i] + 1 + tk[i];
+		ok[i].x[2] = tl[i] - tk[i];
 	}
-	ok[3].x[is_back] = ik->x[is_back];
-	ok[2].x[is_back] = ok[3].x[is_back] + tl[3];
-	ok[1].x[is_back] = ok[2].x[is_back] + tl[2];
-	ok[0].x[is_back] = ok[1].x[is_back] + tl[1];
+	ok[3].x[is_back] = ik->x[is_back] + (ik->x[!is_back] <= bwt->primary && ik->x[!is_back] + ik->x[2] - 1 >= bwt->primary);
+	ok[2].x[is_back] = ok[3].x[is_back] + ok[3].x[2];
+	ok[1].x[is_back] = ok[2].x[is_back] + ok[2].x[2];
+	ok[0].x[is_back] = ok[1].x[is_back] + ok[1].x[2];
 }
 
 static void bwt_reverse_intvs(bwtintv_v *p)
@@ -298,7 +298,6 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	ret = curr->a[0].info; // this will be the returned value
 	swap = curr; curr = prev; prev = swap;
 
-	if (x == 40) printf("[%lld,%lld,%lld]\n", prev->a[0].x[0], prev->a[0].x[1], prev->a[0].x[2]);
 	for (i = x - 1; i >= -1; --i) { // backward search for MEMs
 		if (q[i] > 3) break;
 		c = i < 0? 0 : q[i];
