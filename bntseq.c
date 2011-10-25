@@ -190,14 +190,14 @@ static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *
 				*q = bns->ambs + bns->n_holes;
 				(*q)->len = 1;
 				(*q)->offset = p->offset + i;
-				(*q)->amb = seq->seq.s[i];
+				(*q)->amb = 'N';
 				++p->n_ambs;
 				++bns->n_holes;
 			}
 		}
 		lasts = seq->seq.s[i];
 		{ // fill buffer
-			if (c >= 4) c = lrand48()&0x3;
+			if (c >= 4) c = c>>4;
 			if (*l_buf == 0x40000) {
 				fwrite(buf, 1, 0x10000, fp);
 				memset(buf, 0, 0x10000);
@@ -238,11 +238,16 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	memset(buf, 0, 0x10000);
 	// read sequences
 	while (kseq_read(seq) >= 0) {
-		for (i = 0; i < seq->seq.l; ++i) // convert to 2-bit encoding
+		for (i = 0; i < seq->seq.l; ++i) { // convert to 2-bit encoding
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
+			if (seq->seq.s[i] > 3)
+				seq->seq.s[i] |= (lrand48()&3) << 4;
+		}
 		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
 		if (!for_only) {
-			seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 1);
+			seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 0); // reversed but not complemented
+			for (i = 0; i < seq->seq.l; ++i) // complement
+				seq->seq.s[i] = seq->seq.s[i] < 4? 3 - seq->seq.s[i] : ((3 - (seq->seq.s[i]>>4)) << 4 | 4);
 			add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
 		}
 	}

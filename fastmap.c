@@ -39,6 +39,27 @@ int main_fastmap(int argc, char *argv[])
 	while (kseq_read(seq) >= 0) {
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
+		{
+			int beg = 98;
+			bwtintv_t ik, ok[4];
+			bwt_set_intv(bwt, seq->seq.s[seq->seq.l - 1], ik);
+			for (i = seq->seq.l - 2; i >= beg; --i) {
+				//printf("[%lld,%lld,%lld] @ %d\n", ik.x[0], ik.x[1], ik.x[2], i+1);
+				bwt_extend(bwt, &ik, ok, 1);
+				ik = ok[seq->seq.s[i]];
+				if (ik.x[2] == 0) break;
+			}
+			printf("[%lld,%lld,%lld] @ %d\n", ik.x[0], ik.x[1], ik.x[2], i+1);
+			printf("======================== %lld, [%lld,%lld,%lld,%lld]\n", bwt->primary, bwt->L2[1], bwt->L2[2]-bwt->L2[1], bwt->L2[3]-bwt->L2[2], bwt->L2[4]-bwt->L2[3]);
+			bwt_set_intv(bwt, seq->seq.s[beg], ik);
+			for (i = beg + 1; i < seq->seq.l; ++i) {
+				//printf("[%lld,%lld,%lld] @ %d\n", ik.x[0], ik.x[1], ik.x[2], i-1);
+				bwt_extend(bwt, &ik, ok, 0);
+				ik = ok[3-seq->seq.s[i]];
+				if (ik.x[2] == 0) break;
+			}
+			printf("[%lld,%lld,%lld] @ %d\n", ik.x[0], ik.x[1], ik.x[2], i-1);
+		}
 		bwt_smem(bwt, seq->seq.l, (uint8_t*)seq->seq.s, &mem, tvec);
 		printf(">%s\t%ld\n", seq->name.s, mem.n);
 		for (i = 0; i < mem.n; ++i) {

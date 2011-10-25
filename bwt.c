@@ -282,9 +282,9 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	prev = tmpvec[0]? tmpvec[0] : &a[0];
 	curr = tmpvec[1]? tmpvec[1] : &a[1];
 	bwt_set_intv(bwt, q[x], ik);
-
 	ik.info = x + 1;
-	for (i = x + 1; i < len; ++i) { // forward search
+
+	for (i = x + 1, curr->n = 0; i < len; ++i) { // forward search
 		if (q[i] > 3) break;
 		c = 3 - q[i];
 		bwt_extend(bwt, &ik, ok, 0);
@@ -298,6 +298,7 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	ret = curr->a[0].info; // this will be the returned value
 	swap = curr; curr = prev; prev = swap;
 
+	if (x == 40) printf("[%lld,%lld,%lld]\n", prev->a[0].x[0], prev->a[0].x[1], prev->a[0].x[2]);
 	for (i = x - 1; i >= -1; --i) { // backward search for MEMs
 		if (q[i] > 3) break;
 		c = i < 0? 0 : q[i];
