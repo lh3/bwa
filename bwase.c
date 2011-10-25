@@ -111,10 +111,9 @@ int bwa_approx_mapQ(const bwa_seq_t *p, int mm)
 
 bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int len, int *strand)
 {
-	bwtint_t pos_fr, pos_f;
-	int is_rev, ref_id;
-	pos_fr = bwt_sa(bwt, sapos);
-	pos_f = bns_pos2refId(bns, pos_fr, 1, &ref_id, &is_rev); // pos_f
+	bwtint_t pos_f;
+	int is_rev;
+	pos_f = bns_depos(bns, bwt_sa(bwt, sapos), &is_rev); // pos_f
 	*strand = !is_rev;
 	/* NB: For gapped alignment, pacpos may not be correct, which will be fixed
 	 * in refine_gapped_core(). This line also determines the way "x" is

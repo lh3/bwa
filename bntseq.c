@@ -163,6 +163,9 @@ void bns_destroy(bntseq_t *bns)
 	}
 }
 
+#define _set_pac(pac, l, c) ((pac)[(l)>>2] |= (c)<<((~(l)&3)<<1))
+#define _get_pac(pac, l) ((pac)[(l)>>2]>>((~(l)&3)<<1)&3)
+
 static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_pac, int *m_seqs, int *m_holes, bntamb1_t **q)
 {
 	bntann1_t *p;
@@ -178,7 +181,7 @@ static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_
 	p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
 	p->n_ambs = 0;
 	for (i = lasts = 0; i < seq->seq.l; ++i) {
-		int c = seq->seq.s[i];
+		int c = nst_nt4_table[(int)seq->seq.s[i]];
 		if (c >= 4) { // N
 			if (lasts == seq->seq.s[i]) { // contiguous N
 				++(*q)->len;
@@ -190,20 +193,20 @@ static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_
 				*q = bns->ambs + bns->n_holes;
 				(*q)->len = 1;
 				(*q)->offset = p->offset + i;
-				(*q)->amb = 'N';
+				(*q)->amb = seq->seq.s[i];
 				++p->n_ambs;
 				++bns->n_holes;
 			}
 		}
 		lasts = seq->seq.s[i];
 		{ // fill buffer
-			if (c >= 4) c = c>>4;
+			if (c >= 4) c = lrand48()&3;
 			if (bns->l_pac == *m_pac) { // double the pac size
 				*m_pac <<= 1;
 				pac = realloc(pac, *m_pac/4);
 				memset(pac + bns->l_pac/4, 0, (*m_pac - bns->l_pac)/4);
 			}
-			pac[bns->l_pac>>2] |= c << ((3 - (bns->l_pac&3)) << 1);
+			_set_pac(pac, bns->l_pac, c);
 			++bns->l_pac;
 		}
 	}
@@ -218,8 +221,8 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	char name[1024];
 	bntseq_t *bns;
 	uint8_t *pac = 0;
-	int32_t i, m_seqs, m_holes;
-	int64_t ret = -1, m_pac;
+	int32_t m_seqs, m_holes;
+	int64_t ret = -1, m_pac, l;
 	bntamb1_t *q;
 	FILE *fp;
 
@@ -236,19 +239,13 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	strcpy(name, prefix); strcat(name, ".pac");
 	fp = xopen(name, "wb");
 	// read sequences
-	while (kseq_read(seq) >= 0) {
-		for (i = 0; i < seq->seq.l; ++i) { // convert to 2-bit encoding
-			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-			if (seq->seq.s[i] > 3)
-				seq->seq.s[i] |= (lrand48()&3) << 4;
-		}
-		pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
-		if (!for_only) {
-			seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 0); // reversed but not complemented
-			for (i = 0; i < seq->seq.l; ++i) // complement
-				seq->seq.s[i] = seq->seq.s[i] < 4? 3 - seq->seq.s[i] : ((3 - (seq->seq.s[i]>>4)) << 4 | 4);
-			pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
-		}
+	while (kseq_read(seq) >= 0) pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
+	if (!for_only) { // add the reverse complemented sequence
+		m_pac = (bns->l_pac * 2 + 3) / 4 * 4;
+		pac = realloc(pac, m_pac/4);
+		memset(pac + (bns->l_pac+3)/4, 0, (m_pac - (bns->l_pac+3)/4*4) / 4);
+		for (l = bns->l_pac - 1; l >= 0; --l, ++bns->l_pac)
+			_set_pac(pac, bns->l_pac, 3-_get_pac(pac, l));
 	}
 	ret = bns->l_pac;
 	{ // finalize .pac file
@@ -290,32 +287,21 @@ int bwa_fa2pac(int argc, char *argv[])
 	return 0;
 }
 
-int64_t bns_pos2refId(const bntseq_t *bns, int64_t pos, int is_fr, int *ref_id, int *is_rev)
-{
-	int left, mid, right;
-	is_fr = is_fr? 1 : 0;
-	left = 0; mid = 0; right = bns->n_seqs;
-	while (left < right) {
-		mid = (left + right) >> 1;
-		if (pos >= bns->anns[mid].offset<<is_fr) {
-			if (mid == bns->n_seqs - 1) break;
-			if (pos < bns->anns[mid+1].offset<<is_fr) break; // bracketed
-			left = mid + 1;
-		} else right = mid;
-	}
-	*ref_id = mid;
-	if (is_fr) { // then compute the forward-only position
-		bntann1_t *p = &bns->anns[mid];
-		if (pos - (p->offset<<1) < p->len) *is_rev = 0, pos -= p->offset;
-		else *is_rev = 1, pos = p->len - (pos - (p->offset<<1) - p->len) + p->offset;
-	}
-	return pos;
-}
-
 int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
 {
 	int left, mid, right, nn;
-	if (ref_id) bns_pos2refId(bns, pos_f, 0, ref_id, 0);
+	if (ref_id) {
+		left = 0; mid = 0; right = bns->n_seqs;
+		while (left < right) {
+			mid = (left + right) >> 1;
+			if (pos_f >= bns->anns[mid].offset) {
+				if (mid == bns->n_seqs - 1) break;
+				if (pos_f < bns->anns[mid+1].offset) break; // bracketed
+				left = mid + 1;
+			} else right = mid;
+		}
+		*ref_id = mid;
+	}
 	left = 0; right = bns->n_holes; nn = 0;
 	while (left < right) {
 		mid = (left + right) >> 1;

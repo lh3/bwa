@@ -71,12 +71,15 @@ extern "C" {
 	bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, const char* pac_filename);
 	void bns_destroy(bntseq_t *bns);
 	int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only);
-	int64_t bns_pos2refId(const bntseq_t *bns, int64_t pos, int is_fr, int *ref_id, int *is_rev);
 	int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id);
-	
 
 #ifdef __cplusplus
 }
 #endif
+
+static inline int64_t bns_depos(const bntseq_t *bns, int64_t pos, int *is_rev)
+{
+	return (*is_rev = (pos >= bns->l_pac))? (bns->l_pac<<1) - pos : pos;
+}
 
 #endif
