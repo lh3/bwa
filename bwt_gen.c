@@ -1486,8 +1486,8 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 		BWTIncConstruct(bwtInc, textToLoad);
 		processedTextLength += textToLoad;
 		if (bwtInc->numberOfIterationDone % 10 == 0) {
-			printf("[BWTIncConstructFromPacked] %lu iterations done. %lu characters processed.\n",
-				   (long)bwtInc->numberOfIterationDone, (long)processedTextLength);
+			fprintf(stderr, "[BWTIncConstructFromPacked] %lu iterations done. %lu characters processed.\n",
+					(long)bwtInc->numberOfIterationDone, (long)processedTextLength);
 		}
 	}
 	return bwtInc;
