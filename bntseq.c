@@ -163,7 +163,7 @@ void bns_destroy(bntseq_t *bns)
 	}
 }
 
-static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *l_buf, int *m_seqs, int *m_holes, bntamb1_t **q)
+static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_pac, int *m_seqs, int *m_holes, bntamb1_t **q)
 {
 	bntann1_t *p;
 	int i, lasts;
@@ -198,17 +198,17 @@ static void add1(const kseq_t *seq, bntseq_t *bns, FILE *fp, uint8_t *buf, int *
 		lasts = seq->seq.s[i];
 		{ // fill buffer
 			if (c >= 4) c = c>>4;
-			if (*l_buf == 0x40000) {
-				fwrite(buf, 1, 0x10000, fp);
-				memset(buf, 0, 0x10000);
-				*l_buf = 0;
+			if (bns->l_pac == *m_pac) { // double the pac size
+				*m_pac <<= 1;
+				pac = realloc(pac, *m_pac/4);
+				memset(pac + bns->l_pac/4, 0, (*m_pac - bns->l_pac)/4);
 			}
-			buf[*l_buf>>2] |= c << ((3 - (*l_buf&3)) << 1);
-			++(*l_buf);
+			pac[bns->l_pac>>2] |= c << ((3 - (bns->l_pac&3)) << 1);
+			++bns->l_pac;
 		}
 	}
 	++bns->n_seqs;
-	bns->l_pac += seq->seq.l;
+	return pac;
 }
 
 int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
@@ -217,9 +217,9 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	kseq_t *seq;
 	char name[1024];
 	bntseq_t *bns;
-	unsigned char buf[0x10000];
-	int32_t i, l_buf, m_seqs, m_holes;
-	int64_t ret = -1;
+	uint8_t *pac = 0;
+	int32_t i, m_seqs, m_holes;
+	int64_t ret = -1, m_pac;
 	bntamb1_t *q;
 	FILE *fp;
 
@@ -228,14 +228,13 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	bns = (bntseq_t*)calloc(1, sizeof(bntseq_t));
 	bns->seed = 11; // fixed seed for random generator
 	srand48(bns->seed);
-	m_seqs = m_holes = 8;
+	m_seqs = m_holes = 8; m_pac = 0x10000;
 	bns->anns = (bntann1_t*)calloc(m_seqs, sizeof(bntann1_t));
 	bns->ambs = (bntamb1_t*)calloc(m_holes, sizeof(bntamb1_t));
+	pac = calloc(m_pac/4, 1);
 	q = bns->ambs;
-	l_buf = 0;
 	strcpy(name, prefix); strcat(name, ".pac");
 	fp = xopen(name, "wb");
-	memset(buf, 0, 0x10000);
 	// read sequences
 	while (kseq_read(seq) >= 0) {
 		for (i = 0; i < seq->seq.l; ++i) { // convert to 2-bit encoding
@@ -243,19 +242,18 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 			if (seq->seq.s[i] > 3)
 				seq->seq.s[i] |= (lrand48()&3) << 4;
 		}
-		add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
+		pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
 		if (!for_only) {
 			seq_reverse(seq->seq.l, (uint8_t*)seq->seq.s, 0); // reversed but not complemented
 			for (i = 0; i < seq->seq.l; ++i) // complement
 				seq->seq.s[i] = seq->seq.s[i] < 4? 3 - seq->seq.s[i] : ((3 - (seq->seq.s[i]>>4)) << 4 | 4);
-			add1(seq, bns, fp, buf, &l_buf, &m_seqs, &m_holes, &q);
+			pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
 		}
 	}
-	xassert(bns->l_pac, "zero length sequence.");
 	ret = bns->l_pac;
 	{ // finalize .pac file
 		ubyte_t ct;
-		fwrite(buf, 1, (l_buf>>2) + ((l_buf&3) == 0? 0 : 1), fp);
+		fwrite(pac, 1, (bns->l_pac>>2) + ((bns->l_pac&3) == 0? 0 : 1), fp);
 		// the following codes make the pac file size always (l_pac/4+1+1)
 		if (bns->l_pac % 4 == 0) {
 			ct = 0;
@@ -269,6 +267,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	bns_dump(bns, prefix);
 	bns_destroy(bns);
 	kseq_destroy(seq);
+	free(pac);
 	return ret;
 }
 
