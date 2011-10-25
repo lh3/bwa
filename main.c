@@ -54,6 +54,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "bwtsw2") == 0) return bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "dbwtsw") == 0) return bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwasw") == 0) return bwa_bwtsw2(argc-1, argv+1);
+	else if (strcmp(argv[1], "fastmap") == 0) return main_fastmap(argc-1, argv+1);
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;

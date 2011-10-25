@@ -54,6 +54,12 @@ typedef struct {
 	bwtint_t *sa;
 } bwt_t;
 
+typedef struct {
+	bwtint_t x[3], info;
+} bwtintv_t;
+
+typedef struct { size_t n, m; bwtintv_t *a; } bwtintv_v;
+
 /* For general OCC_INTERVAL, the following is correct:
 #define bwt_bwt(b, k) ((b)->bwt[(k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(bwtint_t)/4*4) + sizeof(bwtint_t)/4*4 + (k)%OCC_INTERVAL/16])
 #define bwt_occ_intv(b, k) ((b)->bwt + (k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(bwtint_t)/4*4)
@@ -74,6 +80,8 @@ typedef struct {
 	 ((k) < (bwt)->primary)?											\
 	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
 	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
+
+#define bwt_set_intv(bwt, c, ik) ((ik).x[0] = (bwt)->L2[(int)(c)], (ik).x[2] = (bwt)->L2[(int)(c)+1] - (bwt)->L2[(int)(c)], (ik).x[1] = (bwt)->L2[3-(c)], (ik).info = 0)
 
 #ifdef __cplusplus
 extern "C" {
@@ -103,6 +111,9 @@ extern "C" {
 
 	int bwt_match_exact(const bwt_t *bwt, int len, const ubyte_t *str, bwtint_t *sa_begin, bwtint_t *sa_end);
 	int bwt_match_exact_alt(const bwt_t *bwt, int len, const ubyte_t *str, bwtint_t *k0, bwtint_t *l0);
+
+	void bwt_extend(const bwt_t *bwt, const bwtintv_t *ik, bwtintv_t ok[4], int is_back);
+	int bwt_smem(const bwt_t *bwt, int len, const uint8_t *q, bwtintv_v *mem, bwtintv_v *tmpvec[3]);
 
 #ifdef __cplusplus
 }

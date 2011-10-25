@@ -32,6 +32,7 @@
 #include <stdint.h>
 #include "utils.h"
 #include "bwt.h"
+#include "kvec.h"
 
 void bwt_gen_cnt_table(bwt_t *bwt)
 {
@@ -236,4 +237,112 @@ int bwt_match_exact_alt(const bwt_t *bwt, int len, const ubyte_t *str, bwtint_t 
 	}
 	*k0 = k; *l0 = l;
 	return l - k + 1;
+}
+
+/*********************
+ * Bidirectional BWT *
+ *********************/
+
+void bwt_extend(const bwt_t *bwt, const bwtintv_t *ik, bwtintv_t ok[4], int is_back)
+{
+	bwtint_t tk[4], tl[4];
+	int i;
+	bwt_2occ4(bwt, ik->x[!is_back] - 1, ik->x[!is_back] - 1 + ik->x[2], tk, tl);
+	for (i = 0; i != 4; ++i) {
+		ok[i].x[!is_back] = bwt->L2[i] + tk[i] + 1;
+		ok[i].x[2] = (tl[i] -= tk[i]);
+	}
+	ok[3].x[is_back] = ik->x[is_back];
+	ok[2].x[is_back] = ok[3].x[is_back] + tl[3];
+	ok[1].x[is_back] = ok[2].x[is_back] + tl[2];
+	ok[0].x[is_back] = ok[1].x[is_back] + tl[1];
+}
+
+static void bwt_reverse_intvs(bwtintv_v *p)
+{
+	if (p->n > 1) {
+		int j;
+		for (j = 0; j < p->n>>1; ++j) {
+			bwtintv_t tmp = p->a[p->n - 1 - j];
+			p->a[p->n - 1 - j] = p->a[j];
+			p->a[j] = tmp;
+		}
+	}
+}
+
+int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem, bwtintv_v *tmpvec[2])
+{
+	int i, j, c, ret;
+	bwtintv_t ik, ok[4];
+	bwtintv_v a[2], *prev, *curr, *swap;
+
+	mem->n = 0;
+	if (q[x] > 3) return x + 1;
+	kv_init(a[0]); kv_init(a[1]);
+	prev = tmpvec[0]? tmpvec[0] : &a[0];
+	curr = tmpvec[1]? tmpvec[1] : &a[1];
+	bwt_set_intv(bwt, q[x], ik);
+
+	ik.info = x + 1;
+	for (i = x + 1; i < len; ++i) { // forward search
+		if (q[i] > 3) break;
+		c = 3 - q[i];
+		bwt_extend(bwt, &ik, ok, 0);
+		if (ok[c].x[2] != ik.x[2]) // change of the interval size
+			kv_push(bwtintv_t, *curr, ik);
+		if (ok[c].x[2] == 0) break; // cannot be extended
+		ik = ok[c]; ik.info = i + 1;
+	}
+	if (i == len) kv_push(bwtintv_t, *curr, ik); // push the last interval if we reach the end
+	bwt_reverse_intvs(curr); // s.t. smaller intervals visited first
+	ret = curr->a[0].info; // this will be the returned value
+	swap = curr; curr = prev; prev = swap;
+
+	for (i = x - 1; i >= -1; --i) { // backward search for MEMs
+		if (q[i] > 3) break;
+		c = i < 0? 0 : q[i];
+		for (j = 0, curr->n = 0; j < prev->n; ++j) {
+			bwtintv_t *p = &prev->a[j];
+			bwt_extend(bwt, p, ok, 1);
+			if (ok[c].x[2] == 0 || i == -1) { // keep the hit if reaching the beginning or not extended further
+				if (curr->n == 0) { // curr->n to make sure there is no longer matches
+					if (mem->n == 0 || i + 1 < mem->a[mem->n-1].info>>32) { // skip contained matches
+						ik = *p; ik.info |= (uint64_t)(i + 1)<<32;
+						kv_push(bwtintv_t, *mem, ik);
+					}
+				} // otherwise the match is contained in another longer match
+			}
+			if (ok[c].x[2] && (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2])) {
+				ok[c].info = p->info;
+				kv_push(bwtintv_t, *curr, ok[c]);
+			}
+		}
+		if (curr->n == 0) break;
+		swap = curr; curr = prev; prev = swap;
+	}
+	bwt_reverse_intvs(mem); // s.t. sorted by the start coordinate
+
+	if (tmpvec[0] == 0) free(a[0].a);
+	if (tmpvec[1] == 0) free(a[1].a);
+	return ret;
+}
+
+int bwt_smem(const bwt_t *bwt, int len, const uint8_t *q, bwtintv_v *mem, bwtintv_v *tmpvec[3])
+{
+	int x = 0, i;
+	bwtintv_v a[3], *tvec[2], *mem1;
+	kv_init(a[0]); kv_init(a[1]); kv_init(a[2]); // no memory allocation here
+	tvec[0] = tmpvec[0]? tmpvec[0] : &a[0];
+	tvec[1] = tmpvec[1]? tmpvec[1] : &a[1];
+	mem1    = tmpvec[2]? tmpvec[2] : &a[2];
+	mem->n = 0;
+	do {
+		x = bwt_smem1(bwt, len, q, x, mem1, tvec);
+		for (i = 0; i < mem1->n; ++i)
+			kv_push(bwtintv_t, *mem, mem1->a[i]);
+	} while (x < len);
+	if (tmpvec[0] == 0) free(a[0].a);
+	if (tmpvec[1] == 0) free(a[1].a);
+	if (tmpvec[2] == 0) free(a[2].a);
+	return mem->n;
 }
