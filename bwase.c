@@ -118,7 +118,7 @@ bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int l
 	/* NB: For gapped alignment, pacpos may not be correct, which will be fixed
 	 * in refine_gapped_core(). This line also determines the way "x" is
 	 * calculated in refine_gapped_core() when (ext < 0 && is_end == 0). */
-	if (is_rev) pos_f = pos_f < len? 0 : pos_f - len; // mapped to the forward strand
+	if (is_rev) pos_f = pos_f + 1 < len? 0 : pos_f - len + 1; // mapped to the forward strand
 	return pos_f; // FIXME: it is possible that pos_f < bns->anns[ref_id].offset
 }
 
