@@ -107,7 +107,7 @@ static int fake_cigar(const bntseq_t *bns, fmhit_v *hits, int beg, int end, int 
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 3, min_len = 17, max_dist = 100, mem_only = 0;
+	int c, i, min_iwidth = 20, min_len = 17, max_dist = 50, mem_only = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -176,6 +176,7 @@ int main_fastmap(int argc, char *argv[])
 		if (!mem_only) {
 			int64_t pos;
 			int n_cigar, is_rev, ref_id, mapq;
+			if (hits.n == 0) continue;
 			mapq = cluster_hits(&hits, max_dist);
 			n_cigar = fake_cigar(bns, &hits, 0, hits.n, seq->seq.l, cigar, &pos, &is_rev);
 			bns_cnt_ambi(bns, pos, 1, &ref_id);
