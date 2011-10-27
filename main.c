@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.6.0-r64-dev"
+#define PACKAGE_VERSION "0.6.0-r68-dev"
 #endif
 
 static int usage()
@@ -19,6 +19,7 @@ static int usage()
 	fprintf(stderr, "         samse         generate alignment (single ended)\n");
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
 	fprintf(stderr, "         bwasw         BWA-SW for long queries\n");
+	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
