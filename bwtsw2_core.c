@@ -290,7 +290,7 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 					b->hits[j].k = bns_depos(bns, bwt_sa(bwt, k), &is_rev);
 					b->hits[j].l = 0;
 					b->hits[j].is_rev = is_rev;
-					if (is_rev) b->hits[j].k -= p->len;
+					if (is_rev) b->hits[j].k -= p->len - 1;
 					++j;
 				}
 			} else if (p->G > 0) {
@@ -299,7 +299,7 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 				b->hits[j].l = 0;
 				b->hits[j].flag |= 1;
 				b->hits[j].is_rev = is_rev;
-				if (is_rev) b->hits[j].k -= p->len;
+				if (is_rev) b->hits[j].k -= p->len - 1;
 				++j;
 			}
 		}
