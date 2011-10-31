@@ -56,6 +56,10 @@ void bwt_cal_sa(bwt_t *bwt, int intv)
 	bwt->sa_intv = intv;
 	bwt->n_sa = (bwt->seq_len + intv) / intv;
 	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
+	if (bwa->sa == 0) {
+		fprintf(stderr, "[%s] Fail to allocate %.3fMB memory. Abort!\n", __func__, bwt->n_sa * sizeof(bwtint_t) / 1024.0/1024.0);
+		abort();
+	}
 	// calculate SA value
 	isa = 0; sa = bwt->seq_len;
 	for (i = 0; i < bwt->seq_len; ++i) {
