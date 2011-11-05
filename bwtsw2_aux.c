@@ -66,6 +66,25 @@ void bsw2_destroy(bwtsw2_t *b)
 	free(b);
 }
 
+bwtsw2_t *bsw2_dup(const bwtsw2_t *b)
+{
+	bwtsw2_t *p;
+	int i;
+	p = calloc(1, sizeof(bwtsw2_t));
+	p->max = p->n = b->n;
+	kroundup32(p->max);
+	p->hits = calloc(p->max, sizeof(bsw2hit_t));
+	p->n_cigar = calloc(p->max, sizeof(int));
+	p->cigar = calloc(p->max, sizeof(void*));
+	memcpy(p->hits, b->hits, p->n * sizeof(bsw2hit_t));
+	for (i = 0; i < p->n; ++i) {
+		p->n_cigar[i] = b->n_cigar[i];
+		p->cigar[i] = malloc(p->n_cigar[i] * 4);
+		memcpy(p->cigar[i], b->cigar[i], p->n_cigar[i] * 4);
+	}
+	return p;
+}
+
 #define __gen_ap(par, opt) do {									\
 		int i;													\
 		for (i = 0; i < 25; ++i) (par).matrix[i] = -(opt)->b;	\
@@ -470,6 +489,8 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 	int x;
 	bsw2opt_t opt = *_opt;
 	bsw2global_t *pool = bsw2_global_init();
+	bwtsw2_t **buf;
+	buf = calloc(_seq->n, sizeof(void*));
 	for (x = 0; x < _seq->n; ++x) {
 		bsw2seq1_t *p = _seq->seq + x;
 		uint8_t *seq[2], *rseq[2];
@@ -533,11 +554,16 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 		} else b[1] = 0;
 		// generate CIGAR and print SAM
 		gen_cigar(&opt, l, seq, pac, b[0]);
-		print_hits(bns, &opt, p, b[0]);
+		buf[x] = bsw2_dup(b[0]);
 		// free
 		free(seq[0]);
 		bsw2_destroy(b[0]);
 	}
+	for (x = 0; x < _seq->n; ++x) {
+		print_hits(bns, &opt, &_seq->seq[x], buf[x]);
+		bsw2_destroy(buf[x]);
+	}
+	free(buf);
 	bsw2_global_destroy(pool);
 }
 
