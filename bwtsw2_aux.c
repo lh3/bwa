@@ -465,7 +465,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 
 /* Core routine to align reads in _seq. It is separated from
  * process_seqs() to realize multi-threading */ 
-static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, bwt_t * const target)
+static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target, int is_pe)
 {
 	int x;
 	bsw2opt_t opt = *_opt;
@@ -543,32 +543,32 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 
 #ifdef HAVE_PTHREAD
 typedef struct {
-	int tid;
+	int tid, is_pe;
 	bsw2seq_t *_seq;
 	const bsw2opt_t *_opt;
 	const bntseq_t *bns;
 	uint8_t *pac;
-	bwt_t *target;
+	const bwt_t *target;
 } thread_aux_t;
 
 /* another interface to bsw2_aln_core() to facilitate pthread_create() */
 static void *worker(void *data)
 {
 	thread_aux_t *p = (thread_aux_t*)data;
-	bsw2_aln_core(p->tid, p->_seq, p->_opt, p->bns, p->pac, p->target);
+	bsw2_aln_core(p->tid, p->_seq, p->_opt, p->bns, p->pac, p->target, p->is_pe);
 	return 0;
 }
 #endif
 
 /* process sequences stored in _seq, generate SAM lines for these
  * sequences and reset _seq afterwards. */
-static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *bns, uint8_t *pac, bwt_t * const target)
+static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target, int is_pe)
 {
 	int i;
 
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads <= 1) {
-		bsw2_aln_core(0, _seq, opt, bns, pac, target);
+		bsw2_aln_core(0, _seq, opt, bns, pac, target, is_pe);
 	} else {
 		pthread_t *tid;
 		pthread_attr_t attr;
@@ -580,7 +580,7 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
 		for (j = 0; j < opt->n_threads; ++j) {
 			thread_aux_t *p = data + j;
-			p->tid = j; p->_seq = _seq; p->_opt = opt; p->bns = bns;
+			p->tid = j; p->_seq = _seq; p->_opt = opt; p->bns = bns; p->is_pe = is_pe;
 			p->pac = pac; p->target = target;
 			pthread_create(&tid[j], &attr, worker, p);
 		}
@@ -588,7 +588,7 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 		free(data); free(tid);
 	}
 #else
-	bsw2_aln_core(0, _seq, opt, bns, pac, target);
+	bsw2_aln_core(0, _seq, opt, bns, pac, target, is_pe);
 #endif
 
 	// print and reset
@@ -603,11 +603,21 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 	_seq->n = 0;
 }
 
-void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, const char *fn)
+static void kseq_to_bsw2seq(const kseq_t *ks, bsw2seq1_t *p)
 {
-	gzFile fp;
-	kseq_t *ks;
-	int l, size = 0;
+	p->tid = -1;
+	p->l = ks->seq.l;
+	p->name = strdup(ks->name.s);
+	p->seq = strdup(ks->seq.s);
+	p->qual = ks->qual.l? strdup(ks->qual.s) : 0;
+	p->sam = 0;
+}
+
+void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, const char *fn, const char *fn2)
+{
+	gzFile fp, fp2;
+	kseq_t *ks, *ks2;
+	int l, size = 0, is_pe = 0;
 	uint8_t *pac;
 	bsw2seq_t *_seq;
 
@@ -622,30 +632,42 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	fp = xzopen(fn, "r");
 	ks = kseq_init(fp);
 	_seq = calloc(1, sizeof(bsw2seq_t));
-	while ((l = kseq_read(ks)) >= 0) {
-		bsw2seq1_t *p;
+	if (fn2) {
+		fp2 = xzopen(fn2, "r");
+		ks2 = kseq_init(fp2);
+		is_pe = 1;
+	} else fp2 = 0, ks2 = 0, is_pe = 0;
+	while (kseq_read(ks) >= 0) {
 		if (_seq->n == _seq->max) {
 			_seq->max = _seq->max? _seq->max<<1 : 1024;
 			_seq->seq = realloc(_seq->seq, _seq->max * sizeof(bsw2seq1_t));
 		}
-		p = &_seq->seq[_seq->n++];
-		p->tid = -1;
-		p->l = l;
-		p->name = strdup(ks->name.s);
-		p->seq = strdup(ks->seq.s);
-		p->qual = ks->qual.l? strdup(ks->qual.s) : 0;
-		p->sam = 0;
-		size += l;
+		kseq_to_bsw2seq(ks, &_seq->seq[_seq->n++]);
+		size += ks->seq.l;
+		if (ks2) {
+			if (kseq_read(ks2) >= 0) {
+				kseq_to_bsw2seq(ks2, &_seq->seq[_seq->n++]); // for PE, _seq->n here must be odd and we do not need to enlarge
+				size += ks->seq.l;
+			} else {
+				fprintf(stderr, "[%s] The second query file has fewer reads. Switched to the single-end mode for the following batches.\n", __func__);
+				is_pe = 0;
+			}
+		}
 		if (size > opt->chunk_size) {
-			fprintf(stderr, "[bsw2_aln] read %d sequences (%d bp)...\n", _seq->n, size);
-			process_seqs(_seq, opt, bns, pac, target);
+			fprintf(stderr, "[bsw2_aln] read %d sequences/pairs (%d bp)...\n", _seq->n, size);
+			process_seqs(_seq, opt, bns, pac, target, is_pe);
 			size = 0;
 		}
 	}
-	fprintf(stderr, "[bsw2_aln] read %d sequences (%d bp)...\n", _seq->n, size);
-	process_seqs(_seq, opt, bns, pac, target);
+	fprintf(stderr, "[bsw2_aln] read %d sequences/pairs (%d bp)...\n", _seq->n, size);
+	process_seqs(_seq, opt, bns, pac, target, is_pe);
+	// free
+	free(pac);
 	free(_seq->seq); free(_seq);
 	kseq_destroy(ks);
 	gzclose(fp);
-	free(pac);
+	if (fn2) {
+		kseq_destroy(ks2);
+		gzclose(fp2);
+	}
 }

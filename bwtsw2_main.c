@@ -40,7 +40,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 
 	if (optind + 2 > argc) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage:   bwa bwasw [options] <target.prefix> <query.fa>\n\n");
+		fprintf(stderr, "Usage:   bwa bwasw [options] <target.prefix> <query.fa> [query2.fa]\n\n");
 		fprintf(stderr, "Options: -a INT   score for a match [%d]\n", opt->a);
 		fprintf(stderr, "         -b INT   mismatch penalty [%d]\n", opt->b);
 		fprintf(stderr, "         -q INT   gap open penalty [%d]\n", opt->q);
@@ -65,15 +65,6 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "      increase '-z' for better sensitivity.\n");
 		fprintf(stderr, "\n");
 
-		if (0) {
-			double c, theta, eps, delta;
-			c = opt->a / log(opt->yita);
-			theta = exp(-opt->b / c) / opt->yita;
-			eps = exp(-opt->q / c);
-			delta = exp(-opt->r / c);
-			fprintf(stderr, "mismatch: %lf, gap_open: %lf, gap_ext: %lf\n\n",
-					theta, eps, delta);
-		}
 		return 1;
 	}
 
@@ -85,7 +76,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 	strcpy(buf, argv[optind]); bwt_restore_sa(strcat(buf, ".sa"), target);
 	bns = bns_restore(argv[optind]);
 
-	bsw2_aln(opt, bns, target, argv[optind+1]);
+	bsw2_aln(opt, bns, target, argv[optind+1], optind+2 < argc? argv[optind+2] : 0);
 
 	bns_destroy(bns);
 	bwt_destroy(target);
