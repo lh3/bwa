@@ -329,11 +329,6 @@ static void flag_fr(bwtsw2_t *b[2])
 }
 
 typedef struct {
-	int l, tid;
-	char *name, *seq, *qual, *sam;
-} bsw2seq1_t;
-
-typedef struct {
 	int n, max;
 	bsw2seq1_t *seq;
 } bsw2seq_t;
@@ -559,6 +554,7 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 		free(seq[0]);
 		bsw2_destroy(b[0]);
 	}
+	bwtsw2_pair(pac, _seq->n, _seq->seq, buf);
 	for (x = 0; x < _seq->n; ++x) {
 		print_hits(bns, &opt, &_seq->seq[x], buf[x]);
 		bsw2_destroy(buf[x]);

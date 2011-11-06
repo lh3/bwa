@@ -33,6 +33,11 @@ typedef struct {
 	uint8_t *aln_mem;
 } bsw2global_t;
 
+typedef struct {
+	int l, tid;
+	char *name, *seq, *qual, *sam;
+} bsw2seq1_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -44,6 +49,8 @@ extern "C" {
 
 	bsw2global_t *bsw2_global_init();
 	void bsw2_global_destroy(bsw2global_t *_pool);
+
+	void bwtsw2_pair(const uint8_t *pac, int n, bsw2seq1_t *seq, bwtsw2_t **hit);
 
 #ifdef __cplusplus
 }
