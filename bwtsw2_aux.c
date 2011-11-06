@@ -66,22 +66,14 @@ void bsw2_destroy(bwtsw2_t *b)
 	free(b);
 }
 
-bwtsw2_t *bsw2_dup(const bwtsw2_t *b)
+bwtsw2_t *bsw2_dup_no_cigar(const bwtsw2_t *b)
 {
 	bwtsw2_t *p;
-	int i;
 	p = calloc(1, sizeof(bwtsw2_t));
 	p->max = p->n = b->n;
 	kroundup32(p->max);
 	p->hits = calloc(p->max, sizeof(bsw2hit_t));
-	p->n_cigar = calloc(p->max, sizeof(int));
-	p->cigar = calloc(p->max, sizeof(void*));
 	memcpy(p->hits, b->hits, p->n * sizeof(bsw2hit_t));
-	for (i = 0; i < p->n; ++i) {
-		p->n_cigar[i] = b->n_cigar[i];
-		p->cigar[i] = malloc(p->n_cigar[i] * 4);
-		memcpy(p->cigar[i], b->cigar[i], p->n_cigar[i] * 4);
-	}
 	return p;
 }
 
@@ -406,9 +398,22 @@ static int fix_cigar(const char *qname, const bntseq_t *bns, bsw2hit_t *p, int n
 	return n_cigar;
 }
 
+static int est_mapq(const bsw2hit_t *p, const bsw2opt_t *opt)
+{
+	float c = 1.0;	
+	int qual, subo = p->G2 > opt->t? p->G2 : opt->t;
+	if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
+	if (p->n_seeds < 2) c *= .2;
+	qual = (int)(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a) + .499);
+	if (qual > 250) qual = 250;
+	if (qual < 0) qual = 0;
+	if (p->flag&1) qual = 0; // this is a random hit
+	return qual;
+}
+
 /* generate SAM lines for a sequence in ks with alignment stored in
  * b. ks->name and ks->seq will be freed and set to NULL in the end. */
-static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks, bwtsw2_t *b)
+static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks, bwtsw2_t *b, int is_pe, bwtsw2_t *bmate)
 {
 	int i, k;
 	kstring_t str;
@@ -433,18 +438,15 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 			nn = bns_cnt_ambi(bns, p->k, p->len, &seqid);
 			coor = p->k - bns->anns[seqid].offset;
 		}
-		ksprintf(&str, "%s\t%d", ks->name, p->flag&0x10);
+		ksprintf(&str, "%s\t%d", ks->name, (p->flag&0xff)|(is_pe?1:0));
 		ksprintf(&str, "\t%s\t%ld", seqid>=0? bns->anns[seqid].name : "*", (long)coor + 1);
 		if (p->l == 0) {
 			{ // estimate mapping quality
-				float c = 1.0;	
-				int subo = p->G2 > opt->t? p->G2 : opt->t;
-				if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
-				if (p->n_seeds < 2) c *= .2;
-				qual = (int)(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a) + .499);
-				if (qual > 250) qual = 250;
-				if (qual < 0) qual = 0;
-				if (p->flag&1) qual = 0;
+				qual = est_mapq(p, opt);
+				if ((p->flag & BSW2_FLAG_MATESW) && bmate && bmate->n == 1) { // this alignment is from Smith-Waterman rescue
+					int mate_qual = est_mapq(bmate->hits, opt);
+					qual = qual < mate_qual? qual : mate_qual;
+				}
 			}
 			ksprintf(&str, "\t%d\t", qual);
 			for (k = 0; k < b->n_cigar[i]; ++k)
@@ -469,6 +471,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		} else ksprintf(&str, "\t*");
 		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d\tXN:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds, nn);
 		if (p->l) ksprintf(&str, "\tXI:i:%d", p->l - p->k + 1);
+		if (p->flag&BSW2_FLAG_MATESW) ksprintf(&str, "\tXT:i:1");
 		kputc('\n', &str);
 	}
 	ks->sam = str.s;
@@ -526,7 +529,7 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			rseq[1][i] = c;
 		}
 		if (l - k < opt.t) { // too few unambiguous bases
-			print_hits(bns, &opt, p, 0);
+			buf[x] = 0;
 			free(seq[0]); continue;
 		}
 		// alignment
@@ -548,17 +551,28 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			bsw2_resolve_query_overlaps(b[0], opt.mask_level);
 		} else b[1] = 0;
 		// generate CIGAR and print SAM
-		gen_cigar(&opt, l, seq, pac, b[0]);
-		buf[x] = bsw2_dup(b[0]);
+		buf[x] = bsw2_dup_no_cigar(b[0]);
 		// free
 		free(seq[0]);
 		bsw2_destroy(b[0]);
 	}
-	bwtsw2_pair(pac, _seq->n, _seq->seq, buf);
+	if (is_pe) bsw2_pair(&opt, bns->l_pac, pac, _seq->n, _seq->seq, buf);
 	for (x = 0; x < _seq->n; ++x) {
-		print_hits(bns, &opt, &_seq->seq[x], buf[x]);
-		bsw2_destroy(buf[x]);
+		bsw2seq1_t *p = _seq->seq + x;
+		uint8_t *seq[2];
+		int i;
+		seq[0] = malloc(p->l * 2); seq[1] = seq[0] + p->l;
+		for (i = 0; i < p->l; ++i) {
+			int c = nst_nt4_table[(int)p->seq[i]];
+			if (c >= 4) c = (int)(drand48() * 4);
+			seq[0][i] = c;
+			seq[1][p->l-1-i] = 3 - c;
+		}
+		gen_cigar(&opt, p->l, seq, pac, buf[x]);
+		print_hits(bns, &opt, p, buf[x], is_pe, buf[x^1]);
+		free(seq[0]);
 	}
+	for (x = 0; x < _seq->n; ++x) bsw2_destroy(buf[x]);
 	free(buf);
 	bsw2_global_destroy(pool);
 }

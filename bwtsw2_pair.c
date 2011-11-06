@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "bwt.h"
 #include "bntseq.h"
 #include "bwtsw2.h"
@@ -10,13 +11,14 @@
 #define MIN_RATIO     0.8
 #define OUTLIER_BOUND 2.0
 #define MAX_STDDEV    4.0
+#define EXT_STDDEV    4.0
 
 typedef struct {
 	int low, high;
 	double avg, std;
 } bsw2pestat_t;
 
-bsw2pestat_t bwtsw2_stat(int n, bwtsw2_t **buf)
+bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf)
 {
 	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 	int i, k, x, p25, p50, p75, tmp, max_len = 0;
@@ -27,11 +29,11 @@ bsw2pestat_t bwtsw2_stat(int n, bwtsw2_t **buf)
 	for (i = k = 0; i < n; i += 2) {
 		bsw2hit_t *t[2];
 		int l;
-		if (buf[i]->n != 1 || buf[i+1]->n != 1) continue; // more than 1 hits
+		if (buf[i] == 0 || buf[i]->n != 1 || buf[i+1]->n != 1) continue; // more than 1 hits
 		t[0] = &buf[i]->hits[0]; t[1] = &buf[i+1]->hits[0];
 		if (t[0]->G2 > 0.8 * t[0]->G) continue; // the best hit is not good enough
 		if (t[1]->G2 > 0.8 * t[1]->G) continue; // the best hit is not good enough
-		l = t[0]->k > t[1]->k? t[0]->k - t[1]->k + (t[1]->end - t[1]->beg) : t[1]->k - t[0]->k + (t[0]->end - t[0]->beg);
+		l = t[0]->k > t[1]->k? t[0]->k - t[1]->k + t[1]->len : t[1]->k - t[0]->k + t[0]->len;
 		max_len = max_len > t[0]->end - t[0]->beg? max_len : t[0]->end - t[0]->beg;
 		max_len = max_len > t[1]->end - t[1]->beg? max_len : t[1]->end - t[1]->beg;
 		isize[k++] = l;
@@ -64,8 +66,121 @@ bsw2pestat_t bwtsw2_stat(int n, bwtsw2_t **buf)
 	return r;
 }
 
-void bwtsw2_pair(const uint8_t *pac, int n, bsw2seq1_t *seq, bwtsw2_t **hits)
+typedef struct {
+	int n_cigar, beg, end, len;
+	int64_t pos;
+	uint32_t *cigar;
+} pairaux_t;
+
+extern unsigned char nst_nt4_table[256];
+static int8_t g_mat[25];
+
+void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const bsw2pestat_t *st, const bsw2hit_t *h, int l_mseq, const char *mseq, bsw2hit_t *a)
 {
+	extern void seq_reverse(int len, ubyte_t *seq, int is_comp);
+	int64_t k, beg, end;
+	uint8_t *seq, *ref;
+	int i;
+	ksw_query_t *q;
+	ksw_aux_t aux[2];
+	// compute the region start and end
+	a->n_seeds = 1; a->l = 0; a->flag |= BSW2_FLAG_MATESW;
+	if (h->is_rev == 0) {
+		beg = (int64_t)(h->k + st->avg - EXT_STDDEV * st->std - l_mseq + .499);
+		end = (int64_t)(h->k + st->avg + EXT_STDDEV * st->std + .499);
+		a->is_rev = 1; a->flag |= 16;
+	} else {
+		beg = (int64_t)(h->k + h->end - h->beg - st->avg - EXT_STDDEV * st->std + .499);
+		end = (int64_t)(h->k + h->end - h->beg - st->avg + EXT_STDDEV * st->std + l_mseq + .499);
+		a->is_rev = 0;
+	}
+	if (beg < 1) beg = 1;
+	if (end > l_pac) end = l_pac;
+	// generate the sequence
+	seq = malloc(l_mseq + (end - beg));
+	ref = seq + l_mseq;
+	for (k = beg; k < end; ++k)
+		ref[k - beg] = pac[k>>2] >> ((~k&3)<<1) & 0x3;
+	if (h->is_rev == 0) {
+		for (i = 0; i < l_mseq; ++i) { // on the reverse strand
+			int c = nst_nt4_table[(int)mseq[i]];
+			seq[l_mseq - 1 - i] = c > 3? 4 : 3 - c;
+		}
+	} else {
+		for (i = 0; i < l_mseq; ++i) // on the forward strand
+			seq[i] = nst_nt4_table[(int)mseq[i]];
+	}
+	/* The following code can be made up to 2-fold as fast. I am just lazy... */
+	// forward Smith-Waterman
+	aux[0].T = opt->t; aux[0].gapo = opt->q; aux[0].gape = opt->r; aux[1] = aux[0];
+	q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
+	ksw_sse2(q, end - beg, ref, &aux[0]);
+	free(q);
+	if (aux[0].score == 0) {
+		free(seq);
+		return;
+	}
+	// reverse Smith-Waterman
+	seq_reverse(l_mseq, seq, 0);
+	seq_reverse(end - beg, ref, 0);
+	q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
+	ksw_sse2(q, end - beg, ref, &aux[1]);
+	free(q);
+	aux[1].te = end - beg - 1 - aux[1].te; // change to the forward-strand coordinate
+	// write output
+	a->G = aux[0].score;
+	a->G2 = aux[0].score2 > aux[1].score2? aux[0].score2 : aux[1].score2;
+	a->k = beg + aux[1].te;
+	a->len = aux[0].te + 1 - aux[1].te;
+	a->beg = l_mseq - 1 - aux[1].qe;
+	a->end = aux[0].qe + 1;
+	free(seq);
+}
+
+void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, bsw2seq1_t *seq, bwtsw2_t **hits)
+{
+	extern int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS);
 	bsw2pestat_t pes;
-	pes = bwtsw2_stat(n, hits);
+	int i, j, k, n_rescued = 0;
+	pes = bsw2_stat(n, hits);
+	for (i = k = 0; i < 5; ++i) {
+		for (j = 0; j < 4; ++j)
+			g_mat[k++] = i == j? opt->a : -opt->b;
+		g_mat[k++] = 0;
+	}
+	for (i = 0; i < n; i += 2) {
+		bsw2hit_t a[2];
+		memset(&a, 0, sizeof(bsw2hit_t) * 2);
+		a[0].flag = 1<<6; a[1].flag = 1<<7;
+		for (j = 0; j < 2; ++j) { // set the read1/2 flag
+			if (hits[i+j] == 0) continue;
+			for (k = 0; k < hits[i+j]->n; ++k) {
+				bsw2hit_t *p = &hits[i+j]->hits[k];
+				p->flag |= 1<<(6+j);
+			}
+		}
+		if (hits[i] == 0 || hits[i+1] == 0) continue; // one end has excessive N
+		if (hits[i]->n != 1 && hits[i+1]->n != 1) continue; // no end has exactly one hit
+		if (hits[i]->n > 1 || hits[i+1]->n > 1) continue; // one read has more than one hit
+		if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1]);
+		if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0]);
+		// the following enumerate all possibilities. It is tedious but necessary...
+		//if (strstr(seq[i].name, "22_49258265_49258755_4")) fprintf(stderr, "%lld\t%lld\t(%d,%d)\n", hits[i+1]->hits[0].k, a[1].k, a[0].G, a[0].G2);
+		if (hits[i]->n + hits[i+1]->n == 1) { // one end mapped; the other not
+			bwtsw2_t *p[2];
+			int which;
+			if (hits[i]->n == 1) p[0] = hits[i], p[1] = hits[i+1], which = 1;
+			else p[0] = hits[i+1], p[1] = hits[i], which = 0;
+			if (a[which].G == 0) continue;
+			if (p[1]->max == 0) {
+				p[1]->max = 1;
+				p[1]->hits = malloc(sizeof(bsw2hit_t));
+			}
+			memcpy(p[1]->hits, &a[which], sizeof(bsw2hit_t));
+			p[1]->n = 1;
+			++n_rescued;
+		} else { // then both ends mapped
+		}
+	}
+	fprintf(stderr, "[%s] rescued %d reads\n", __func__, n_rescued);
 }

@@ -6,6 +6,8 @@
 #include "bwt_lite.h"
 #include "bwt.h"
 
+#define BSW2_FLAG_MATESW 0x100
+
 typedef struct {
 	int a, b, q, r, t, qr, bw;
 	int z, is, t_seeds, hard_clip;
@@ -50,7 +52,7 @@ extern "C" {
 	bsw2global_t *bsw2_global_init();
 	void bsw2_global_destroy(bsw2global_t *_pool);
 
-	void bwtsw2_pair(const uint8_t *pac, int n, bsw2seq1_t *seq, bwtsw2_t **hit);
+	void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, bsw2seq1_t *seq, bwtsw2_t **hit);
 
 #ifdef __cplusplus
 }
