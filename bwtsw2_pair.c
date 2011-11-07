@@ -63,6 +63,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf)
 	r.low = tmp > max_len? tmp : max_len;
 	if (r.high < r.avg - MAX_STDDEV * 4.) r.high = (int)(r.avg + MAX_STDDEV * 4. + .499);
 	fprintf(stderr, "[%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r.low, r.high);
+	free(isize);
 	return r;
 }
 
@@ -110,30 +111,32 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 		for (i = 0; i < l_mseq; ++i) // on the forward strand
 			seq[i] = nst_nt4_table[(int)mseq[i]];
 	}
-	/* The following code can be made up to 2-fold as fast. I am just lazy... */
 	// forward Smith-Waterman
 	aux[0].T = opt->t; aux[0].gapo = opt->q; aux[0].gape = opt->r; aux[1] = aux[0];
 	q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
 	ksw_sse2(q, end - beg, ref, &aux[0]);
 	free(q);
-	if (aux[0].score == 0) {
+	if (aux[0].score < opt->t) {
+		aux[0].score = 0;
 		free(seq);
 		return;
 	}
+	++aux[0].qe; ++aux[0].te;
 	// reverse Smith-Waterman
-	seq_reverse(l_mseq, seq, 0);
-	seq_reverse(end - beg, ref, 0);
-	q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
-	ksw_sse2(q, end - beg, ref, &aux[1]);
+	seq_reverse(aux[0].qe, seq, 0);
+	seq_reverse(aux[0].te, ref, 0);
+	q = ksw_qinit(aux[0].qe * g_mat[0] < 250? 1 : 2, aux[0].qe, seq, 5, g_mat);
+	ksw_sse2(q, aux[0].te, ref, &aux[1]);
 	free(q);
-	aux[1].te = end - beg - 1 - aux[1].te; // change to the forward-strand coordinate
+	++aux[1].qe; ++aux[1].te;
 	// write output
 	a->G = aux[0].score;
 	a->G2 = aux[0].score2 > aux[1].score2? aux[0].score2 : aux[1].score2;
-	a->k = beg + aux[1].te;
-	a->len = aux[0].te + 1 - aux[1].te;
-	a->beg = l_mseq - 1 - aux[1].qe;
-	a->end = aux[0].qe + 1;
+	a->k = beg + (aux[0].te - aux[1].te);
+	a->len = aux[1].te;
+	a->beg = aux[0].qe - aux[1].qe;
+	a->end = aux[0].qe;
+	if (a->is_rev) i = a->beg, a->beg = l_mseq - a->end, a->end = l_mseq - i;
 	free(seq);
 }
 
@@ -141,7 +144,7 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 {
 	extern int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS);
 	bsw2pestat_t pes;
-	int i, j, k, n_rescued = 0;
+	int i, j, k, n_rescued = 0, n_moved = 0, n_fixed = 0;
 	pes = bsw2_stat(n, hits);
 	for (i = k = 0; i < 5; ++i) {
 		for (j = 0; j < 4; ++j)
@@ -165,7 +168,6 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 		if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1]);
 		if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0]);
 		// the following enumerate all possibilities. It is tedious but necessary...
-		//if (strstr(seq[i].name, "22_49258265_49258755_4")) fprintf(stderr, "%lld\t%lld\t(%d,%d)\n", hits[i+1]->hits[0].k, a[1].k, a[0].G, a[0].G2);
 		if (hits[i]->n + hits[i+1]->n == 1) { // one end mapped; the other not
 			bwtsw2_t *p[2];
 			int which;
@@ -176,11 +178,61 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 				p[1]->max = 1;
 				p[1]->hits = malloc(sizeof(bsw2hit_t));
 			}
-			memcpy(p[1]->hits, &a[which], sizeof(bsw2hit_t));
+			p[1]->hits[0] = a[which];
 			p[1]->n = 1;
 			++n_rescued;
 		} else { // then both ends mapped
+			//fprintf(stderr, "%d; %lld,%lld; %d,%d\n", a[0].is_rev, hits[i]->hits[0].k, a[0].k, hits[i]->hits[0].end, a[0].end);
+			for (j = 0; j < 2; ++j) { // first fix wrong mappings
+				if (hits[i+j]->hits[0].G < a[j].G) { // the orginal mapping is suboptimal
+					a[j].G2 = a[j].G2 > hits[i+j]->hits[0].G? a[j].G2 : hits[i+j]->hits[0].G;
+					hits[i+j]->hits[0] = a[j];
+					++n_fixed;
+				}
+			}
+			if (hits[i]->hits[0].k == a[0].k && hits[i+1]->hits[0].k == a[1].k) { // properly paired and no ends need to be moved
+				for (j = 0; j < 2; ++j) {
+					if (hits[i+j]->hits[0].G2 < a[j].G2)
+						hits[i+j]->hits[0].G2 = a[j].G2;
+					if (a[j].G2) hits[i+j]->hits[0].flag |= BSW2_FLAG_TANDEM;
+					hits[i+j]->hits[0].flag |= 2;
+				}
+			} else if (hits[i]->hits[0].k == a[0].k || hits[i+1]->hits[0].k == a[1].k) { // a tandem match
+				for (j = 0; j < 2; ++j) {
+					hits[i+j]->hits[0].flag |= 2;
+					if (hits[i+j]->hits[0].k != a[j].k)
+						hits[i+j]->hits[0].flag |= BSW2_FLAG_TANDEM | 2;
+				}
+			} else if (a[0].G || a[1].G) { // it is possible to move one end
+				if (a[0].G && a[1].G) { // now we have two "proper pairs"
+					int G[2];
+					double diff;
+					G[0] = hits[i]->hits[0].G + a[1].G;
+					G[1] = hits[i+1]->hits[0].G + a[0].G;
+					diff = fabs(G[0] - G[1]) / (opt->a + opt->b) / ((hits[i]->hits[0].len + a[1].len + hits[i+1]->hits[0].len + a[0].len) / 2.);
+					if (diff > 0.05) a[G[0] > G[1]? 0 : 1].G = 0;
+				}
+				if (a[0].G == 0 || a[1].G == 0) { // one proper pair only
+					bsw2hit_t *p[2];
+					int which, isize;
+					double dev, diff;
+					if (a[0].G) p[0] = &hits[i+1]->hits[0], p[1] = &hits[i]->hits[0], which = 0;
+					else p[0] = &hits[i]->hits[0], p[1] = &hits[i+1]->hits[0], which = 1;
+					isize = p[0]->is_rev? p[0]->k + p[0]->len - a[which].k : a[which].k + a[which].len - p[0]->k;
+					dev = fabs(isize - pes.avg) / pes.std;
+					diff = (double)(p[1]->G - a[which].G) / (opt->a + opt->b) / (p[1]->end - p[1]->beg) * 100.0;
+					if (diff < dev * 2.) { // then move
+						int tflag = 0;
+						if (a[which].G - a[which].G2 < 2 * (opt->a + opt->b)) tflag = BSW2_FLAG_TANDEM;
+						a[which].G2 = a[which].G;
+						p[1][0] = a[which];
+						p[1]->flag |= BSW2_FLAG_MOVED | 2 | tflag;
+						p[0]->flag |= 2;
+						++n_moved;
+					}
+				}
+			}
 		}
 	}
-	fprintf(stderr, "[%s] rescued %d reads\n", __func__, n_rescued);
+	fprintf(stderr, "[%s] #fixed=%d, #rescued=%d, #moved=%d\n", __func__, n_fixed, n_rescued, n_moved);
 }

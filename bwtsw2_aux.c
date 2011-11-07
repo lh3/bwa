@@ -431,21 +431,28 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		bsw2hit_t *p = b->hits + i;
 		int seqid = -1;
 		int64_t coor = -1;
-		int j, qual, nn = 0;
+		int j, nn = 0;
 		int beg, end;
 		if (p->l == 0) {
 			b->n_cigar[i] = fix_cigar(ks->name, bns, p, b->n_cigar[i], b->cigar[i]);
 			nn = bns_cnt_ambi(bns, p->k, p->len, &seqid);
 			coor = p->k - bns->anns[seqid].offset;
 		}
-		ksprintf(&str, "%s\t%d", ks->name, (p->flag&0xff)|(is_pe?1:0));
+		ksprintf(&str, "%s\t%d", ks->name, (p->flag&0x7f)|(is_pe?1:0));
 		ksprintf(&str, "\t%s\t%ld", seqid>=0? bns->anns[seqid].name : "*", (long)coor + 1);
 		if (p->l == 0) {
-			{ // estimate mapping quality
-				qual = est_mapq(p, opt);
-				if ((p->flag & BSW2_FLAG_MATESW) && bmate && bmate->n == 1) { // this alignment is from Smith-Waterman rescue
-					int mate_qual = est_mapq(bmate->hits, opt);
+			int qual = est_mapq(p, opt);
+			if (is_pe && bmate && bmate->n == 1) {
+				int mate_qual = est_mapq(bmate->hits, opt);
+				if (p->flag & BSW2_FLAG_MATESW) { // this alignment is rescued by Smith-Waterman
 					qual = qual < mate_qual? qual : mate_qual;
+				} else if (p->flag&2) { // properly paired
+					if (!(p->flag & BSW2_FLAG_TANDEM)) { // not around a tandem repeat
+						if (qual < mate_qual) {
+							qual += 20;
+							if (qual >= mate_qual) qual = mate_qual;
+						}
+					}
 				}
 			}
 			ksprintf(&str, "\t%d\t", qual);
