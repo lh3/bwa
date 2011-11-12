@@ -341,7 +341,8 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 			&& (p[1]->type == BWA_TYPE_UNIQUE || p[1]->type == BWA_TYPE_REPEAT))
 		{ // only when both ends mapped
 			uint64_t x;
-			int j, k, n_occ[2];
+			int j, k;
+			long long n_occ[2];
 			for (j = 0; j < 2; ++j) {
 				n_occ[j] = 0;
 				for (k = 0; k < d->aln[j].n; ++k)
