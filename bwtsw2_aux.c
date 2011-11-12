@@ -60,9 +60,9 @@ void bsw2_destroy(bwtsw2_t *b)
 {
 	int i;
 	if (b == 0) return;
-	if (b->cigar)
-		for (i = 0; i < b->n; ++i) free(b->cigar[i]);
-	free(b->cigar); free(b->n_cigar); free(b->hits);
+	if (b->aux)
+		for (i = 0; i < b->n; ++i) free(b->aux[i].cigar);
+	free(b->aux); free(b->hits);
 	free(b);
 }
 
@@ -175,18 +175,10 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], uint8_t *pa
 	i = ((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq; // maximum possible target length
 	target = calloc(i, 1);
 	path = calloc(i + lq, sizeof(path_t));
-	// memory clean up for b
-	if (b->n < b->max) {
-		b->max = b->n;
-		b->hits = realloc(b->hits, b->n * sizeof(bsw2hit_t));
-	}
-	if (b->cigar) free(b->cigar);
-	if (b->n_cigar) free(b->n_cigar);
-	b->cigar = (uint32_t**)calloc(b->max, sizeof(void*));
-	b->n_cigar = (int*)calloc(b->max, sizeof(int));
 	// generate CIGAR
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
+		bsw2aux_t *q = b->aux + i;
 		uint8_t *query;
 		bwtint_t k;
 		int score, path_len, beg, end;
@@ -197,17 +189,17 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], uint8_t *pa
 		for (k = p->k; k < p->k + p->len; ++k) // in principle, no out-of-boundary here
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
-		b->cigar[i] = aln_path2cigar32(path, path_len, &b->n_cigar[i]);
+		q->cigar = aln_path2cigar32(path, path_len, &q->n_cigar);
 		if (beg != 0 || end < lq) { // write soft clipping
-			b->cigar[i] = realloc(b->cigar[i], 4 * (b->n_cigar[i] + 2));
+			q->cigar = realloc(q->cigar, 4 * (q->n_cigar + 2));
 			if (beg != 0) {
-				memmove(b->cigar[i] + 1, b->cigar[i], b->n_cigar[i] * 4);
-				b->cigar[i][0] = beg<<4 | 4;
-				++b->n_cigar[i];
+				memmove(q->cigar + 1, q->cigar, q->n_cigar * 4);
+				q->cigar[0] = beg<<4 | 4;
+				++q->n_cigar;
 			}
 			if (end < lq) {
-				b->cigar[i][b->n_cigar[i]] = (lq - end)<<4 | 4;
-				++b->n_cigar[i];
+				q->cigar[q->n_cigar] = (lq - end)<<4 | 4;
+				++q->n_cigar;
 			}
 		}
 	}
@@ -325,7 +317,7 @@ typedef struct {
 	bsw2seq1_t *seq;
 } bsw2seq_t;
 
-static int fix_cigar(const char *qname, const bntseq_t *bns, bsw2hit_t *p, int n_cigar, uint32_t *cigar)
+static int fix_cigar(const bntseq_t *bns, bsw2hit_t *p, int n_cigar, uint32_t *cigar)
 {
 	// FIXME: this routine does not work if the query bridge three reference sequences
 	int32_t coor, refl, lq;
@@ -398,17 +390,82 @@ static int fix_cigar(const char *qname, const bntseq_t *bns, bsw2hit_t *p, int n
 	return n_cigar;
 }
 
-static int est_mapq(const bsw2hit_t *p, const bsw2opt_t *opt)
+static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8_t *seq[2], uint8_t *pac, bwtsw2_t *b)
 {
-	float c = 1.0;	
-	int qual, subo = p->G2 > opt->t? p->G2 : opt->t;
-	if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
-	if (p->n_seeds < 2) c *= .2;
-	qual = (int)(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a) + .499);
-	if (qual > 250) qual = 250;
-	if (qual < 0) qual = 0;
-	if (p->flag&1) qual = 0; // this is a random hit
-	return qual;
+	int i;
+	// allocate for b->aux
+	if (b->n<<1 < b->max) {
+		b->max = b->n;
+		kroundup32(b->max);
+		b->hits = realloc(b->hits, b->max * sizeof(bsw2hit_t));
+	}
+	b->aux = calloc(b->n, sizeof(bsw2aux_t));
+	// generate CIGAR
+	gen_cigar(opt, qlen, seq, pac, b);
+	// fix CIGAR, generate mapQ, and write chromosomal position
+	for (i = 0; i < b->n; ++i) {
+		bsw2hit_t *p = &b->hits[i];
+		bsw2aux_t *q = &b->aux[i];
+		q->flag = p->flag & 0xfe;
+		q->isize = 0;
+		if (p->l == 0) { // unique hit
+			float c = 1.0;
+			int subo;
+			// fix out-of-boundary CIGAR
+			q->n_cigar = fix_cigar(bns, p, q->n_cigar, q->cigar);
+			// compute mapQ
+			subo = p->G2 > opt->t? p->G2 : opt->t;
+			if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
+			if (p->n_seeds < 2) c *= .2;
+			q->qual = (int)(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a) + .499);
+			if (q->qual > 250) q->qual = 250;
+			if (q->qual < 0) q->qual = 0;
+			if (p->flag&1) q->qual = 0; // this is a random hit
+			q->pqual = q->qual; // set the paired qual as qual
+			// get the chromosomal position
+			q->nn = bns_cnt_ambi(bns, p->k, p->len, &q->chr);
+			q->pos = p->k - bns->anns[q->chr].offset;
+		} else q->qual = 0, q->n_cigar = 0, q->chr = q->pos = -1, q->nn = 0;
+	}
+}
+
+static void update_mate_aux(bwtsw2_t *b, const bwtsw2_t *m)
+{
+	int i;
+	if (m == 0) return;
+	// update flag, mchr and mpos
+	for (i = 0; i < b->n; ++i) {
+		bsw2aux_t *q = &b->aux[i];
+		q->flag |= 1; // paired
+		if (m->n == 0) q->flag |= 8; // mate unmapped
+		if (m->n == 1) {
+			q->mchr = m->aux[0].chr;
+			q->mpos = m->aux[0].pos;
+			if (m->aux[0].flag&0x10) q->flag |= 0x20; // mate reverse strand
+			if (q->chr == q->mchr) { // set insert size
+				if (q->mpos + m->hits[0].len > q->pos)
+					q->isize = q->mpos + m->hits[0].len - q->pos;
+				else q->isize = q->mpos - q->pos - b->hits[0].len;
+			} else q->isize = 0;
+		} else q->mchr = q->mpos = -1;
+	}
+	// update mapping quality
+	if (b->n == 1 && m->n == 1) {
+		bsw2hit_t *p = &b->hits[0];
+		int isize;
+		if (p->flag & BSW2_FLAG_MATESW) { // this alignment is rescued by Smith-Waterman
+			if (!(p->flag & BSW2_FLAG_TANDEM) && b->aux[0].pqual < m->aux[0].qual)
+				b->aux[0].pqual = m->aux[0].qual;
+		} else if (p->flag&2) { // properly paired
+			if (!(p->flag & BSW2_FLAG_TANDEM)) { // not around a tandem repeat
+				if (b->aux[0].pqual < m->aux[0].qual) {
+					b->aux[0].pqual += 20;
+					if (b->aux[0].pqual >= m->aux[0].qual)
+						b->aux[0].pqual = m->aux[0].qual;
+				}
+			}
+		}
+	}
 }
 
 /* generate SAM lines for a sequence in ks with alignment stored in
@@ -429,46 +486,28 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 	}
 	for (i = 0; b && i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
-		int seqid = -1;
-		int64_t coor = -1;
-		int j, nn = 0;
-		int beg, end;
-		if (p->l == 0) {
-			b->n_cigar[i] = fix_cigar(ks->name, bns, p, b->n_cigar[i], b->cigar[i]);
-			nn = bns_cnt_ambi(bns, p->k, p->len, &seqid);
-			coor = p->k - bns->anns[seqid].offset;
-		}
-		ksprintf(&str, "%s\t%d", ks->name, (p->flag&0x7f)|(is_pe?1:0));
-		ksprintf(&str, "\t%s\t%ld", seqid>=0? bns->anns[seqid].name : "*", (long)coor + 1);
-		if (p->l == 0) {
-			int qual = est_mapq(p, opt);
-			if (is_pe && bmate && bmate->n == 1) {
-				int mate_qual = est_mapq(bmate->hits, opt);
-				if (p->flag & BSW2_FLAG_MATESW) { // this alignment is rescued by Smith-Waterman
-					qual = qual < mate_qual? qual : mate_qual;
-				} else if (p->flag&2) { // properly paired
-					if (!(p->flag & BSW2_FLAG_TANDEM)) { // not around a tandem repeat
-						if (qual < mate_qual) {
-							qual += 20;
-							if (qual >= mate_qual) qual = mate_qual;
-						}
-					}
-				}
-			}
-			ksprintf(&str, "\t%d\t", qual);
-			for (k = 0; k < b->n_cigar[i]; ++k)
-				ksprintf(&str, "%d%c", b->cigar[i][k]>>4, (opt->hard_clip? "MIDNHHP" : "MIDNSHP")[b->cigar[i][k]&0xf]);
+		bsw2aux_t *q = b->aux + i;
+		int j, beg, end, type = 0;
+		// print mandatory fields before SEQ
+		ksprintf(&str, "%s\t%d", ks->name, q->flag);
+		ksprintf(&str, "\t%s\t%ld", q->chr>=0? bns->anns[q->chr].name : "*", (long)q->pos + 1);
+		if (p->l == 0) { // not a repetitive hit
+			ksprintf(&str, "\t%d\t", q->pqual);
+			for (k = 0; k < q->n_cigar; ++k)
+				ksprintf(&str, "%d%c", q->cigar[k]>>4, (opt->hard_clip? "MIDNHHP" : "MIDNSHP")[q->cigar[k]&0xf]);
 		} else ksprintf(&str, "\t0\t*");
-		ksprintf(&str, "\t*\t0\t0\t");
+		ksprintf(&str, "\t%s\t%d\t%d\t", q->mchr==q->chr? "=" : (q->mchr<0? "*" : bns->anns[q->mchr].name), q->mpos+1, q->isize);
+		// get the sequence begin and end
 		beg = 0; end = ks->l;
 		if (opt->hard_clip) {
-			if ((b->cigar[i][0]&0xf) == 4) beg += b->cigar[i][0]>>4;
-			if ((b->cigar[i][b->n_cigar[i]-1]&0xf) == 4) end -= b->cigar[i][b->n_cigar[i]-1]>>4;
+			if ((q->cigar[0]&0xf) == 4) beg += q->cigar[0]>>4;
+			if ((q->cigar[q->n_cigar-1]&0xf) == 4) end -= q->cigar[q->n_cigar-1]>>4;
 		}
 		for (j = beg; j < end; ++j) {
 			if (p->flag&0x10) kputc(nt_comp_table[(int)ks->seq[ks->l - 1 - j]], &str);
 			else kputc(ks->seq[j], &str);
 		}
+		// print base quality if present
 		if (ks->qual) {
 			kputc('\t', &str);
 			for (j = beg; j < end; ++j) {
@@ -476,9 +515,13 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 				else kputc(ks->qual[j], &str);
 			}
 		} else ksprintf(&str, "\t*");
-		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d\tXN:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds, nn);
+		// print optional tags
+		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds);
+		if (q->nn) ksprintf(&str, "\tXN:i:%d", q->nn);
 		if (p->l) ksprintf(&str, "\tXI:i:%d", p->l - p->k + 1);
-		if (p->flag&BSW2_FLAG_MATESW) ksprintf(&str, "\tXT:i:1");
+		if (p->flag&BSW2_FLAG_MATESW) type |= 1;
+		if (p->flag&BSW2_FLAG_TANDEM) type |= 2;
+		if (type) ksprintf(&str, "\tXT:i:%d", type);
 		kputc('\n', &str);
 	}
 	ks->sam = str.s;
@@ -575,9 +618,12 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 			seq[0][i] = c;
 			seq[1][p->l-1-i] = 3 - c;
 		}
-		gen_cigar(&opt, p->l, seq, pac, buf[x]);
-		print_hits(bns, &opt, p, buf[x], is_pe, buf[x^1]);
+		write_aux(&opt, bns, p->l, seq, pac, buf[x]);
 		free(seq[0]);
+	}
+	for (x = 0; x < _seq->n; ++x) {
+		if (is_pe) update_mate_aux(buf[x], buf[x^1]);
+		print_hits(bns, &opt, &_seq->seq[x], buf[x], is_pe, buf[x^1]);
 	}
 	for (x = 0; x < _seq->n; ++x) bsw2_destroy(buf[x]);
 	free(buf);
@@ -681,6 +727,8 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 		is_pe = 1;
 	} else fp2 = 0, ks2 = 0, is_pe = 0;
 	while (kseq_read(ks) >= 0) {
+		if (ks->name.l > 2 && ks->name.s[ks->name.l-2] == '/')
+			ks->name.l -= 2, ks->name.s[ks->name.l] = 0;
 		if (_seq->n == _seq->max) {
 			_seq->max = _seq->max? _seq->max<<1 : 1024;
 			_seq->seq = realloc(_seq->seq, _seq->max * sizeof(bsw2seq1_t));
@@ -689,6 +737,8 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 		size += ks->seq.l;
 		if (ks2) {
 			if (kseq_read(ks2) >= 0) {
+				if (ks2->name.l > 2 && ks2->name.s[ks2->name.l-2] == '/')
+					ks2->name.l -= 2, ks2->name.s[ks2->name.l] = 0;
 				kseq_to_bsw2seq(ks2, &_seq->seq[_seq->n++]); // for PE, _seq->n here must be odd and we do not need to enlarge
 				size += ks->seq.l;
 			} else {

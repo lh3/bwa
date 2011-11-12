@@ -85,7 +85,7 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	ksw_query_t *q;
 	ksw_aux_t aux[2];
 	// compute the region start and end
-	a->n_seeds = 1; a->l = 0; a->flag |= BSW2_FLAG_MATESW;
+	a->n_seeds = 1; a->l = 0;
 	if (h->is_rev == 0) {
 		beg = (int64_t)(h->k + st->avg - EXT_STDDEV * st->std - l_mseq + .499);
 		end = (int64_t)(h->k + st->avg + EXT_STDDEV * st->std + .499);
@@ -168,21 +168,27 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 		if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1]);
 		if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0]);
 		// the following enumerate all possibilities. It is tedious but necessary...
-		if (hits[i]->n + hits[i+1]->n == 1) { // one end mapped; the other not
+		if (hits[i]->n + hits[i+1]->n == 1) { // one end mapped; the other not;
 			bwtsw2_t *p[2];
 			int which;
 			if (hits[i]->n == 1) p[0] = hits[i], p[1] = hits[i+1], which = 1;
 			else p[0] = hits[i+1], p[1] = hits[i], which = 0;
 			if (a[which].G == 0) continue;
+			a[which].flag |= BSW2_FLAG_MATESW;
+			if (a[which].G2) a[which].flag |= BSW2_FLAG_TANDEM;
 			if (p[1]->max == 0) {
 				p[1]->max = 1;
 				p[1]->hits = malloc(sizeof(bsw2hit_t));
 			}
 			p[1]->hits[0] = a[which];
 			p[1]->n = 1;
+			p[0]->hits[0].flag |= 2;
+			p[1]->hits[0].flag |= 2;
 			++n_rescued;
 		} else { // then both ends mapped
+			int ori_G2[2];
 			//fprintf(stderr, "%d; %lld,%lld; %d,%d\n", a[0].is_rev, hits[i]->hits[0].k, a[0].k, hits[i]->hits[0].end, a[0].end);
+			ori_G2[0] = a[0].G2; ori_G2[1] = a[1].G2;
 			for (j = 0; j < 2; ++j) { // first fix wrong mappings
 				if (hits[i+j]->hits[0].G < a[j].G) { // the orginal mapping is suboptimal
 					a[j].G2 = a[j].G2 > hits[i+j]->hits[0].G? a[j].G2 : hits[i+j]->hits[0].G;
@@ -194,14 +200,14 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 				for (j = 0; j < 2; ++j) {
 					if (hits[i+j]->hits[0].G2 < a[j].G2)
 						hits[i+j]->hits[0].G2 = a[j].G2;
-					if (a[j].G2) hits[i+j]->hits[0].flag |= BSW2_FLAG_TANDEM;
+					if (ori_G2[j]) hits[i+j]->hits[0].flag |= BSW2_FLAG_TANDEM;
 					hits[i+j]->hits[0].flag |= 2;
 				}
 			} else if (hits[i]->hits[0].k == a[0].k || hits[i+1]->hits[0].k == a[1].k) { // a tandem match
 				for (j = 0; j < 2; ++j) {
 					hits[i+j]->hits[0].flag |= 2;
 					if (hits[i+j]->hits[0].k != a[j].k)
-						hits[i+j]->hits[0].flag |= BSW2_FLAG_TANDEM | 2;
+						hits[i+j]->hits[0].flag |= BSW2_FLAG_TANDEM;
 				}
 			} else if (a[0].G || a[1].G) { // it is possible to move one end
 				if (a[0].G && a[1].G) { // now we have two "proper pairs"
@@ -223,14 +229,14 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 					diff = (double)(p[1]->G - a[which].G) / (opt->a + opt->b) / (p[1]->end - p[1]->beg) * 100.0;
 					if (diff < dev * 2.) { // then move
 						int tflag = 0;
-						if (a[which].G - a[which].G2 < 2 * (opt->a + opt->b)) tflag = BSW2_FLAG_TANDEM;
+						if (ori_G2[which]) tflag = BSW2_FLAG_TANDEM;
 						a[which].G2 = a[which].G;
 						p[1][0] = a[which];
 						p[1]->flag |= BSW2_FLAG_MOVED | 2 | tflag;
 						p[0]->flag |= 2;
 						++n_moved;
 					}
-				}
+				} // else, do nothing
 			}
 		}
 	}

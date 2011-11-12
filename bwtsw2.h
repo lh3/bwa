@@ -6,9 +6,9 @@
 #include "bwt_lite.h"
 #include "bwt.h"
 
-#define BSW2_FLAG_MOVED  0x80
 #define BSW2_FLAG_MATESW 0x100
 #define BSW2_FLAG_TANDEM 0x200
+#define BSW2_FLAG_MOVED  0x400
 
 typedef struct {
 	int a, b, q, r, t, qr, bw;
@@ -25,10 +25,14 @@ typedef struct {
 } bsw2hit_t;
 
 typedef struct {
+	int flag, nn, n_cigar, chr, pos, qual, mchr, mpos, pqual, isize;
+	uint32_t *cigar;
+} bsw2aux_t;
+
+typedef struct {
 	int n, max;
 	bsw2hit_t *hits;
-	int *n_cigar;
-	uint32_t **cigar;
+	bsw2aux_t *aux;
 } bwtsw2_t;
 
 typedef struct {
