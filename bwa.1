@@ -1,4 +1,4 @@
-.TH bwa 1 "24 October 2011" "bwa-0.6.0" "Bioinformatics tools"
+.TH bwa 1 "12 November 2011" "bwa-0.6.0" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -20,19 +20,19 @@ BWA is a fast light-weighted tool that aligns relatively short sequences
 (queries) to a sequence database (targe), such as the human reference
 genome. It implements two different algorithms, both based on
 Burrows-Wheeler Transform (BWT). The first algorithm is designed for
-short queries up to ~200bp with low error rate (<3%). It does gapped
+short queries up to ~150bp with low error rate (<3%). It does gapped
 global alignment w.r.t. queries, supports paired-end reads, and is one
 of the fastest short read alignment algorithms to date while also
 visiting suboptimal hits. The second algorithm, BWA-SW, is designed for
-long reads with more errors. It performs heuristic Smith-Waterman-like
-alignment to find high-scoring local hits (and thus chimera). On
-low-error short queries, BWA-SW is slower and less accurate than the
+reads longer than 100bp with more errors. It performs a heuristic Smith-Waterman-like
+alignment to find high-scoring local hits and split hits. On
+low-error short queries, BWA-SW is a little slower and less accurate than the
 first algorithm, but on long queries, it is better.
 .PP
 For both algorithms, the database file in the FASTA format must be
 first indexed with the
 .B `index'
-command, which typically takes a few hours. The first algorithm is
+command, which typically takes a few hours for a 3GB genome. The first algorithm is
 implemented via the
 .B `aln'
 command, which finds the suffix array (SA) coordinates of good hits of
@@ -72,8 +72,7 @@ reimplemented by Yuta Mori.
 .TP
 .B bwtsw
 Algorithm implemented in BWT-SW. This method works with the whole human
-genome, but it does not work with database smaller than 10MB and it is
-usually slower than IS.
+genome.
 .RE
 .RE
 
@@ -260,9 +259,17 @@ Specify the read group in a format like `@RG\\tID:foo\\tSM:bar'. [null]
 .B bwasw
 bwa bwasw [-a matchScore] [-b mmPen] [-q gapOpenPen] [-r gapExtPen] [-t
 nThreads] [-w bandWidth] [-T thres] [-s hspIntv] [-z zBest] [-N
-nHspRev] [-c thresCoef] <in.db.fasta> <in.fq>
+nHspRev] [-c thresCoef] <in.db.fasta> <in.fq> [mate.fq]
 
-Align query sequences in the <in.fq> file.
+Align query sequences in the
+.I in.fq
+file. When
+.I mate.fq
+is present, perform paired-end alignment. The paired-end mode only works
+for reads Illumina short-insert libraries. In the paired-end mode, BWA-SW
+may still output split alignments but they are all marked as not properly
+paired; the mate positions will not be written if the mate has multiple
+local hits.
 
 .B OPTIONS:
 .RS
@@ -413,20 +420,19 @@ subsequence contains no more than
 differences.
 .PP
 When gapped alignment is disabled, BWA is expected to generate the same
-alignment as Eland, the Illumina alignment program. However, as BWA
+alignment as Eland version 1, the Illumina alignment program. However, as BWA
 change `N' in the database sequence to random nucleotides, hits to these
 random sequences will also be counted. As a consequence, BWA may mark a
 unique hit as a repeat, if the random sequences happen to be identical
-to the sequences which should be unqiue in the database. This random
-behaviour will be avoided in future releases.
+to the sequences which should be unqiue in the database.
 .PP
-By default, if the best hit is no so repetitive (controlled by -R), BWA
+By default, if the best hit is not highly repetitive (controlled by -R), BWA
 also finds all hits contains one more mismatch; otherwise, BWA finds all
 equally best hits only. Base quality is NOT considered in evaluating
-hits. In paired-end alignment, BWA pairs all hits it found. It further
-performs Smith-Waterman alignment for unmapped reads with mates mapped
-to rescue mapped mates, and for high-quality anomalous pairs to fix
-potential alignment errors.
+hits. In the paired-end mode, BWA pairs all hits it found. It further
+performs Smith-Waterman alignment for unmapped reads to rescue reads with a
+high erro rate, and for high-quality anomalous pairs to fix potential alignment
+errors.
 
 .SS Estimating Insert Size Distribution
 .PP
@@ -447,20 +453,20 @@ error output.
 
 .SS Memory Requirement
 .PP
-With bwtsw algorithm, 2.5GB memory is required for indexing the complete
+With bwtsw algorithm, 5GB memory is required for indexing the complete
 human genome sequences. For short reads, the
-.B `aln'
-command uses ~2.3GB memory and the
-.B `sampe'
-command uses ~3.5GB.
+.B aln
+command uses ~3.2GB memory and the
+.B sampe
+command uses ~5.4GB.
 
 .SS Speed
 .PP
 Indexing the human genome sequences takes 3 hours with bwtsw
-algorithm. Indexing smaller genomes with IS or divsufsort algorithms is
-several times faster, but requires more memory.
+algorithm. Indexing smaller genomes with IS algorithms is
+faster, but requires more memory.
 .PP
-Speed of alignment is largely determined by the error rate of the query
+The speed of alignment is largely determined by the error rate of the query
 sequences (r). Firstly, BWA runs much faster for near perfect hits than
 for hits with many differences, and it stops searching for a hit with
 l+2 differences if a l-difference hit is found. This means BWA will be
@@ -475,36 +481,39 @@ r>0.02.
 Pairing is slower for shorter reads. This is mainly because shorter
 reads have more spurious hits and converting SA coordinates to
 chromosomal coordinates are very costly.
-.PP
-In a practical experiment, BWA is able to map 2 million 32bp reads to a
-bacterial genome in several minutes, map the same amount of reads to
-human X chromosome in 8-15 minutes and to the human genome in 15-25
-minutes. This result implies that the speed of BWA is insensitive to the
-size of database and therefore BWA is more efficient when the database
-is sufficiently large. On smaller genomes, hash based algorithms are
-usually much faster.
 
 .SH NOTES ON LONG-READ ALIGNMENT
 .PP
 Command
-.B `bwasw'
-is designed for long-read alignment. The algorithm behind, BWA-SW, is
-similar to BWT-SW, but does not guarantee to find all local hits due to
-the heuristic acceleration. It tends to be faster and more accurate if
-the resultant alignment is supported by more seeds, and therefore
-BWA-SW usually performs better on long queries than on short ones.
+.B bwasw
+is designed for long-read alignment. BWA-SW essentially aligns the trie
+of the reference genome against the directed acyclic word graph (DAWG) of a
+read to find seeds not highly repetitive in the genome, and then performs a
+standard Smith-Waterman algorithm to extend the seeds. A key heuristic, called
+the Z-best heuristic, is that at each vertex in the DAWG, BWA-SW only keeps the
+top Z reference suffix intervals that match the vertex. BWA-SW is more accurate
+if the resultant alignment is supported by more seeds, and therefore BWA-SW
+usually performs better on long queries or queries with low divergence to the
+reference genome.
 
-On 350-1000bp reads, BWA-SW is several to tens of times faster than the
-existing programs. Its accuracy is comparable to SSAHA2, more accurate
-than BLAT. Like BLAT, BWA-SW also finds chimera which may pose a
-challenge to SSAHA2. On 10-100kbp queries where chimera detection is
-important, BWA-SW is over 10X faster than BLAT while being more
-sensitive.
+BWA-SW is perhaps a better choice than BWA-short for 100bp single-end HiSeq reads
+mainly because it gives better gapped alignment. For paired-end reads, it is yet
+to know whether BWA-short or BWA-SW yield overall better results.
 
-BWA-SW can also be used to align ~100bp reads, but it is slower than
-the short-read algorithm. Its sensitivity and accuracy is lower than
-SSAHA2 especially when the sequencing error rate is above 2%. This is
-the trade-off of the 30X speed up in comparison to SSAHA2's -454 mode.
+.SH CHANGES IN BWA-0.6
+.PP
+Since version 0.6, BWA has been able to work with a reference genome longer than 4GB.
+This feature makes it possible to integrate the forward and reverse complemented
+genome in one FM-index, which speeds up both BWA-short and BWA-SW. As a tradeoff,
+BWA uses more memory because it has to keep all positions and ranks in 64-bit
+integers, twice larger than 32-bit integers used in the previous versions.
+
+The latest BWA-SW also works for paired-end reads longer than 100bp. In
+comparison to BWA-short, BWA-SW tends to be more accurate for highly unique
+reads and more robust to relative long INDELs and structural variants.
+Nonetheless, BWA-short usually has higher power to distinguish the optimal hit
+from many suboptimal hits. The choice of the mapping algorithm may depend on
+the application.
 
 .SH SEE ALSO
 BWA website <http://bio-bwa.sourceforge.net>, Samtools website
@@ -529,12 +538,12 @@ If you use the short-read alignment component, please cite the following
 paper:
 .PP
 Li H. and Durbin R. (2009) Fast and accurate short read alignment with
-Burrows-Wheeler transform. Bioinformatics, 25, 1754-60. [PMID: 19451168]
+Burrows-Wheeler transform. Bioinformatics, 25, 1754-1760. [PMID: 19451168]
 .PP
 If you use the long-read component (BWA-SW), please cite:
 .PP
 Li H. and Durbin R. (2010) Fast and accurate long-read alignment with
-Burrows-Wheeler transform. Bioinformatics. [PMID: 20080505]
+Burrows-Wheeler transform. Bioinformatics, 26, 589-595. [PMID: 20080505]
 
 .SH HISTORY
 BWA is largely influenced by BWT-SW. It uses source codes from BWT-SW
