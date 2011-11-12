@@ -188,7 +188,7 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 			data = (thread_aux_t*)calloc(opt->n_threads, sizeof(thread_aux_t));
 			tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
 			for (j = 0; j < opt->n_threads; ++j) {
-				data[j].tid = j; data[j].bwt[0] = bwt[0]; data[j].bwt[1] = bwt[1];
+				data[j].tid = j; data[j].bwt = bwt;
 				data[j].n_seqs = n_seqs; data[j].seqs = seqs; data[j].opt = opt;
 				pthread_create(&tid[j], &attr, worker, data + j);
 			}
