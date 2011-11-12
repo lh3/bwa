@@ -6,9 +6,10 @@
 #include "bwt_lite.h"
 #include "bwt.h"
 
-#define BSW2_FLAG_MATESW 0x100
-#define BSW2_FLAG_TANDEM 0x200
-#define BSW2_FLAG_MOVED  0x400
+#define BSW2_FLAG_MATESW  0x100
+#define BSW2_FLAG_TANDEM  0x200
+#define BSW2_FLAG_MOVED   0x400
+#define BSW2_FLAG_RESCUED 0x800
 
 typedef struct {
 	int a, b, q, r, t, qr, bw;

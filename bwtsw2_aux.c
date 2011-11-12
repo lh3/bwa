@@ -452,17 +452,15 @@ static void update_mate_aux(bwtsw2_t *b, const bwtsw2_t *m)
 	// update mapping quality
 	if (b->n == 1 && m->n == 1) {
 		bsw2hit_t *p = &b->hits[0];
-		int isize;
-		if (p->flag & BSW2_FLAG_MATESW) { // this alignment is rescued by Smith-Waterman
-			if (!(p->flag & BSW2_FLAG_TANDEM) && b->aux[0].pqual < m->aux[0].qual)
-				b->aux[0].pqual = m->aux[0].qual;
-		} else if (p->flag&2) { // properly paired
-			if (!(p->flag & BSW2_FLAG_TANDEM)) { // not around a tandem repeat
-				if (b->aux[0].pqual < m->aux[0].qual) {
-					b->aux[0].pqual += 20;
-					if (b->aux[0].pqual >= m->aux[0].qual)
-						b->aux[0].pqual = m->aux[0].qual;
-				}
+		if (p->flag & BSW2_FLAG_MATESW) { // this alignment is found by Smith-Waterman
+			if (!(p->flag & BSW2_FLAG_TANDEM) && b->aux[0].pqual < 20)
+				b->aux[0].pqual = 20;
+			if (b->aux[0].pqual >= m->aux[0].qual) b->aux[0].pqual = m->aux[0].qual;
+		} else if ((p->flag & 2) && !(m->hits[0].flag & BSW2_FLAG_MATESW)) { // properly paired
+			if (!(p->flag & BSW2_FLAG_TANDEM)) { // pqual is bounded by [b->aux[0].qual,m->aux[0].qual]
+				b->aux[0].pqual += 20;
+				if (b->aux[0].pqual > m->aux[0].qual) b->aux[0].pqual = m->aux[0].qual;
+				if (b->aux[0].pqual < b->aux[0].qual) b->aux[0].pqual = b->aux[0].qual;
 			}
 		}
 	}
