@@ -6,6 +6,7 @@
 #include "bntseq.h"
 #include "bwtsw2.h"
 #include "ksw.h"
+#include "kstring.h"
 
 #define MAX_INS       20000
 #define MIN_RATIO     0.8
@@ -14,17 +15,18 @@
 #define EXT_STDDEV    4.0
 
 typedef struct {
-	int low, high;
+	int low, high, failed;
 	double avg, std;
 } bsw2pestat_t;
 
-bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf)
+bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg)
 {
 	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 	int i, k, x, p25, p50, p75, tmp, max_len = 0;
 	uint64_t *isize;
 	bsw2pestat_t r;
 
+	memset(&r, 0, sizeof(bsw2pestat_t));
 	isize = calloc(n, 8);
 	for (i = k = 0; i < n; i += 2) {
 		bsw2hit_t *t[2];
@@ -42,11 +44,19 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf)
 	p25 = isize[(int)(.25 * k + .499)];
 	p50 = isize[(int)(.50 * k + .499)];
 	p75 = isize[(int)(.75 * k + .499)];
+	ksprintf(msg, "[%s] infer the insert size distribution from %d high-quality pairs.\n", __func__, k);
+	if (k < 8) {
+		ksprintf(msg, "[%s] fail to infer the insert size distribution.\n", __func__);
+		free(isize);
+		r.failed = 1;
+		return r;
+	}
 	tmp    = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
 	r.low  = tmp > max_len? tmp : max_len;
+	if (r.low < 1) r.low = 1;
 	r.high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
-	fprintf(stderr, "[%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
-	fprintf(stderr, "[%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r.low, r.high);
+	ksprintf(msg, "[%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
+	ksprintf(msg, "[%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r.low, r.high);
 	for (i = x = 0, r.avg = 0; i < k; ++i)
 		if (isize[i] >= r.low && isize[i] <= r.high)
 			r.avg += isize[i], ++x;
@@ -55,14 +65,15 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf)
 		if (isize[i] >= r.low && isize[i] <= r.high)
 			r.std += (isize[i] - r.avg) * (isize[i] - r.avg);
 	r.std = sqrt(r.std / x);
-	fprintf(stderr, "[%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r.avg, r.std);
+	ksprintf(msg, "[%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r.avg, r.std);
 	tmp  = (int)(p25 - 3. * (p75 - p25) + .499);
 	r.low  = tmp > max_len? tmp : max_len;
+	if (r.low < 1) r.low = 1;
 	r.high = (int)(p75 + 3. * (p75 - p25) + .499);
 	if (r.low > r.avg - MAX_STDDEV * 4.) r.low = (int)(r.avg - MAX_STDDEV * 4. + .499);
 	r.low = tmp > max_len? tmp : max_len;
 	if (r.high < r.avg - MAX_STDDEV * 4.) r.high = (int)(r.avg + MAX_STDDEV * 4. + .499);
-	fprintf(stderr, "[%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r.low, r.high);
+	ksprintf(msg, "[%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r.low, r.high);
 	free(isize);
 	return r;
 }
@@ -74,9 +85,8 @@ typedef struct {
 } pairaux_t;
 
 extern unsigned char nst_nt4_table[256];
-static int8_t g_mat[25];
 
-void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const bsw2pestat_t *st, const bsw2hit_t *h, int l_mseq, const char *mseq, bsw2hit_t *a)
+void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const bsw2pestat_t *st, const bsw2hit_t *h, int l_mseq, const char *mseq, bsw2hit_t *a, int8_t g_mat[25])
 {
 	extern void seq_reverse(int len, ubyte_t *seq, int is_comp);
 	int64_t k, beg, end;
@@ -88,11 +98,13 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	a->n_seeds = 1; a->flag |= BSW2_FLAG_MATESW; // before calling this routine, *a has been cleared with memset(0); the flag is set with 1<<6/7
 	if (h->is_rev == 0) {
 		beg = (int64_t)(h->k + st->avg - EXT_STDDEV * st->std - l_mseq + .499);
+		if (beg < h->k) beg = h->k;
 		end = (int64_t)(h->k + st->avg + EXT_STDDEV * st->std + .499);
 		a->is_rev = 1; a->flag |= 16;
 	} else {
 		beg = (int64_t)(h->k + h->end - h->beg - st->avg - EXT_STDDEV * st->std + .499);
 		end = (int64_t)(h->k + h->end - h->beg - st->avg + EXT_STDDEV * st->std + l_mseq + .499);
+		if (end > h->k + (h->end - h->beg)) end = h->k + (h->end - h->beg);
 		a->is_rev = 0;
 	}
 	if (beg < 1) beg = 1;
@@ -146,7 +158,10 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 	extern int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS);
 	bsw2pestat_t pes;
 	int i, j, k, n_rescued = 0, n_moved = 0, n_fixed = 0;
-	pes = bsw2_stat(n, hits);
+	int8_t g_mat[25];
+	kstring_t msg;
+	memset(&msg, 0, sizeof(kstring_t));
+	pes = bsw2_stat(n, hits, &msg);
 	for (i = k = 0; i < 5; ++i) {
 		for (j = 0; j < 4; ++j)
 			g_mat[k++] = i == j? opt->a : -opt->b;
@@ -163,11 +178,12 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 				p->flag |= 1<<(6+j);
 			}
 		}
+		if (pes.failed) continue;
 		if (hits[i] == 0 || hits[i+1] == 0) continue; // one end has excessive N
 		if (hits[i]->n != 1 && hits[i+1]->n != 1) continue; // no end has exactly one hit
 		if (hits[i]->n > 1 || hits[i+1]->n > 1) continue; // one read has more than one hit
-		if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1]);
-		if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0]);
+		if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1], g_mat);
+		if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0], g_mat);
 		// the following enumerate all possibilities. It is tedious but necessary...
 		if (hits[i]->n + hits[i+1]->n == 1) { // one end mapped; the other not;
 			bwtsw2_t *p[2];
@@ -242,5 +258,7 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 			}
 		}
 	}
-	fprintf(stderr, "[%s] #fixed=%d, #rescued=%d, #moved=%d\n", __func__, n_fixed, n_rescued, n_moved);
+	ksprintf(&msg, "[%s] #fixed=%d, #rescued=%d, #moved=%d\n", __func__, n_fixed, n_rescued, n_moved);
+	fputs(msg.s, stderr);
+	free(msg.s);
 }

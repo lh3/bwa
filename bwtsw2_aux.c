@@ -71,9 +71,11 @@ bwtsw2_t *bsw2_dup_no_cigar(const bwtsw2_t *b)
 	bwtsw2_t *p;
 	p = calloc(1, sizeof(bwtsw2_t));
 	p->max = p->n = b->n;
-	kroundup32(p->max);
-	p->hits = calloc(p->max, sizeof(bsw2hit_t));
-	memcpy(p->hits, b->hits, p->n * sizeof(bsw2hit_t));
+	if (b->n) {
+		kroundup32(p->max);
+		p->hits = calloc(p->max, sizeof(bsw2hit_t));
+		memcpy(p->hits, b->hits, p->n * sizeof(bsw2hit_t));
+	}
 	return p;
 }
 
@@ -530,7 +532,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 
 /* Core routine to align reads in _seq. It is separated from
  * process_seqs() to realize multi-threading */ 
-static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target, int is_pe)
+static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target, int is_pe)
 {
 	int x;
 	bsw2opt_t opt = *_opt;
@@ -543,11 +545,6 @@ static void bsw2_aln_core(int tid, bsw2seq_t *_seq, const bsw2opt_t *_opt, const
 		int i, l, k;
 		bwtsw2_t *b[2];
 		l = p->l;
-
-#ifdef HAVE_PTHREAD
-		if (x % _opt->n_threads != tid) continue;
-#endif
-
 		// set opt->t
 		opt.t = _opt->t;
 		if (opt.t < log(l) * opt.coef) opt.t = (int)(log(l) * opt.coef + .499);
@@ -642,7 +639,7 @@ typedef struct {
 static void *worker(void *data)
 {
 	thread_aux_t *p = (thread_aux_t*)data;
-	bsw2_aln_core(p->tid, p->_seq, p->_opt, p->bns, p->pac, p->target, p->is_pe);
+	bsw2_aln_core(p->_seq, p->_opt, p->bns, p->pac, p->target, p->is_pe);
 	return 0;
 }
 #endif
@@ -652,10 +649,11 @@ static void *worker(void *data)
 static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target, int is_pe)
 {
 	int i;
+	is_pe = is_pe? 1 : 0;
 
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads <= 1) {
-		bsw2_aln_core(0, _seq, opt, bns, pac, target, is_pe);
+		bsw2_aln_core(_seq, opt, bns, pac, target, is_pe);
 	} else {
 		pthread_t *tid;
 		pthread_attr_t attr;
@@ -667,15 +665,33 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
 		for (j = 0; j < opt->n_threads; ++j) {
 			thread_aux_t *p = data + j;
-			p->tid = j; p->_seq = _seq; p->_opt = opt; p->bns = bns; p->is_pe = is_pe;
+			p->tid = j; p->_opt = opt; p->bns = bns; p->is_pe = is_pe;
 			p->pac = pac; p->target = target;
-			pthread_create(&tid[j], &attr, worker, p);
+			p->_seq = calloc(1, sizeof(bsw2seq_t));
+			p->_seq->max = (_seq->n + opt->n_threads - 1) / opt->n_threads + 1;
+			p->_seq->n = 0;
+			p->_seq->seq = calloc(p->_seq->max, sizeof(bsw2seq1_t));
 		}
+		for (i = 0; i < _seq->n; ++i) { // assign sequences to each thread
+			bsw2seq_t *p = data[(i>>is_pe)%opt->n_threads]._seq;
+			p->seq[p->n++] = _seq->seq[i];
+		}
+		for (j = 0; j < opt->n_threads; ++j) pthread_create(&tid[j], &attr, worker, &data[j]);
 		for (j = 0; j < opt->n_threads; ++j) pthread_join(tid[j], 0);
+		for (j = 0; j < opt->n_threads; ++j) data[j]._seq->n = 0;
+		for (i = 0; i < _seq->n; ++i) { // copy the result from each thread back
+			bsw2seq_t *p = data[(i>>is_pe)%opt->n_threads]._seq;
+			_seq->seq[i] = p->seq[p->n++];
+		}
+		for (j = 0; j < opt->n_threads; ++j) {
+			thread_aux_t *p = data + j;
+			free(p->_seq->seq);
+			free(p->_seq);
+		}
 		free(data); free(tid);
 	}
 #else
-	bsw2_aln_core(0, _seq, opt, bns, pac, target, is_pe);
+	bsw2_aln_core(_seq, opt, bns, pac, target, is_pe);
 #endif
 
 	// print and reset
@@ -744,7 +760,7 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 				is_pe = 0;
 			}
 		}
-		if (size > opt->chunk_size) {
+		if (size > opt->chunk_size * opt->n_threads) {
 			fprintf(stderr, "[bsw2_aln] read %d sequences/pairs (%d bp)...\n", _seq->n, size);
 			process_seqs(_seq, opt, bns, pac, target, is_pe);
 			size = 0;

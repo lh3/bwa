@@ -63,6 +63,9 @@ extern "C" {
 	int err_fflush(FILE *stream);
 	int err_fclose(FILE *stream);
 
+	double cputime();
+	double realtime();
+
 #ifdef __cplusplus
 }
 #endif
