@@ -1,3 +1,52 @@
+Release 0.5.10 and 0.6.0 (12 November, 2011)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The 0.6.0 release comes with two major changes. Firstly, the index data
+structure has been changed to support genomes longer than 4GB. The forward and
+reverse backward genome is now integrated in one index. This change speeds up
+BWA-short by about 20% and BWA-SW by 90% with the mapping acccuracy largely
+unchanged. A tradeoff is BWA requires more memory, but this is the price almost
+all mappers that index the genome have to pay.
+
+Secondly, BWA-SW in 0.6.0 now works with paired-end data. It is more accurate
+for highly unique reads and more robust to long indels and structural
+variations. However, BWA-short still has edges for reads with many suboptimal
+hits. It is yet to know which algorithm is the best for variant calling.
+
+0.5.10 is a bugfix release only and is likely to be the last release in the 0.5
+branch unless I find critical bugs in future.
+
+Other notable changes:
+
+ * Added the `fastmap' command that finds super-maximal exact matches. It does
+   not give the final alignment, but runs much faster. It can be a building
+   block for other alignment algorithms. [0.6.0 only]
+
+ * Output the timing information before BWA exits. This also tells users that
+   the task has been finished instead of being killed or aborted. [0.6.0 only]
+
+ * Sped up multi-threading when using many (>20) CPU cores.
+
+ * Check I/O error.
+
+ * Increased the maximum barcode length to 63bp.
+
+ * Automatically choose the indexing algorithm.
+
+ * Bugfix: very rare segfault due to an uninitialized variable. The bug also
+   affects the placement of suboptimal alignments. The effect is very minor.
+
+This release involves quite a lot of tricky changes. Although it has been
+tested on a few data sets, subtle bugs may be still hidden. It is *NOT*
+recommended to use this release in a production pipeline. In future, however,
+BWA-SW may be better when reads continue to go longer. I would encourage users
+to try the 0.6 release. I would also like to hear the users' experience. Thank
+you.
+
+(0.6.0: 12 November 2011, r85)
+
+
+
 Beta Release 0.5.9 (24 January, 2011)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
