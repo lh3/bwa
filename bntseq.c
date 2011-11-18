@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <zlib.h>
+#include <unistd.h>
 #include "bntseq.h"
 #include "main.h"
 #include "utils.h"

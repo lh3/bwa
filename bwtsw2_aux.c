@@ -574,7 +574,7 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 			rseq[1][i] = c;
 		}
 		if (l - k < opt.t) { // too few unambiguous bases
-			buf[x] = 0;
+			buf[x] = calloc(1, sizeof(bwtsw2_t));
 			free(seq[0]); continue;
 		}
 		// alignment
