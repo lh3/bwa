@@ -395,16 +395,19 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 		if (opt->N_multi || opt->n_multi) {
 			for (j = 0; j < 2; ++j) {
 				if (p[j]->type != BWA_TYPE_NO_MATCH) {
-					int k;
+					int k, n_multi;
 					if (!(p[j]->extra_flag&SAM_FPP) && p[1-j]->type != BWA_TYPE_NO_MATCH) {
 						bwa_aln2seq_core(d->aln[j].n, d->aln[j].a, p[j], 0, p[j]->c1+p[j]->c2-1 > opt->N_multi? opt->n_multi : opt->N_multi);
 					} else bwa_aln2seq_core(d->aln[j].n, d->aln[j].a, p[j], 0, opt->n_multi);
-					for (k = 0; k < p[j]->n_multi; ++k) {
+					for (k = 0, n_multi = 0; k < p[j]->n_multi; ++k) {
 						int strand;
 						bwt_multi1_t *q = p[j]->multi + k;
 						q->pos = bwa_sa2pos(bns, bwt, q->pos, p[j]->len, &strand);
 						q->strand = strand;
+						if (q->pos != p[j]->pos)
+							p[j]->multi[n_multi++] = *q;
 					}
+					p[j]->n_multi = n_multi;
 				}
 			}
 		}

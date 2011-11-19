@@ -84,12 +84,6 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 			}
 		}
 		s->n_multi = z;
-		/*// the following code removes the primary hit, but this leads to a bug in the PE mode
-		for (k = z = 0; k < s->n_multi; ++k)
-			if (s->multi[k].pos != s->sa)
-				s->multi[z++] = s->multi[k];
-		s->n_multi = z < n_multi? z : n_multi;
-		*/
 	}
 }
 
@@ -141,19 +135,23 @@ void bwa_cal_pac_pos_core(const bntseq_t *bns, const bwt_t *bwt, bwa_seq_t *seq,
 
 void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_seq_t *seqs, int max_mm, float fnr)
 {
-	int i, j, strand;
+	int i, j, strand, n_multi;
 	char str[1024];
 	bwt_t *bwt;
 	// load forward SA
 	strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
 	strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
 	for (i = 0; i != n_seqs; ++i) {
-		bwa_cal_pac_pos_core(bns, bwt, &seqs[i], max_mm, fnr);
-		for (j = 0; j < seqs[i].n_multi; ++j) {
-			bwt_multi1_t *p = seqs[i].multi + j;
-			p->pos = bwa_sa2pos(bns, bwt, p->pos, seqs[i].len, &strand);
-			p->strand = strand;
+		bwa_seq_t *p = &seqs[i];
+		bwa_cal_pac_pos_core(bns, bwt, p, max_mm, fnr);
+		for (j = n_multi = 0; j < p->n_multi; ++j) {
+			bwt_multi1_t *q = p->multi + j;
+			q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len, &strand);
+			q->strand = strand;
+			if (q->pos != p->pos)
+				p->multi[n_multi++] = *q;
 		}
+		p->n_multi = n_multi;
 	}
 	bwt_destroy(bwt);
 }
