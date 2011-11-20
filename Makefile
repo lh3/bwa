@@ -2,7 +2,7 @@ CC=			gcc
 CXX=		g++
 CFLAGS=		-g -Wall -O2
 CXXFLAGS=	$(CFLAGS)
-DFLAGS=		-DHAVE_PTHREAD #-D_FILE_OFFSET_BITS=64
+DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
 OBJS=		QSufSort.o bwt_gen.o utils.o bwt.o bwtio.o bwtaln.o bwtgap.o \
 			is.o bntseq.o bwtmisc.o bwtindex.o ksw.o stdaln.o simple_dp.o \
 			bwaseqio.o bwase.o bwape.o kstring.o cs2nt.o \

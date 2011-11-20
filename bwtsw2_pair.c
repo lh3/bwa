@@ -5,8 +5,12 @@
 #include "bwt.h"
 #include "bntseq.h"
 #include "bwtsw2.h"
-#include "ksw.h"
 #include "kstring.h"
+#ifndef _NO_SSE2
+#include "ksw.h"
+#else
+#include "stdaln.h"
+#endif
 
 #define MAX_INS       20000
 #define MIN_RATIO     0.8
@@ -92,8 +96,6 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	int64_t k, beg, end;
 	uint8_t *seq, *ref;
 	int i;
-	ksw_query_t *q;
-	ksw_aux_t aux[2];
 	// compute the region start and end
 	a->n_seeds = 1; a->flag |= BSW2_FLAG_MATESW; // before calling this routine, *a has been cleared with memset(0); the flag is set with 1<<6/7
 	if (h->is_rev == 0) {
@@ -123,32 +125,54 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 		for (i = 0; i < l_mseq; ++i) // on the forward strand
 			seq[i] = nst_nt4_table[(int)mseq[i]];
 	}
-	// forward Smith-Waterman
-	aux[0].T = opt->t; aux[0].gapo = opt->q; aux[0].gape = opt->r; aux[1] = aux[0];
-	q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
-	ksw_sse2(q, end - beg, ref, &aux[0]);
-	free(q);
-	if (aux[0].score < opt->t) {
-		free(seq);
-		return;
+#ifndef _NO_SSE2
+	{
+		ksw_query_t *q;
+		ksw_aux_t aux[2];
+		// forward Smith-Waterman
+		aux[0].T = opt->t; aux[0].gapo = opt->q; aux[0].gape = opt->r; aux[1] = aux[0];
+		q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
+		ksw_sse2(q, end - beg, ref, &aux[0]);
+		free(q);
+		if (aux[0].score < opt->t) {
+			free(seq);
+			return;
+		}
+		++aux[0].qe; ++aux[0].te;
+		// reverse Smith-Waterman
+		seq_reverse(aux[0].qe, seq, 0);
+		seq_reverse(aux[0].te, ref, 0);
+		q = ksw_qinit(aux[0].qe * g_mat[0] < 250? 1 : 2, aux[0].qe, seq, 5, g_mat);
+		ksw_sse2(q, aux[0].te, ref, &aux[1]);
+		free(q);
+		++aux[1].qe; ++aux[1].te;
+		// write output
+		a->G = aux[0].score;
+		a->G2 = aux[0].score2 > aux[1].score2? aux[0].score2 : aux[1].score2;
+		if (a->G2 < opt->t) a->G2 = 0;
+		if (a->G2) a->flag |= BSW2_FLAG_TANDEM;
+		a->k = beg + (aux[0].te - aux[1].te);
+		a->len = aux[1].te;
+		a->beg = aux[0].qe - aux[1].qe;
+		a->end = aux[0].qe;
 	}
-	++aux[0].qe; ++aux[0].te;
-	// reverse Smith-Waterman
-	seq_reverse(aux[0].qe, seq, 0);
-	seq_reverse(aux[0].te, ref, 0);
-	q = ksw_qinit(aux[0].qe * g_mat[0] < 250? 1 : 2, aux[0].qe, seq, 5, g_mat);
-	ksw_sse2(q, aux[0].te, ref, &aux[1]);
-	free(q);
-	++aux[1].qe; ++aux[1].te;
-	// write output
-	a->G = aux[0].score;
-	a->G2 = aux[0].score2 > aux[1].score2? aux[0].score2 : aux[1].score2;
-	if (a->G2 < opt->t) a->G2 = 0;
-	if (a->G2) a->flag |= BSW2_FLAG_TANDEM;
-	a->k = beg + (aux[0].te - aux[1].te);
-	a->len = aux[1].te;
-	a->beg = aux[0].qe - aux[1].qe;
-	a->end = aux[0].qe;
+#else
+	{
+		AlnParam ap;
+		path_t path[2];
+		int matrix[25];
+		for (i = 0; i < 25; ++i) matrix[i] = g_mat[i];
+		ap.gap_open = opt->q; ap.gap_ext = opt->r; ap.gap_end = opt->r;
+		ap.matrix = matrix; ap.row = 5; ap.band_width = 50;
+		a->G = aln_local_core(ref, end - beg, seq, l_mseq, &ap, path, 0, opt->t, &a->G2);
+		if (a->G < opt->t) a->G = 0;
+		if (a->G2 < opt->t) a->G2 = 0;
+		a->k = beg + path[0].i - 1;
+		a->len = path[1].i - path[0].i + 1;
+		a->beg = path[0].j - 1;
+		a->end = path[1].j;
+	}
+#endif
 	if (a->is_rev) i = a->beg, a->beg = l_mseq - a->end, a->end = l_mseq - i;
 	free(seq);
 }

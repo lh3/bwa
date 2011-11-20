@@ -23,6 +23,7 @@
    SOFTWARE.
 */
 
+#ifndef _NO_SSE2
 #include <stdlib.h>
 #include <stdint.h>
 #include <emmintrin.h>
@@ -396,4 +397,5 @@ int main(int argc, char *argv[])
 	kseq_destroy(ksq); gzclose(fpq);
 	return 0;
 }
-#endif
+#endif // _KSW_MAIN
+#endif // _NO_SSE2

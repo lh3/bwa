@@ -631,7 +631,7 @@ int aln_local_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2,
 	score_f += of_base;
 
 	if (score_f < thres) { /* no matching residue at all, 090218 */
-		*path_len = 0;
+		if (path_len) *path_len = 0;
 		goto end_func;
 	}
 	if (path == 0) goto end_func; /* skip path-filling */
