@@ -26,7 +26,7 @@ typedef struct {
 } bsw2hit_t;
 
 typedef struct {
-	int flag, nn, n_cigar, chr, pos, qual, mchr, mpos, pqual, isize;
+	int flag, nn, n_cigar, chr, pos, qual, mchr, mpos, pqual, isize, nm;
 	uint32_t *cigar;
 } bsw2aux_t;
 

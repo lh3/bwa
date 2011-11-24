@@ -165,7 +165,7 @@ void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq,
 }
 
 /* generate CIGAR array(s) in b->cigar[] */
-static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], uint8_t *pac, bwtsw2_t *b)
+static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b)
 {
 	uint8_t *target;
 	int i, matrix[25];
@@ -392,7 +392,28 @@ static int fix_cigar(const bntseq_t *bns, bsw2hit_t *p, int n_cigar, uint32_t *c
 	return n_cigar;
 }
 
-static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8_t *seq[2], uint8_t *pac, bwtsw2_t *b)
+static int compute_nm(bsw2hit_t *p, int n_cigar, const uint32_t *cigar, const uint8_t *pac, const uint8_t *seq)
+{
+	int k, x, n_mm = 0, i, n_gap = 0;
+	bwtint_t y;
+	x = 0; y = p->k;
+	for (k = 0; k < n_cigar; ++k) {
+		int op  = cigar[k]&0xf;
+		int len = cigar[k]>>4;
+		if (op == 0) { // match
+			for (i = 0; i < len; ++i) {
+				int ref = pac[(y+i)>>2] >> (~(y+i)&3)*2 & 0x3;
+				if (seq[x + i] != ref) ++n_mm;
+			}
+			x += len; y += len;
+		} else if (op == 1) x += len, n_gap += len;
+		else if (op == 2) y += len, n_gap += len;
+		else if (op == 4) x += len;
+	}
+	return n_mm + n_gap;
+}
+
+static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b)
 {
 	int i;
 	// allocate for b->aux
@@ -415,6 +436,8 @@ static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8
 			int subo;
 			// fix out-of-boundary CIGAR
 			q->n_cigar = fix_cigar(bns, p, q->n_cigar, q->cigar);
+			// compute the NM tag
+			q->nm = compute_nm(p, q->n_cigar, q->cigar, pac, seq[p->is_rev]);
 			// compute mapQ
 			subo = p->G2 > opt->t? p->G2 : opt->t;
 			if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
@@ -517,7 +540,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 			}
 		} else ksprintf(&str, "\t*");
 		// print optional tags
-		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds);
+		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d\tNM:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds, q->nm);
 		if (q->nn) ksprintf(&str, "\tXN:i:%d", q->nn);
 		if (p->l) ksprintf(&str, "\tXI:i:%d", p->l - p->k + 1);
 		if (p->flag&BSW2_FLAG_MATESW) type |= 1;
