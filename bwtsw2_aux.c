@@ -496,7 +496,8 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 			for (k = 0; k < q->n_cigar; ++k)
 				ksprintf(&str, "%d%c", q->cigar[k]>>4, (opt->hard_clip? "MIDNHHP" : "MIDNSHP")[q->cigar[k]&0xf]);
 		} else ksprintf(&str, "\t0\t*");
-		ksprintf(&str, "\t%s\t%d\t%d\t", q->mchr==q->chr? "=" : (q->mchr<0? "*" : bns->anns[q->mchr].name), q->mpos+1, q->isize);
+		if (!is_pe) kputs("\t*\t0\t0\t", &str);
+		else ksprintf(&str, "\t%s\t%d\t%d\t", q->mchr==q->chr? "=" : (q->mchr<0? "*" : bns->anns[q->mchr].name), q->mpos+1, q->isize);
 		// get the sequence begin and end
 		beg = 0; end = ks->l;
 		if (opt->hard_clip) {
