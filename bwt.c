@@ -49,7 +49,10 @@ void bwt_gen_cnt_table(bwt_t *bwt)
 void bwt_cal_sa(bwt_t *bwt, int intv)
 {
 	bwtint_t isa, sa, i; // S(isa) = sa
+	int intv_round = intv;
 
+	kv_roundup32(intv_round);
+	xassert(intv_round == intv, "SA sample interval is not a power of 2.");
 	xassert(bwt->bwt, "bwt_t::bwt is not initialized.");
 
 	if (bwt->sa) free(bwt->sa);
@@ -73,8 +76,8 @@ void bwt_cal_sa(bwt_t *bwt, int intv)
 
 bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k)
 {
-	bwtint_t sa = 0;
-	while (k % bwt->sa_intv != 0) {
+	bwtint_t sa = 0, mask = bwt->sa_intv - 1;
+	while (k & mask) {
 		++sa;
 		k = bwt_invPsi(bwt, k);
 	}
