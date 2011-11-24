@@ -46,7 +46,7 @@ command. It works for single-end reads only.
 .SH COMMANDS AND OPTIONS
 .TP
 .B index
-bwa index [-p prefix] [-a algoType] [-c] <in.db.fasta>
+bwa index [-p prefix] [-a algoType] <in.db.fasta>
 
 Index database sequences in the FASTA format.
 
@@ -54,7 +54,7 @@ Index database sequences in the FASTA format.
 .RS
 .TP 10
 .B -c
-Build color-space index. The input fast should be in nucleotide space.
+Build color-space index. The input fast should be in nucleotide space. (Disabled since 0.6.x)
 .TP
 .BI -p \ STR
 Prefix of the output database [same as db filename]
@@ -142,7 +142,7 @@ especially for short reads (~32bp).
 .TP
 .B -c
 Reverse query but not complement it, which is required for alignment in
-the color space.
+the color space. (Disabled since 0.6.x)
 .TP
 .B -N
 Disable iterative search. All hits with no more than

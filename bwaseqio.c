@@ -73,16 +73,14 @@ void seq_reverse(int len, ubyte_t *seq, int is_comp)
 
 int bwa_trim_read(int trim_qual, bwa_seq_t *p)
 {
-	int s = 0, l, max = 0, max_l = p->len - 1;
+	int s = 0, l, max = 0, max_l = p->len;
 	if (trim_qual < 1 || p->qual == 0) return 0;
 	for (l = p->len - 1; l >= BWA_MIN_RDLEN - 1; --l) {
 		s += trim_qual - (p->qual[l] - 33);
 		if (s < 0) break;
-		if (s > max) {
-			max = s; max_l = l;
-		}
+		if (s > max) max = s, max_l = l;
 	}
-	p->clip_len = p->len = max_l + 1;
+	p->clip_len = p->len = max_l;
 	return p->full_len - p->len;
 }
 

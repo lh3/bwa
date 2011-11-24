@@ -65,7 +65,8 @@ int bwa_index(int argc, char *argv[])
 		fprintf(stderr, "Usage:   bwa index [-a bwtsw|div|is] [-c] <in.fasta>\n\n");
 		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [is]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
-		fprintf(stderr, "         -c        build color-space index\n\n");
+//		fprintf(stderr, "         -c        build color-space index\n");
+		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
 		fprintf(stderr, "         `-a div' do not work not for long genomes. Please choose `-a'\n");
 		fprintf(stderr, "         according to the length of the genome.\n\n");

@@ -283,7 +283,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
         fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
 		fprintf(stderr, "         -B INT    length of barcode\n");
-		fprintf(stderr, "         -c        input sequences are in the color space\n");
+//		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
 		fprintf(stderr, "         -N        non-iterative mode: search for all n-difference hits (slooow)\n");
 		fprintf(stderr, "         -I        the input is in the Illumina 1.3+ FASTQ-like format\n");
