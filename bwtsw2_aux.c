@@ -489,7 +489,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		bsw2aux_t *q = b->aux + i;
 		int j, beg, end, type = 0;
 		// print mandatory fields before SEQ
-		ksprintf(&str, "%s\t%d", ks->name, q->flag);
+		ksprintf(&str, "%s\t%d", ks->name, q->flag | (opt->multi_2nd && i? 0x100 : 0));
 		ksprintf(&str, "\t%s\t%ld", q->chr>=0? bns->anns[q->chr].name : "*", (long)q->pos + 1);
 		if (p->l == 0) { // not a repetitive hit
 			ksprintf(&str, "\t%d\t", q->pqual);
