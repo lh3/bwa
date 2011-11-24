@@ -51,7 +51,7 @@ bsw2opt_t *bsw2_init_opt()
 	o->a = 1; o->b = 3; o->q = 5; o->r = 2; o->t = 30;
 	o->bw = 50;
 	o->z = 1; o->is = 3; o->t_seeds = 5; o->hard_clip = 0;
-	o->mask_level = 0.50f; o->yita = 5.5f; o->coef = 5.5f;
+	o->mask_level = 0.50f; o->coef = 5.5f;
 	o->qr = o->q + o->r; o->n_threads = 1; o->chunk_size = 10000000;
 	return o;
 }

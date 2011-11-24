@@ -17,7 +17,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 
 	opt = bsw2_init_opt();
 	srand48(11);
-	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:y:s:c:N:Hf:")) >= 0) {
+	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:")) >= 0) {
 		switch (c) {
 		case 'q': opt->q = atoi(optarg); break;
 		case 'r': opt->r = atoi(optarg); break;
@@ -27,7 +27,6 @@ int bwa_bwtsw2(int argc, char *argv[])
 		case 'T': opt->t = atoi(optarg); break;
 		case 't': opt->n_threads = atoi(optarg); break;
 		case 'z': opt->z = atoi(optarg); break;
-		case 'y': opt->yita = atof(optarg); break;
 		case 's': opt->is = atoi(optarg); break;
 		case 'm': opt->mask_level = atof(optarg); break;
 		case 'c': opt->coef = atof(optarg); break;
@@ -45,7 +44,6 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -b INT   mismatch penalty [%d]\n", opt->b);
 		fprintf(stderr, "         -q INT   gap open penalty [%d]\n", opt->q);
 		fprintf(stderr, "         -r INT   gap extension penalty [%d]\n", opt->r);
-//		fprintf(stderr, "         -y FLOAT error recurrence coef. (4..16) [%.1f]\n", opt->yita);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "\n");

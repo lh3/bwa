@@ -14,7 +14,7 @@
 typedef struct {
 	int a, b, q, r, t, qr, bw;
 	int z, is, t_seeds, hard_clip;
-	float yita, mask_level, coef;
+	float mask_level, coef;
 	int n_threads, chunk_size;
 } bsw2opt_t;
 
