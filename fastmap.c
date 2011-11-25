@@ -10,6 +10,49 @@ KSEQ_INIT(gzFile, gzread)
 
 extern unsigned char nst_nt4_table[256];
 
+typedef struct {
+	const bwt_t *bwt;
+	const uint8_t *query;
+	int start, len;
+	bwtintv_v *tmpvec[2], *matches;
+} smem_i;
+
+smem_i *smem_iter_init(const bwt_t *bwt)
+{
+	smem_i *iter;
+	iter = calloc(1, sizeof(smem_i));
+	iter->bwt = bwt;
+	iter->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
+	iter->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
+	iter->matches   = calloc(1, sizeof(bwtintv_v));
+	return iter;
+}
+
+void smem_iter_destroy(smem_i *iter)
+{
+	free(iter->tmpvec[0]->a);
+	free(iter->tmpvec[1]->a);
+	free(iter->matches->a);
+	free(iter);
+}
+
+void smem_set_query(smem_i *iter, int len, const uint8_t *query)
+{
+	iter->query = query;
+	iter->start = 0;
+	iter->len = len;
+}
+
+int smem_next(smem_i *iter)
+{
+	iter->tmpvec[0]->n = iter->tmpvec[1]->n = iter->matches->n = 0;
+	if (iter->start >= iter->len || iter->start < 0) return -1;
+	while (iter->start < iter->len && iter->query[iter->start] > 3) ++iter->start; // skip ambiguous bases
+	if (iter->start == iter->len) return -1;
+	iter->start = bwt_smem1(iter->bwt, iter->len, iter->query, iter->start, iter->matches, iter->tmpvec);
+	return iter->start;
+}
+
 int main_fastmap(int argc, char *argv[])
 {
 	int c, i, min_iwidth = 20, min_len = 17;
@@ -18,7 +61,7 @@ int main_fastmap(int argc, char *argv[])
 	gzFile fp;
 	bwt_t *bwt;
 	bntseq_t *bns;
-	bwtintv_v a[3], mem, *tvec[3];
+	smem_i *iter;
 
 	while ((c = getopt(argc, argv, "w:l:")) >= 0) {
 		switch (c) {
@@ -42,38 +85,35 @@ int main_fastmap(int argc, char *argv[])
 		free(tmp);
 		bns = bns_restore(argv[optind]);
 	}
-	for (i = 0; i < 3; ++i) { // initiate the temporary array
-		kv_init(a[i]);
-		tvec[i] = &a[i];
-	}
-	kv_init(mem);
+	iter = smem_iter_init(bwt);
 	while (kseq_read(seq) >= 0) {
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-		bwt_smem(bwt, seq->seq.l, (uint8_t*)seq->seq.s, &mem, tvec);
 		printf("SQ\t%s\t%ld\n", seq->name.s, seq->seq.l);
-		for (i = 0; i < mem.n; ++i) {
-			bwtintv_t *p = &mem.a[i];
-			if ((uint32_t)p->info - (p->info>>32) < min_len) continue;
-			printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
-			if (p->x[2] <= min_iwidth) {
-				for (k = 0; k < p->x[2]; ++k) {
-					bwtint_t pos;
-					int len, is_rev, ref_id;
-					len  = (uint32_t)p->info - (p->info>>32);
-					pos = bns_depos(bns, bwt_sa(bwt, p->x[0] + k), &is_rev);
-					if (is_rev) pos -= len - 1;
-					bns_cnt_ambi(bns, pos, len, &ref_id);
-					printf("\t%s:%c%ld", bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
-				}
+		smem_set_query(iter, seq->seq.l, (uint8_t*)seq->seq.s);
+		while (smem_next(iter) > 0) {
+			for (i = 0; i < iter->matches->n; ++i) {
+				bwtintv_t *p = &iter->matches->a[i];
+				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;
+				printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
+				if (p->x[2] <= min_iwidth) {
+					for (k = 0; k < p->x[2]; ++k) {
+						bwtint_t pos;
+						int len, is_rev, ref_id;
+						len  = (uint32_t)p->info - (p->info>>32);
+						pos = bns_depos(bns, bwt_sa(bwt, p->x[0] + k), &is_rev);
+						if (is_rev) pos -= len - 1;
+						bns_cnt_ambi(bns, pos, len, &ref_id);
+						printf("\t%s:%c%ld", bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
+					}
+				} else fputs("\t*", stdout);
+				putchar('\n');
 			}
-			putchar('\n');
 		}
 		puts("//");
 	}
 
-	free(mem.a);
-	for (i = 0; i < 3; ++i) free(a[i].a);
+	smem_iter_destroy(iter);
 	bns_destroy(bns);
 	bwt_destroy(bwt);
 	kseq_destroy(seq);

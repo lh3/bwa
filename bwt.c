@@ -292,13 +292,17 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	ik.info = x + 1;
 
 	for (i = x + 1, curr->n = 0; i < len; ++i) { // forward search
-		if (q[i] > 3) break;
-		c = 3 - q[i];
-		bwt_extend(bwt, &ik, ok, 0);
-		if (ok[c].x[2] != ik.x[2]) // change of the interval size
+		if (q[i] < 4) {
+			c = 3 - q[i];
+			bwt_extend(bwt, &ik, ok, 0);
+			if (ok[c].x[2] != ik.x[2]) // change of the interval size
+				kv_push(bwtintv_t, *curr, ik);
+			if (ok[c].x[2] == 0) break; // cannot be extended
+			ik = ok[c]; ik.info = i + 1;
+		} else { // an ambiguous base
 			kv_push(bwtintv_t, *curr, ik);
-		if (ok[c].x[2] == 0) break; // cannot be extended
-		ik = ok[c]; ik.info = i + 1;
+			break; // cannot be extended; in this case, i<len always stands
+		}
 	}
 	if (i == len) kv_push(bwtintv_t, *curr, ik); // push the last interval if we reach the end
 	bwt_reverse_intvs(curr); // s.t. smaller intervals visited first
@@ -332,24 +336,4 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	if (tmpvec[0] == 0) free(a[0].a);
 	if (tmpvec[1] == 0) free(a[1].a);
 	return ret;
-}
-
-int bwt_smem(const bwt_t *bwt, int len, const uint8_t *q, bwtintv_v *mem, bwtintv_v *tmpvec[3])
-{
-	int x = 0, i;
-	bwtintv_v a[3], *tvec[2], *mem1;
-	kv_init(a[0]); kv_init(a[1]); kv_init(a[2]); // no memory allocation here
-	tvec[0] = tmpvec[0]? tmpvec[0] : &a[0];
-	tvec[1] = tmpvec[1]? tmpvec[1] : &a[1];
-	mem1    = tmpvec[2]? tmpvec[2] : &a[2];
-	mem->n = 0;
-	do {
-		x = bwt_smem1(bwt, len, q, x, mem1, tvec);
-		for (i = 0; i < mem1->n; ++i)
-			kv_push(bwtintv_t, *mem, mem1->a[i]);
-	} while (x < len);
-	if (tmpvec[0] == 0) free(a[0].a);
-	if (tmpvec[1] == 0) free(a[1].a);
-	if (tmpvec[2] == 0) free(a[2].a);
-	return mem->n;
 }

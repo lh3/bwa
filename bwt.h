@@ -112,8 +112,16 @@ extern "C" {
 	int bwt_match_exact(const bwt_t *bwt, int len, const ubyte_t *str, bwtint_t *sa_begin, bwtint_t *sa_end);
 	int bwt_match_exact_alt(const bwt_t *bwt, int len, const ubyte_t *str, bwtint_t *k0, bwtint_t *l0);
 
+	/**
+	 * Extend bi-SA-interval _ik_
+	 */
 	void bwt_extend(const bwt_t *bwt, const bwtintv_t *ik, bwtintv_t ok[4], int is_back);
-	int bwt_smem(const bwt_t *bwt, int len, const uint8_t *q, bwtintv_v *mem, bwtintv_v *tmpvec[3]);
+
+	/**
+	 * Given a query _q_, collect potential SMEMs covering position _x_ and store them in _mem_.
+	 * Return the end of the longest exact match starting from _x_.
+	 */
+	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
 #ifdef __cplusplus
 }
