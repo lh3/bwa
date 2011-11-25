@@ -55,7 +55,7 @@ int smem_next(smem_i *iter)
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -63,14 +63,15 @@ int main_fastmap(int argc, char *argv[])
 	bntseq_t *bns;
 	smem_i *iter;
 
-	while ((c = getopt(argc, argv, "w:l:")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:s")) >= 0) {
 		switch (c) {
+			case 's': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
+		fprintf(stderr, "Usage: bwa fastmap [-s] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
 		return 1;
 	}
 
@@ -87,9 +88,13 @@ int main_fastmap(int argc, char *argv[])
 	}
 	iter = smem_iter_init(bwt);
 	while (kseq_read(seq) >= 0) {
+		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
+		if (print_seq) {
+			putchar('\t');
+			puts(seq->seq.s);
+		} else putchar('\n');
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-		printf("SQ\t%s\t%ld\n", seq->name.s, seq->seq.l);
 		smem_set_query(iter, seq->seq.l, (uint8_t*)seq->seq.s);
 		while (smem_next(iter) > 0) {
 			for (i = 0; i < iter->matches->n; ++i) {
