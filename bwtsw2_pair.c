@@ -111,6 +111,7 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	}
 	if (beg < 1) beg = 1;
 	if (end > l_pac) end = l_pac;
+	if (end - beg < l_mseq) return;
 	// generate the sequence
 	seq = malloc(l_mseq + (end - beg));
 	ref = seq + l_mseq;

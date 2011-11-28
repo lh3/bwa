@@ -1,3 +1,36 @@
+Release 0.6.1 (25 November, 2011)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Notable changes to BWA-short:
+
+ * Bugfix: duplicated alternative hits in the XA tag.
+
+ * Bugfix: when trimming enabled, bwa-aln trims 1bp less.
+
+ * Disabled the color-space alignment. 0.6.x is not working with SOLiD reads at
+   present.
+
+Notable changes to BWA-SW:
+
+ * Bugfix: segfault due to excessive ambiguous bases.
+
+ * Bugfix: incorrect mate position in the SE mode.
+
+ * When macro _NO_SSE2 is in use, fall back to the standard Smith-Waterman
+   instead of SSE2-SW.
+
+ * Optionally mark split hits with lower alignment scores as secondary.
+
+Changes to fastmap:
+
+ * Bugfix: infinite loop caused by ambiguous bases.
+
+ * Optionally output the query sequence.
+
+(0.6.1: 25 November 2011, r103)
+
+
+
 Release 0.5.10 and 0.6.0 (12 November, 2011)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

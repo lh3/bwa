@@ -437,7 +437,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	bwa_cigar_t *cigar = 0;
 	ubyte_t *ref_seq;
 	bwtint_t k, x, y, l;
-	int path_len, ret;
+	int path_len, ret, subo;
 	AlnParam ap = aln_param_bwa;
 	path_t *path, *p;
 
@@ -454,8 +454,8 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	path = (path_t*)calloc(l+len, sizeof(path_t));
 
 	// do alignment
-	ret = aln_local_core(ref_seq, l, (ubyte_t*)seq, len, &ap, path, &path_len, 1, 0);
-	if (ret < 0) {
+	ret = aln_local_core(ref_seq, l, (ubyte_t*)seq, len, &ap, path, &path_len, 1, &subo);
+	if (ret < 0 || subo == ret) { // no hit or tandem hits
 		free(path); free(cigar); free(ref_seq); *n_cigar = 0;
 		return 0;
 	}
