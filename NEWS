@@ -1,4 +1,4 @@
-Release 0.6.1 (25 November, 2011)
+Release 0.6.1 (28 November, 2011)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Notable changes to BWA-short:
@@ -16,6 +16,8 @@ Notable changes to BWA-SW:
 
  * Bugfix: incorrect mate position in the SE mode.
 
+ * Bugfix: rare segfault in the PE mode
+
  * When macro _NO_SSE2 is in use, fall back to the standard Smith-Waterman
    instead of SSE2-SW.
 
@@ -27,7 +29,7 @@ Changes to fastmap:
 
  * Optionally output the query sequence.
 
-(0.6.1: 25 November 2011, r103)
+(0.6.1: 28 November 2011, r104)
 
 
 

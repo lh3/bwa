@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.6.0-r102-dev"
+#define PACKAGE_VERSION "0.6.1-r104"
 #endif
 
 static int usage()
