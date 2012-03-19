@@ -245,7 +245,7 @@ char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_
 			}
 		}
 	} else { // no gaps
-		for (z = u = 0; z < (bwtint_t)len; ++z) {
+		for (z = u = 0; z < (bwtint_t)len && x+z < l_pac; ++z) {
 			c = pacseq[(x+z)>>2] >> ((~(x+z)&3)<<1) & 3;
 			if (c > 3 || seq[y+z] > 3 || c != seq[y+z]) {
 				ksprintf(str, "%d", u);
