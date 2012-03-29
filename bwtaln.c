@@ -227,17 +227,19 @@ char *bwa_infer_prefix(const char *hint)
 	l_hint = strlen(hint);
 	prefix = malloc(l_hint + 3 + 4 + 1);
 	strcpy(prefix, hint);
-	strcpy(prefix + l_hint, ".bwt");
+	strcpy(prefix + l_hint, ".64.bwt");
 	if ((fp = fopen(prefix, "rb")) != 0) {
-		prefix[l_hint] = 0;
+		fclose(fp);
+		prefix[l_hint + 3] = 0;
 		return prefix;
 	} else {
-		strcpy(prefix + l_hint, ".64.bwt");
+		strcpy(prefix + l_hint, ".bwt");
 		if ((fp = fopen(prefix, "rb")) == 0) {
 			free(prefix);
 			return 0;
 		} else {
-			prefix[l_hint + 3] = 0;
+			fclose(fp);
+			prefix[l_hint] = 0;
 			return prefix;
 		}
 	}
