@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 #include <stdint.h>
 #ifdef HAVE_CONFIG_H
@@ -15,6 +16,15 @@
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
+
+// -------------------
+
+extern char bwaversionstr[];
+extern char bwablddatestr[];
+
+extern int adj_n_needed;
+
+// -------------------
 
 gap_opt_t *gap_init_opt()
 {
@@ -157,6 +167,35 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	bwa_seqio_t *ks;
 	clock_t t;
 	bwt_t *bwt;
+        int n_needed;
+        int max_threads = 1;
+
+	// ---------------
+
+#ifdef _SC_NPROCESSORS_ONLN
+        max_threads = sysconf(_SC_NPROCESSORS_ONLN);
+#else
+        max_threads = MAX_CPUS;
+#endif
+
+#ifndef HAVE_PTHREAD
+        max_threads = 1;
+#endif
+
+        fprintf(stderr, "[bwa_aln] version: %s (%s)\n",
+                        bwaversionstr, bwablddatestr);
+        fprintf(stderr, "[bwa_aln] num threads: %d (max: %d)\n",
+                        opt->n_threads, max_threads);
+
+        n_needed = 262144;
+#if 0
+        if(adj_n_needed)
+                n_needed = 1048576;
+#endif
+
+        fprintf(stderr, "[bwa_aln] bsize: %dk\n", n_needed / 1024);
+
+	// ---------------
 
 	// initialization
 	ks = bwa_open_reads(opt->mode, fn_fa);
@@ -169,7 +208,7 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 
 	// core loop
 	err_fwrite(opt, sizeof(gap_opt_t), 1, stdout);
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt->mode, opt->trim_qual)) != 0) {
+	while ((seqs = bwa_read_seq(ks, n_needed, &n_seqs, opt->mode, opt->trim_qual)) != 0) {
 		tot_seqs += n_seqs;
 		t = clock();
 
@@ -217,6 +256,8 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	// destroy
 	bwt_destroy(bwt);
 	bwa_seq_close(ks);
+
+	return;
 }
 
 int bwa_aln(int argc, char *argv[])
@@ -225,7 +266,8 @@ int bwa_aln(int argc, char *argv[])
 	gap_opt_t *opt;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
+
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYTB:")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -255,9 +297,15 @@ int bwa_aln(int argc, char *argv[])
 		case 'I': opt->mode |= BWA_MODE_IL13; break;
 		case 'Y': opt->mode |= BWA_MODE_CFY; break;
 		case 'B': opt->mode |= atoi(optarg) << 24; break;
+		case 'T': adj_n_needed = 0; break;
 		default: return 1;
 		}
 	}
+
+#ifndef HAVE_PTHREAD
+        opt->n_threads = 1;
+#endif
+
 	if (opte > 0) {
 		opt->max_gape = opte;
 		opt->mode &= ~BWA_MODE_GAPE;
@@ -281,7 +329,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -E INT    gap extension penalty [%d]\n", opt->s_gape);
 		fprintf(stderr, "         -R INT    stop searching when there are >INT equally best hits [%d]\n", opt->max_top2);
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
-        fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
+        	fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
 		fprintf(stderr, "         -B INT    length of barcode\n");
 //		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
@@ -292,9 +340,11 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -1        use the 1st read in a pair (effective with -b)\n");
 		fprintf(stderr, "         -2        use the 2nd read in a pair (effective with -b)\n");
 		fprintf(stderr, "         -Y        filter Casava-filtered sequences\n");
+		fprintf(stderr, "         -T        use original read buffer size\n");
 		fprintf(stderr, "\n");
 		return 1;
 	}
+
 	if (opt->fnr > 0.0) {
 		int i, k;
 		for (i = 17, k = 0; i <= 250; ++i) {
@@ -303,8 +353,11 @@ int bwa_aln(int argc, char *argv[])
 			k = l;
 		}
 	}
+
 	bwa_aln_core(argv[optind], argv[optind+1], opt);
+
 	free(opt);
+
 	return 0;
 }
 

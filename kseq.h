@@ -102,7 +102,7 @@ typedef struct __kstring_t {
 					if (ks->buf[i] == delimiter) break;					\
 			} else {													\
 				for (i = ks->begin; i < ks->end; ++i)					\
-					if (isspace(ks->buf[i])) break;						\
+					if ( (ks->buf[i] == 32) || ((ks->buf[i] >= 9) && (ks->buf[i] <= 13)) ) break;	\
 			}															\
 			if (str->m - str->l < i - ks->begin + 1) {					\
 				str->m = str->l + (i - ks->begin) + 1;					\
@@ -166,7 +166,7 @@ typedef struct __kstring_t {
 		if (ks_getuntil(ks, 0, &seq->name, &c) < 0) return -1;			\
 		if (c != '\n') ks_getuntil(ks, '\n', &seq->comment, 0);			\
 		while ((c = ks_getc(ks)) != -1 && c != '>' && c != '+' && c != '@') { \
-			if (isgraph(c)) { /* printable non-space character */		\
+			if (c > 32 && c < 127) { /* printable non-space character */	\
 				if (seq->seq.l + 1 >= seq->seq.m) { /* double the memory */ \
 					seq->seq.m = seq->seq.l + 2;						\
 					kroundup32(seq->seq.m); /* rounded to next closest 2^k */ \
@@ -200,7 +200,7 @@ typedef struct __kstring_t {
 	} kseq_t;
 
 #define KSEQ_INIT(type_t, __read)				\
-	KSTREAM_INIT(type_t, __read, 4096)			\
+	KSTREAM_INIT(type_t, __read, 16384)			\
 	__KSEQ_TYPE(type_t)							\
 	__KSEQ_BASIC(type_t)						\
 	__KSEQ_READ

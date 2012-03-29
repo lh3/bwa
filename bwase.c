@@ -10,11 +10,38 @@
 #include "bntseq.h"
 #include "utils.h"
 #include "kstring.h"
+#include "bwatpx.h"
 
 int g_log_n[256];
 char *bwa_rg_line, *bwa_rg_id;
 
-void bwa_print_sam_PG();
+void bwa_print_sam_PG(void);
+
+// -------------------
+
+extern char bwaversionstr[];
+extern char bwablddatestr[];
+
+extern void bwa_rg_tpx(int iidx, const bntseq_t *bns, int n_seqs1, int n_seqs2,
+                       bwa_seq_t *seqs, ubyte_t *pacseq, bntseq_t *ntbns);
+extern void bwa_read_seq1_tpx(bwa_seqio_t *ks1, int n_needed, int *n,
+                              int mode1, int trim_qual1,
+                              bwa_seq_t **seq1, bwt_aln1_t **aln, int n_occ, FILE *fp_sa, int m_aln);
+extern void bwa_read_seq1_wait_tpx(void);
+extern void bwa_print1_tpx(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, const gap_opt_t opt);
+extern void bwa_print1_wait_tpx(void);
+extern void bwa_cal_pac_pos2_tpx(const bntseq_t *bns, const bwt_t *bwt, int n_seqs1, int n_seqs2,
+                                 bwa_seq_t *seqs, const int max_mm, const float fnr);
+
+extern int num_sampe_threads;
+THR_BWA_RG_TPX thr_bwa_rg_info[MAX_CPUS];
+THR_BWA_SE_PAC_TPX thr_bwa_se_pac_info[MAX_CPUS];
+
+extern int adj_n_needed;
+extern int async_read_seq;
+extern int async_print_res;
+
+// -------------------
 
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi)
 {
@@ -71,7 +98,8 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 				}
 				rest -= q->l - q->k + 1;
 			} else { // Random sampling (http://code.activestate.com/recipes/272884/). In fact, we never come here. 
-				int j, i, k;
+				int j, i;
+				// int k;
 				for (j = rest, i = q->l - q->k + 1, k = 0; j > 0; --j) {
 					double p = 1.0, x = drand48();
 					while (x < p) p -= p * j / (i--);
@@ -116,6 +144,83 @@ bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int l
 	return pos_f; // FIXME: it is possible that pos_f < bns->anns[ref_id].offset
 }
 
+// -------------------
+
+void thr_bwa_se_pac_tpx(long idx)
+{
+	int iidx = (int)idx;
+
+	bwa_cal_pac_pos2_tpx(thr_bwa_se_pac_info[iidx].bns,
+                             thr_bwa_se_pac_info[iidx].bwt,
+                             thr_bwa_se_pac_info[iidx].start,
+                             thr_bwa_se_pac_info[iidx].end,
+                             thr_bwa_se_pac_info[iidx].seqs,
+                             thr_bwa_se_pac_info[iidx].max_mm,
+                             thr_bwa_se_pac_info[iidx].fnr);
+
+	return;
+}
+
+// -------------------
+
+void bwa_cal_pac_pos_tpx(const bntseq_t *bns, const bwt_t *bwt, int n_seqs, bwa_seq_t *seqs, const int max_mm, const float fnr)
+{
+#ifdef HAVE_PTHREAD
+        int i;
+        int srtn = 0;
+        long delta = 0L;
+        pthread_t tid;
+#endif // HAVE_PTHREAD
+
+#ifdef HAVE_PTHREAD
+        if(num_sampe_threads > 1){
+
+          delta = n_seqs / num_sampe_threads;
+
+          for(i=0;i<num_sampe_threads;i++){
+            thr_bwa_se_pac_info[i].end = delta * (i+1);
+            thr_bwa_se_pac_info[i].bns = bns;
+            thr_bwa_se_pac_info[i].bwt = bwt;
+            thr_bwa_se_pac_info[i].seqs = seqs;
+            thr_bwa_se_pac_info[i].max_mm = max_mm;
+            thr_bwa_se_pac_info[i].fnr = fnr;
+          }
+
+          thr_bwa_se_pac_info[num_sampe_threads-1].end = n_seqs;
+
+          thr_bwa_se_pac_info[0].start = 0;
+
+          for(i=1;i<num_sampe_threads;i++){
+            thr_bwa_se_pac_info[i].start = thr_bwa_se_pac_info[i-1].end;
+          }
+
+          for(i=0;i<num_sampe_threads;i++){
+            srtn = pthread_create(&tid,NULL,(void *(*)(void *))thr_bwa_se_pac_tpx,(void *)(long)i);
+            if(srtn != 0){
+              fprintf(stderr,"[%s] pthread_create thr_bwa_se_pac_tpx error %d\n", __func__, srtn);
+              exit(1);
+            }
+            thr_bwa_se_pac_info[i].tid = tid;
+          }
+
+          for(i=0;i<num_sampe_threads;i++){
+            pthread_join(thr_bwa_se_pac_info[i].tid,NULL);
+          }
+
+        }else{
+
+          bwa_cal_pac_pos2_tpx(bns,bwt,0,n_seqs,seqs,max_mm,fnr);
+
+        }
+#else // HAVE_PTHREAD
+        bwa_cal_pac_pos2_tpx(bns,bwt,0,n_seqs,seqs,max_mm,fnr);
+#endif // HAVE_PTHREAD
+
+        return;
+}
+
+// -------------------
+
 /**
  * Derive the actual position in the read from the given suffix array
  * coordinates. Note that the position will be approximate based on
@@ -131,36 +236,35 @@ void bwa_cal_pac_pos_core(const bntseq_t *bns, const bwt_t *bwt, bwa_seq_t *seq,
 	seq->pos = bwa_sa2pos(bns, bwt, seq->sa, seq->len, &strand);
 	seq->strand = strand;
 	seq->seQ = seq->mapQ = bwa_approx_mapQ(seq, max_diff);
+
+	return;
 }
+
+// -------------------
 
 void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_seq_t *seqs, int max_mm, float fnr)
 {
-	int i, j, strand, n_multi;
 	char str[1024];
 	bwt_t *bwt;
+
 	// load forward SA
 	strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
 	strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
-	for (i = 0; i != n_seqs; ++i) {
-		bwa_seq_t *p = &seqs[i];
-		bwa_cal_pac_pos_core(bns, bwt, p, max_mm, fnr);
-		for (j = n_multi = 0; j < p->n_multi; ++j) {
-			bwt_multi1_t *q = p->multi + j;
-			q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len, &strand);
-			q->strand = strand;
-			if (q->pos != p->pos)
-				p->multi[n_multi++] = *q;
-		}
-		p->n_multi = n_multi;
-	}
+
+	bwa_cal_pac_pos_tpx(bns, bwt, n_seqs, seqs, max_mm, fnr);
+
 	bwt_destroy(bwt);
+
+	return;
 }
+
+// -------------------
 
 /* is_end_correct == 1 if (*pos+len) gives the correct coordinate on
  * forward strand. This happens when p->pos is calculated by
  * bwa_cal_pac_pos(). is_end_correct==0 if (*pos) gives the correct
  * coordinate. This happens only for color-converted alignment. */
-static bwa_cigar_t *refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const ubyte_t *seq, bwtint_t *_pos,
+bwa_cigar_t *refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const ubyte_t *seq, bwtint_t *_pos,
 									int ext, int *n_cigar, int is_end_correct)
 {
 	bwa_cigar_t *cigar = 0;
@@ -245,7 +349,7 @@ char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_
 			}
 		}
 	} else { // no gaps
-		for (z = u = 0; z < (bwtint_t)len; ++z) {
+		for (z = u = 0; z < (bwtint_t)len && x+z < l_pac; ++z) {
 			c = pacseq[(x+z)>>2] >> ((~(x+z)&3)<<1) & 3;
 			if (c > 3 || seq[y+z] > 3 || c != seq[y+z]) {
 				ksprintf(str, "%d", u);
@@ -296,11 +400,34 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 	s->len = s->full_len;
 }
 
+// -------------------
+
+void thr_bwa_rg_tpx(long idx)
+{
+  int iidx = (int)idx;
+
+  bwa_rg_tpx(iidx,
+             thr_bwa_rg_info[iidx].bns,
+             thr_bwa_rg_info[iidx].start,
+             thr_bwa_rg_info[iidx].end,
+             thr_bwa_rg_info[iidx].seqs,
+             thr_bwa_rg_info[iidx].pacseq,
+             thr_bwa_rg_info[iidx].ntbns);
+
+  return;
+}
+
+// -------------------
+
 void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, bntseq_t *ntbns)
 {
 	ubyte_t *pacseq, *ntpac = 0;
-	int i, j;
-	kstring_t *str;
+#ifdef HAVE_PTHREAD
+        int i;
+        int srtn = 0;
+        pthread_t tid;
+        long delta = 0L;
+#endif // HAVE_PTHREAD
 
 	if (ntbns) { // in color space
 		ntpac = (ubyte_t*)calloc(ntbns->l_pac/4+1, 1);
@@ -313,63 +440,61 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		rewind(bns->fp_pac);
 		fread(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
 	} else pacseq = _pacseq;
-	for (i = 0; i != n_seqs; ++i) {
-		bwa_seq_t *s = seqs + i;
-		seq_reverse(s->len, s->seq, 0); // IMPORTANT: s->seq is reversed here!!!
-		for (j = 0; j < s->n_multi; ++j) {
-			bwt_multi1_t *q = s->multi + j;
-			int n_cigar;
-			if (q->gap == 0) continue;
-			q->cigar = refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, &q->pos,
-										  (q->strand? 1 : -1) * q->gap, &n_cigar, 1);
-			q->n_cigar = n_cigar;
-		}
-		if (s->type == BWA_TYPE_NO_MATCH || s->type == BWA_TYPE_MATESW || s->n_gapo == 0) continue;
-		s->cigar = refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos,
-									  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 1);
-	}
 
-	if (ntbns) { // in color space
-		for (i = 0; i < n_seqs; ++i) {
-			bwa_seq_t *s = seqs + i;
-			bwa_cs2nt_core(s, bns->l_pac, ntpac);
-			for (j = 0; j < s->n_multi; ++j) {
-				bwt_multi1_t *q = s->multi + j;
-				int n_cigar;
-				if (q->gap == 0) continue;
-				free(q->cigar);
-				q->cigar = refine_gapped_core(bns->l_pac, ntpac, s->len, q->strand? s->rseq : s->seq, &q->pos,
-											  (q->strand? 1 : -1) * q->gap, &n_cigar, 0);
-				q->n_cigar = n_cigar;
-			}
-			if (s->type != BWA_TYPE_NO_MATCH && s->cigar) { // update cigar again
-				free(s->cigar);
-				s->cigar = refine_gapped_core(bns->l_pac, ntpac, s->len, s->strand? s->rseq : s->seq, &s->pos,
-											  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 0);
-			}
-		}
-	}
+	// ---------------
 
-	// generate MD tag
-	str = (kstring_t*)calloc(1, sizeof(kstring_t));
-	for (i = 0; i != n_seqs; ++i) {
-		bwa_seq_t *s = seqs + i;
-		if (s->type != BWA_TYPE_NO_MATCH) {
-			int nm;
-			s->md = bwa_cal_md1(s->n_cigar, s->cigar, s->len, s->pos, s->strand? s->rseq : s->seq,
-								bns->l_pac, ntbns? ntpac : pacseq, str, &nm);
-			s->nm = nm;
-		}
-	}
-	free(str->s); free(str);
+#ifdef HAVE_PTHREAD
+        if(num_sampe_threads > 1){
 
-	// correct for trimmed reads
-	if (!ntbns) // trimming is only enabled for Illumina reads
-		for (i = 0; i < n_seqs; ++i) bwa_correct_trimmed(seqs + i);
+          delta = n_seqs / num_sampe_threads;
+       
+          for(i=0;i<num_sampe_threads;i++){
+            thr_bwa_rg_info[i].end = delta * (i+1);
+            thr_bwa_rg_info[i].bns = bns;
+            thr_bwa_rg_info[i].seqs = seqs;
+            thr_bwa_rg_info[i].pacseq = pacseq;
+            thr_bwa_rg_info[i].ntbns = ntbns;
+          }
+       
+          thr_bwa_rg_info[num_sampe_threads-1].end = n_seqs;
+       
+          thr_bwa_rg_info[0].start = 0;
+       
+          for(i=1;i<num_sampe_threads;i++){
+            thr_bwa_rg_info[i].start = thr_bwa_rg_info[i-1].end;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            srtn = pthread_create(&tid,NULL,(void *(*)(void *))thr_bwa_rg_tpx,(void *)(long)i);
+            if(srtn != 0){
+              fprintf(stderr,"[%s] pthread_create thr_bwa_rg_tpx error %d\n", __func__, srtn);
+              exit(1);
+            }
+            thr_bwa_rg_info[i].tid = tid;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            pthread_join(thr_bwa_rg_info[i].tid,NULL);
+          }
+
+        }else{
+
+	  bwa_rg_tpx(0, bns, 0, n_seqs, seqs, pacseq, ntbns);
+
+	}
+#else // HAVE_PTHREAD
+	bwa_rg_tpx(0, bns, 0, n_seqs, seqs, pacseq, ntbns);
+#endif // HAVE_PTHREAD
+
+	// ---------------
 
 	if (!_pacseq) free(pacseq);
 	free(ntpac);
+
+	return;
 }
+
+// -------------------
 
 int64_t pos_end(const bwa_seq_t *p)
 {
@@ -442,11 +567,13 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 
 		// print mate coordinate
 		if (mate && mate->type != BWA_TYPE_NO_MATCH) {
-			int m_seqid, m_is_N;
+			int m_seqid;
+			// int m_is_N;
 			long long isize;
 			am = mate->seQ < p->seQ? mate->seQ : p->seQ; // smaller single-end mapping quality
 			// redundant calculation here, but should not matter too much
-			m_is_N = bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
+			// m_is_N = bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
+			(void)bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
 			err_printf("\t%s\t", (seqid == m_seqid)? "=" : bns->anns[m_seqid].name);
 			isize = (seqid == m_seqid)? pos_5(mate) - pos_5(p) : 0;
 			if (p->type == BWA_TYPE_NO_MATCH) isize = 0;
@@ -579,17 +706,60 @@ int bwa_set_rg(const char *s)
 	return 0;
 }
 
+// -------------------
+
 void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ)
 {
-	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, n_seqs, tot_seqs = 0, m_aln;
-	bwt_aln1_t *aln = 0;
-	bwa_seq_t *seqs;
+	int m_aln[3];
+	int tot_seqs = 0;
+	int n_seqs[3];
+	bwt_aln1_t *aln[3];
+	bwa_seq_t *seqs[3];
 	bwa_seqio_t *ks;
 	clock_t t;
 	bntseq_t *bns, *ntbns = 0;
 	FILE *fp_sa;
 	gap_opt_t opt;
+	int n_needed;
+	int nexti1;
+	int nexti2;
+	int seqsd[3];
+	int max_threads = 1;
+	clock_t tio;
+	int first = 1;
+
+	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
+
+#ifdef _SC_NPROCESSORS_ONLN
+        max_threads = sysconf(_SC_NPROCESSORS_ONLN);
+#else
+        max_threads = MAX_CPUS;
+#endif
+
+#ifndef HAVE_PTHREAD
+	max_threads = 1;
+#endif
+
+        if(max_threads > MAX_CPUS)
+                max_threads = MAX_CPUS;
+
+        if(max_threads < 1)
+                max_threads = 1;
+
+        if(num_sampe_threads > max_threads)
+                num_sampe_threads = max_threads;
+
+        if(num_sampe_threads < 1)
+                num_sampe_threads = max_threads;
+
+        n_needed = 262144;
+        if(adj_n_needed)
+                n_needed = 1048576;
+
+        fprintf(stderr, "[bwa_sai2sam_se_core] version: %s (%s)\n",
+                bwaversionstr, bwablddatestr);
+        fprintf(stderr, "[bwa_sai2sam_se_core] num threads: %d (max: %d)\n",
+                num_sampe_threads, max_threads);
 
 	// initialization
 	bwase_initialize();
@@ -597,62 +767,163 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	srand48(bns->seed);
 	fp_sa = xopen(fn_sa, "r");
 
-	m_aln = 0;
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa);
 	if (!(opt.mode & BWA_MODE_COMPREAD)) // in color space; initialize ntpac
 		ntbns = bwa_open_nt(prefix);
+
 	bwa_print_sam_SQ(bns);
 	bwa_print_sam_PG();
+
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
-	// core loop
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt.mode, opt.trim_qual)) != 0) {
-		tot_seqs += n_seqs;
-		t = clock();
 
-		// read alignment
-		for (i = 0; i < n_seqs; ++i) {
-			bwa_seq_t *p = seqs + i;
-			int n_aln;
-			fread(&n_aln, 4, 1, fp_sa);
-			if (n_aln > m_aln) {
-				m_aln = n_aln;
-				aln = (bwt_aln1_t*)realloc(aln, sizeof(bwt_aln1_t) * m_aln);
-			}
-			fread(aln, sizeof(bwt_aln1_t), n_aln, fp_sa);
-			bwa_aln2seq_core(n_aln, aln, p, 1, n_occ);
+	first = 1;
+	seqsd[0] = 0;
+	seqsd[1] = 0;
+	seqsd[2] = 0;
+	nexti1 = 0;
+	nexti2 = 0;
+	n_seqs[0] = 0;
+	n_seqs[1] = 0;
+	n_seqs[2] = 0;
+	seqs[0] = NULL;
+	seqs[1] = NULL;
+	seqs[2] = NULL;
+	aln[0] = NULL;
+	aln[1] = NULL;
+	aln[2] = NULL;
+	m_aln[0] = 0;
+	m_aln[1] = 0;
+	m_aln[2] = 0;
+
+	t = tio = clock();
+
+	bwa_read_seq1_tpx(ks, n_needed, &n_seqs[nexti1], opt.mode, opt.trim_qual, 
+                          &seqs[nexti1], &aln[nexti1], n_occ, fp_sa, m_aln[nexti1]);
+
+	// core loop
+	while(1){
+
+		if( ( (async_read_seq) && (num_sampe_threads > 1) ) || (!first) ){
+			tio = clock();
 		}
 
-		fprintf(stderr, "[bwa_aln_core] convert to sequence coordinate... ");
-		bwa_cal_pac_pos(bns, prefix, n_seqs, seqs, opt.max_diff, opt.fnr); // forward bwt will be destroyed here
+		bwa_read_seq1_wait_tpx();
+
+		if(seqs[nexti1] == NULL){
+			break;
+		}
+
+		tot_seqs += n_seqs[nexti1];
+
+		seqsd[nexti1] = 1;
+
+		nexti2 = nexti1 + 1;
+		if(nexti2 > 2){
+			nexti2 = 0;
+		}
+
+		bwa_read_seq1_tpx(ks, n_needed, &n_seqs[nexti2], opt.mode, opt.trim_qual, 
+				  &seqs[nexti2], &aln[nexti2], n_occ, fp_sa, m_aln[nexti2]);
+
+		fprintf(stderr, "[bwa_sai2sam_se_core] bwa_read_seq1... %.2f sec", (float)(clock() - tio) / CLOCKS_PER_SEC);
+		if( (async_read_seq) && (num_sampe_threads > 1) && (!first) ){
+			fprintf(stderr," (async, bsize=%dk)\n", n_needed / 1024);
+		}else{
+			fprintf(stderr," (bsize=%dk)\n", n_needed / 1024);
+		}
+
+		first = 0;
+
+		// ---------------
+
+		t = clock();
+
+		fprintf(stderr, "[bwa_sai2sam_se_core] convert to sequence coordinate... ");
+		bwa_cal_pac_pos(bns, prefix, n_seqs[nexti1], seqs[nexti1], opt.max_diff, opt.fnr); // forward bwt will be destroyed here
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
-		fprintf(stderr, "[bwa_aln_core] refine gapped alignments... ");
-		bwa_refine_gapped(bns, n_seqs, seqs, 0, ntbns);
+		// ---------------
+
+		fprintf(stderr, "[bwa_sai2sam_se_core] refine gapped alignments... ");
+		bwa_refine_gapped(bns, n_seqs[nexti1], seqs[nexti1], 0, ntbns);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
-		fprintf(stderr, "[bwa_aln_core] print alignments... ");
-		for (i = 0; i < n_seqs; ++i)
-			bwa_print_sam1(bns, seqs + i, 0, opt.mode, opt.max_top2);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+		// ---------------
 
-		bwa_free_read_seq(n_seqs, seqs);
-		fprintf(stderr, "[bwa_aln_core] %d sequences have been processed.\n", tot_seqs);
+		fprintf(stderr, "[bwa_sai2sam_se_core] print alignments... ");
+		bwa_print1_tpx(bns, n_seqs[nexti1], seqs[nexti1], opt);
+		fprintf(stderr, "%.2f sec", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+		if( (async_print_res) && (num_sampe_threads > 1) ){
+			fprintf(stderr," (async)\n");
+		}else{
+			fprintf(stderr,"\n");
+		}
+
+		// ---------------
+
+		fprintf(stderr, "[bwa_sai2sam_se_core] %d sequences have been processed.\n", tot_seqs);
+
+		// ---------------
+
+		nexti1 = nexti2;
+
+		nexti2 = nexti1 + 1;
+		if(nexti2 > 2){
+			nexti2 = 0;
+		}
+
+		if(seqsd[nexti2]){
+			bwa_free_read_seq(n_seqs[nexti2], seqs[nexti2]);
+			seqsd[nexti2] = 0;
+		}
+
 	}
+
+	// ---------------
+
+	if( (async_print_res) && (num_sampe_threads > 1) ){
+		t = clock();
+		fprintf(stderr, "[bwa_sai2sam_se_core] wait for final print alignments... ");
+	}
+
+	bwa_print1_wait_tpx();
+
+	if( (async_print_res) && (num_sampe_threads > 1) ){
+		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+	}
+
+	for(nexti1=0; nexti1<3; nexti1++){
+		if(seqsd[nexti1]){
+			bwa_free_read_seq(n_seqs[nexti1], seqs[nexti1]);
+			seqsd[nexti1] = 0;
+		}
+		if(aln[nexti1]){
+			free(aln[nexti1]);
+			aln[nexti1] = 0;
+		}
+	}
+
+	// ---------------
 
 	// destroy
 	bwa_seq_close(ks);
 	if (ntbns) bns_destroy(ntbns);
 	bns_destroy(bns);
 	fclose(fp_sa);
-	free(aln);
+
+	return;
 }
+
+// -------------------
 
 int bwa_sai2sam_se(int argc, char *argv[])
 {
 	int c, n_occ = 3;
-	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
+
+	while ((c = getopt(argc, argv, "TXYhn:f:r:t:")) >= 0) {
 		switch (c) {
+		case 't': num_sampe_threads = atoi(optarg); break;
 		case 'h': break;
 		case 'r':
 			if (bwa_set_rg(optarg) < 0) {
@@ -662,15 +933,36 @@ int bwa_sai2sam_se(int argc, char *argv[])
 			break;
 		case 'n': n_occ = atoi(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
+                case 'T': adj_n_needed = 0; break;
+                case 'X': async_read_seq = 0; break;
+                case 'Y': async_print_res = 0; break;
 		default: return 1;
 		}
 	}
 
+#ifndef HAVE_PTHREAD
+        async_read_seq = 0;
+        async_print_res = 0;
+        num_sampe_threads = 1;
+#endif
+
 	if (optind + 3 > argc) {
-		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
+                fprintf(stderr, "\n");
+                fprintf(stderr, "Usage: bwa samse [options] <prefix> <in.sai> <in.fq>\n\n");
+                fprintf(stderr, "         -n       max_occ\n");
+                fprintf(stderr, "         -r       RG_line\n");
+                fprintf(stderr, "         -f FILE  sam file to output results to [stdout]\n");
+                fprintf(stderr, "         -t INT   number of threads [%d] (use <=0 for all)\n", num_sampe_threads);
+                fprintf(stderr, "         -T       use original read buffer size\n");
+                fprintf(stderr, "         -X       disable async read seq/aln method\n");
+                fprintf(stderr, "         -Y       disable async print results method\n");
+                fprintf(stderr, "\n");
 		return 1;
 	}
+
 	bwa_sai2sam_se_core(argv[optind], argv[optind+1], argv[optind+2], n_occ);
+
 	free(bwa_rg_line); free(bwa_rg_id);
+
 	return 0;
 }

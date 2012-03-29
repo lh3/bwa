@@ -1,11 +1,38 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include "main.h"
 #include "utils.h"
 
-#ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.6.1-r104"
+// -------------------
+
+#ifndef PACKAGE_VERS
+# define PACKAGE_VERS 0.6.1-r104-tpx
 #endif
+
+#define mkstr(s) #s
+#define mkxstr(s) mkstr(s)
+#define PACKAGE_VERSION mkxstr(PACKAGE_VERS)
+#ifndef BLDDATE
+# define BLDDATE unknown
+#endif
+#ifndef SVNURL
+# define SVNURL unknown
+#endif
+#ifndef SVNREV
+# define SVNREV unknown
+#endif
+char __attribute__((used)) svnid[] = mkxstr(@(#)$Id: bwa PACKAGE_VERS build-date: BLDDATE svn-url: SVNURL svn-rev: SVNREV $);
+
+time_t _prog_start = 1;
+char bwaversionstr[200] = { "" };
+char bwablddatestr[200] = { "" };
+
+// -------------------
 
 static int usage()
 {
@@ -29,6 +56,7 @@ static int usage()
 	fprintf(stderr, "         pac2cspac     convert PAC to color-space PAC\n");
 	fprintf(stderr, "         stdsw         standard SW/NW alignment\n");
 	fprintf(stderr, "\n");
+
 	return 1;
 }
 
@@ -41,8 +69,31 @@ int main(int argc, char *argv[])
 {
 	int i, ret;
 	double t_real;
+	struct timeval st;
+	int srtn = 0;
+	int64_t maxrsskb = 0L;
+
 	t_real = realtime();
+
 	if (argc < 2) return usage();
+
+	// ---------------
+
+        gettimeofday(&st, NULL);
+        _prog_start = st.tv_sec * 1000000L + (time_t)st.tv_usec;
+
+        sprintf(bwaversionstr,"%s-%s",mkxstr(PACKAGE_VERS),mkxstr(SVNREV));
+        sprintf(bwablddatestr,"%s",mkxstr(BLDDATE));
+
+        for(i=1;i<argc;i++){
+          if(strncmp(argv[i],"-ver",4) == 0){
+            fprintf(stdout,"BWA program (%s)\n", bwaversionstr);
+            return 0;
+          }
+        }
+
+	// ---------------
+
 	if (strcmp(argv[1], "fa2pac") == 0) ret = bwa_fa2pac(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwt") == 0) ret = bwa_pac2bwt(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwtgen") == 0) ret = bwt_bwtgen_main(argc-1, argv+1);
@@ -63,14 +114,28 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;
 	}
+
 	err_fflush(stdout);
 	err_fclose(stdout);
+
 	if (ret == 0) {
 		fprintf(stderr, "[%s] Version: %s\n", __func__, PACKAGE_VERSION);
 		fprintf(stderr, "[%s] CMD:", __func__);
 		for (i = 0; i < argc; ++i)
 			fprintf(stderr, " %s", argv[i]);
-		fprintf(stderr, "\n[%s] Real time: %.3f sec; CPU: %.3f sec\n", __func__, realtime() - t_real, cputime());
+
+		fprintf(stderr, "\n");
+
+		// ---------------
+
+		srtn = getmaxrss(&maxrsskb);
+		if(srtn == 0)
+			fprintf(stderr,"[%s] Mem RSS max: %ld mb\n",__func__, (long)maxrsskb / 1024L);
+
+		// ---------------
+
+		fprintf(stderr, "[%s] Real time: %.3f sec; CPU: %.3f sec\n", __func__, realtime() - t_real, cputime());
 	}
+
 	return 0;
 }

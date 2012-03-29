@@ -45,6 +45,51 @@ void bwt_gen_cnt_table(bwt_t *bwt)
 	}
 }
 
+// -------------------
+
+// inverse Psi function
+#define bwt_invPsi(bwt, k)                                                                                              \
+        (((k) == (bwt)->primary)? 0 :                                                                           \
+         ((k) < (bwt)->primary)?                                                                                        \
+         (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))            \
+         : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
+
+// -------------------
+
+static inline int __occ_aux(uint64_t y, int c)
+{
+	// reduce nucleotide counting to bits counting
+	y = ((c&2)? y : ~y) >> 1 & ((c&1)? y : ~y) & 0x5555555555555555ull;
+	// count the number of 1s in y
+	y = (y & 0x3333333333333333ull) + (y >> 2 & 0x3333333333333333ull);
+	return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
+}
+
+static inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
+{
+	bwtint_t n, l, j;
+	uint32_t *p;
+
+	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];
+	if (k == (bwtint_t)(-1)) return 0;
+	if (k >= bwt->primary) --k; // because $ is not in bwt
+
+	// retrieve Occ at k/OCC_INTERVAL
+	n = ((bwtint_t*)(p = bwt_occ_intv(bwt, k)))[c];
+	p += sizeof(bwtint_t); // jump to the start of the first BWT cell
+
+	// calculate Occ up to the last k/32
+	j = k >> 5 << 5;
+	for (l = k/OCC_INTERVAL*OCC_INTERVAL; l < j; l += 32, p += 2)
+		n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+
+	// calculate Occ
+	n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
+	if (c == 0) n -= ~k&31; // corrected for the masked bits
+
+	return n;
+}
+
 // bwt->bwt and bwt->occ must be precalculated
 void bwt_cal_sa(bwt_t *bwt, int intv)
 {
@@ -84,40 +129,6 @@ bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k)
 	/* without setting bwt->sa[0] = -1, the following line should be
 	   changed to (sa + bwt->sa[k/bwt->sa_intv]) % (bwt->seq_len + 1) */
 	return sa + bwt->sa[k/bwt->sa_intv];
-}
-
-static inline int __occ_aux(uint64_t y, int c)
-{
-	// reduce nucleotide counting to bits counting
-	y = ((c&2)? y : ~y) >> 1 & ((c&1)? y : ~y) & 0x5555555555555555ull;
-	// count the number of 1s in y
-	y = (y & 0x3333333333333333ull) + (y >> 2 & 0x3333333333333333ull);
-	return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
-}
-
-inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
-{
-	bwtint_t n, l, j;
-	uint32_t *p;
-
-	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];
-	if (k == (bwtint_t)(-1)) return 0;
-	if (k >= bwt->primary) --k; // because $ is not in bwt
-
-	// retrieve Occ at k/OCC_INTERVAL
-	n = ((bwtint_t*)(p = bwt_occ_intv(bwt, k)))[c];
-	p += sizeof(bwtint_t); // jump to the start of the first BWT cell
-
-	// calculate Occ up to the last k/32
-	j = k >> 5 << 5;
-	for (l = k/OCC_INTERVAL*OCC_INTERVAL; l < j; l += 32, p += 2)
-		n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
-
-	// calculate Occ
-	n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
-	if (c == 0) n -= ~k&31; // corrected for the masked bits
-
-	return n;
 }
 
 // an analogy to bwt_occ() but more efficient, requiring k <= l

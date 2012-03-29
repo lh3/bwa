@@ -74,12 +74,18 @@ typedef struct { size_t n, m; bwtintv_t *a; } bwtintv_v;
  * called bwt_B0 instead of bwt_B */
 #define bwt_B0(b, k) (bwt_bwt(b, k)>>((~(k)&0xf)<<1)&3)
 
+// -------------------
+
+#if 0
 // inverse Psi function
 #define bwt_invPsi(bwt, k)												\
 	(((k) == (bwt)->primary)? 0 :										\
 	 ((k) < (bwt)->primary)?											\
 	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
 	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
+#endif
+
+// -------------------
 
 #define bwt_set_intv(bwt, c, ik) ((ik).x[0] = (bwt)->L2[(int)(c)]+1, (ik).x[2] = (bwt)->L2[(int)(c)+1]-(bwt)->L2[(int)(c)], (ik).x[1] = (bwt)->L2[3-(c)]+1, (ik).info = 0)
 
@@ -100,7 +106,14 @@ extern "C" {
 
 	void bwt_bwtupdate_core(bwt_t *bwt);
 
+        // -------------------
+
+#if 0
 	inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c);
+#endif
+
+        // -------------------
+
 	inline void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4]);
 	bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k);
 

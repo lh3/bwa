@@ -1,4 +1,4 @@
-.TH bwa 1 "28 November 2011" "bwa-0.6.1" "Bioinformatics tools"
+.TH bwa 1 "9 March 2011" "bwa-0.6.1-tpx" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -79,7 +79,7 @@ genome.
 .TP
 .B aln
 bwa aln [-n maxDiff] [-o maxGapO] [-e maxGapE] [-d nDelTail] [-i
-nIndelEnd] [-k maxSeedDiff] [-l seedLen] [-t nThrds] [-cRN] [-M misMsc]
+nIndelEnd] [-k maxSeedDiff] [-l seedLen] [-t nThreads] [-cRNT] [-M misMsc]
 [-O gapOsc] [-E gapEsc] [-q trimQual] <in.db.fasta> <in.query.fq> >
 <out.sai>
 
@@ -149,6 +149,9 @@ Disable iterative search. All hits with no more than
 .I maxDiff
 differences will be found. This mode is much slower than the default.
 .TP
+.BI -T
+use original read buffer size
+.TP
 .BI -q \ INT
 Parameter for read trimming. BWA trims a read down to
 argmax_x{\\sum_{i=x+1}^l(INT-q_i)} if q_l<INT where l is the original
@@ -198,7 +201,8 @@ is specified, only use the second read in a read pair in mapping.
 
 .TP
 .B samse
-bwa samse [-n maxOcc] <in.db.fasta> <in.sai> <in.fq> > <out.sam>
+bwa samse [-n maxOcc] [-t nThreads] [-TXY] <in.db.fasta> 
+<in.sai> <in.fq> > <out.sam>
 
 Generate alignments in the SAM format given single-end reads. Repetitive
 hits will be randomly chosen.
@@ -213,12 +217,25 @@ written. [3]
 .TP
 .BI -r \ STR
 Specify the read group in a format like `@RG\\tID:foo\\tSM:bar'. [null]
+.TP
+.BI -t \ INT
+Number of threads (multi-threading mode) [1] (use <=0 for all)
+.TP
+.BI -T
+use original read buffer size
+.TP
+.BI -X
+disable async read seq/aln method
+.TP
+.BI -Y
+disable async print results method
 .RE
 
 .TP
 .B sampe
 bwa sampe [-a maxInsSize] [-o maxOcc] [-n maxHitPaired] [-N maxHitDis]
-[-P] <in.db.fasta> <in1.sai> <in2.sai> <in1.fq> <in2.fq> > <out.sam>
+[-P] [-t nThreads] [-TXY] <in.db.fasta> <in1.sai> <in2.sai> 
+<in1.fq> <in2.fq> > <out.sam>
 
 Generate alignments in the SAM format given paired-end reads. Repetitive
 read pairs will be placed randomly.
@@ -253,6 +270,18 @@ XA tag will not be written. [10]
 .TP
 .BI -r \ STR
 Specify the read group in a format like `@RG\\tID:foo\\tSM:bar'. [null]
+.TP
+.BI -t \ INT
+Number of threads (multi-threading mode) [1] (use <=0 for all)
+.TP
+.BI -T
+use original read buffer size
+.TP
+.BI -X
+disable async read seq/aln method
+.TP
+.BI -Y
+disable async print results method
 .RE
 
 .TP

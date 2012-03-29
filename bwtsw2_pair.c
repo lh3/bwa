@@ -12,6 +12,9 @@
 #include "stdaln.h"
 #endif
 
+#include "ksort.h"
+KSORT_INIT_GENERIC(uint64_t)
+
 #define MAX_INS       20000
 #define MIN_RATIO     0.8
 #define OUTLIER_BOUND 2.0
@@ -25,7 +28,6 @@ typedef struct {
 
 bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg)
 {
-	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 	int i, k, x, p25, p50, p75, tmp, max_len = 0;
 	uint64_t *isize;
 	bsw2pestat_t r;
@@ -44,7 +46,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg)
 		max_len = max_len > t[1]->end - t[1]->beg? max_len : t[1]->end - t[1]->beg;
 		isize[k++] = l;
 	}
-	ks_introsort_uint64_t(k, isize);
+	ks_introsort(uint64_t, k, isize);
 	p25 = isize[(int)(.25 * k + .499)];
 	p50 = isize[(int)(.50 * k + .499)];
 	p75 = isize[(int)(.75 * k + .499)];
