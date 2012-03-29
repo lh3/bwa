@@ -42,11 +42,11 @@ void bwa_pac_rev_core(const char *fn, const char *fn_rev);
 int bwa_index(int argc, char *argv[])
 {
 	char *prefix = 0, *str, *str2, *str3;
-	int c, algo_type = 0, is_color = 0;
+	int c, algo_type = 0, is_color = 0, is_64 = 0;
 	clock_t t;
 	int64_t l_pac;
 
-	while ((c = getopt(argc, argv, "ca:p:")) >= 0) {
+	while ((c = getopt(argc, argv, "6ca:p:")) >= 0) {
 		switch (c) {
 		case 'a': // if -a is not set, algo_type will be determined later
 			if (strcmp(optarg, "div") == 0) algo_type = 1;
@@ -56,15 +56,17 @@ int bwa_index(int argc, char *argv[])
 			break;
 		case 'p': prefix = strdup(optarg); break;
 		case 'c': is_color = 1; break;
+		case '6': is_64 = 1; break;
 		default: return 1;
 		}
 	}
 
 	if (optind + 1 > argc) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage:   bwa index [-a bwtsw|div|is] [-c] <in.fasta>\n\n");
-		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [is]\n");
+		fprintf(stderr, "Usage:   bwa index [-a bwtsw|is] [-c] <in.fasta>\n\n");
+		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [auto]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
+		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
 //		fprintf(stderr, "         -c        build color-space index\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
@@ -75,7 +77,7 @@ int bwa_index(int argc, char *argv[])
 	if (prefix == 0) {
 		prefix = malloc(strlen(argv[optind]) + 4);
 		strcpy(prefix, argv[optind]);
-		strcat(prefix, ".64");
+		if (is_64) strcat(prefix, ".64");
 	}
 	str  = (char*)calloc(strlen(prefix) + 10, 1);
 	str2 = (char*)calloc(strlen(prefix) + 10, 1);
