@@ -72,7 +72,11 @@ int bwa_index(int argc, char *argv[])
 		fprintf(stderr, "         according to the length of the genome.\n\n");
 		return 1;
 	}
-	if (prefix == 0) prefix = strdup(argv[optind]);
+	if (prefix == 0) {
+		prefix = malloc(strlen(argv[optind]) + 4);
+		strcpy(prefix, argv[optind]);
+		strcat(prefix, ".64");
+	}
 	str  = (char*)calloc(strlen(prefix) + 10, 1);
 	str2 = (char*)calloc(strlen(prefix) + 10, 1);
 	str3 = (char*)calloc(strlen(prefix) + 10, 1);

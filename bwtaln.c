@@ -219,10 +219,35 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	bwa_seq_close(ks);
 }
 
+char *bwa_infer_prefix(const char *hint)
+{
+	char *prefix;
+	int l_hint;
+	FILE *fp;
+	l_hint = strlen(hint);
+	prefix = malloc(l_hint + 3 + 4 + 1);
+	strcpy(prefix, hint);
+	strcpy(prefix + l_hint, ".bwt");
+	if ((fp = fopen(prefix, "rb")) != 0) {
+		prefix[l_hint] = 0;
+		return prefix;
+	} else {
+		strcpy(prefix + l_hint, ".64.bwt");
+		if ((fp = fopen(prefix, "rb")) == 0) {
+			free(prefix);
+			return 0;
+		} else {
+			prefix[l_hint + 3] = 0;
+			return prefix;
+		}
+	}
+}
+
 int bwa_aln(int argc, char *argv[])
 {
 	int c, opte = -1;
 	gap_opt_t *opt;
+	char *prefix;
 
 	opt = gap_init_opt();
 	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
@@ -303,8 +328,13 @@ int bwa_aln(int argc, char *argv[])
 			k = l;
 		}
 	}
-	bwa_aln_core(argv[optind], argv[optind+1], opt);
-	free(opt);
+	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
+		free(opt);
+		return 0;
+	}
+	bwa_aln_core(prefix, argv[optind+1], opt);
+	free(opt); free(prefix);
 	return 0;
 }
 

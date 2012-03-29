@@ -766,8 +766,11 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 {
 	extern char *bwa_rg_line, *bwa_rg_id;
 	extern int bwa_set_rg(const char *s);
+	extern char *bwa_infer_prefix(const char *hint);
 	int c;
 	pe_opt_t *popt;
+	char *prefix;
+
 	popt = bwa_init_pe_opt();
 	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
 		switch (c) {
@@ -809,8 +812,13 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "\n");
 		return 1;
 	}
-	bwa_sai2sam_pe_core(argv[optind], argv + optind + 1, argv + optind+3, popt);
-	free(bwa_rg_line); free(bwa_rg_id);
+	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
+		free(bwa_rg_line); free(bwa_rg_id);
+		return 0;
+	}
+	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt);
+	free(bwa_rg_line); free(bwa_rg_id); free(prefix);
 	free(popt);
 	return 0;
 }

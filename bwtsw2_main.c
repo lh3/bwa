@@ -9,9 +9,10 @@
 
 int bwa_bwtsw2(int argc, char *argv[])
 {
+	extern char *bwa_infer_prefix(const char *hint);
 	bsw2opt_t *opt;
 	bwt_t *target;
-	char buf[1024];
+	char buf[1024], *prefix;
 	bntseq_t *bns;
 	int c;
 
@@ -72,9 +73,13 @@ int bwa_bwtsw2(int argc, char *argv[])
 	opt->t *= opt->a;
 	opt->coef *= opt->a;
 
-	strcpy(buf, argv[optind]); target = bwt_restore_bwt(strcat(buf, ".bwt"));
-	strcpy(buf, argv[optind]); bwt_restore_sa(strcat(buf, ".sa"), target);
-	bns = bns_restore(argv[optind]);
+	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
+		return 0;
+	}
+	strcpy(buf, prefix); target = bwt_restore_bwt(strcat(buf, ".bwt"));
+	strcpy(buf, prefix); bwt_restore_sa(strcat(buf, ".sa"), target);
+	bns = bns_restore(prefix);
 
 	bsw2_aln(opt, bns, target, argv[optind+1], optind+2 < argc? argv[optind+2] : 0);
 

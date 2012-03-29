@@ -650,7 +650,9 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 int bwa_sai2sam_se(int argc, char *argv[])
 {
+	extern char *bwa_infer_prefix(const char *hint);
 	int c, n_occ = 3;
+	char *prefix;
 	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
 		switch (c) {
 		case 'h': break;
@@ -670,7 +672,12 @@ int bwa_sai2sam_se(int argc, char *argv[])
 		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
 		return 1;
 	}
-	bwa_sai2sam_se_core(argv[optind], argv[optind+1], argv[optind+2], n_occ);
+	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
+		free(bwa_rg_line); free(bwa_rg_id);
+		return 0;
+	}
+	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ);
 	free(bwa_rg_line); free(bwa_rg_id);
 	return 0;
 }
