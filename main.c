@@ -1,11 +1,40 @@
 #include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
 #include <string.h>
+#include <sys/time.h>
+#include <time.h>
 #include "main.h"
 #include "utils.h"
 
-#ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.5.9-r26-dev"
+#ifndef PACKAGE_VERS
+# define PACKAGE_VERS 0.5.10-tpx
 #endif
+
+// -------------------
+
+#define mkstr(s) #s
+#define mkxstr(s) mkstr(s)
+#define PACKAGE_VERSION mkxstr(PACKAGE_VERS)
+#ifndef BLDDATE
+# define BLDDATE unknown
+#endif
+#ifndef SVNURL
+# define SVNURL unknown
+#endif
+#ifndef SVNREV
+# define SVNREV unknown
+#endif
+char __attribute__((used)) svnid[] = mkxstr(@(#)$Id: bwa PACKAGE_VERS build-date: BLDDATE svn-url: SVNURL svn-rev: SVNREV $);
+
+time_t _prog_start = 1;
+char bwaversionstr[200] = { "" };
+char bwablddatestr[200] = { "" };
+
+extern int use_soap2_format;
+
+// -------------------
 
 static int usage()
 {
@@ -34,12 +63,37 @@ static int usage()
 
 void bwa_print_sam_PG()
 {
+	if(use_soap2_format){
+		return;
+	}
+
 	printf("@PG\tID:bwa\tPN:bwa\tVN:%s\n", PACKAGE_VERSION);
 }
 
 int main(int argc, char *argv[])
 {
+	struct timeval st;
+	int j;
+
 	if (argc < 2) return usage();
+
+	// -------------------
+
+        gettimeofday(&st, NULL);
+        _prog_start = st.tv_sec * 1000000L + (time_t)st.tv_usec;
+
+        sprintf(bwaversionstr,"%s-%s",mkxstr(PACKAGE_VERS),mkxstr(SVNREV));
+        sprintf(bwablddatestr,"%s",mkxstr(BLDDATE));
+
+        for(j=1;j<argc;j++){
+          if(strncmp(argv[j],"-ver",4) == 0){
+            fprintf(stdout,"BWA program (%s)\n", bwaversionstr);
+            return 0;
+          }
+        }
+
+	// -------------------
+
 	if (strcmp(argv[1], "fa2pac") == 0) return bwa_fa2pac(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwt") == 0) return bwa_pac2bwt(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwtgen") == 0) return bwt_bwtgen_main(argc-1, argv+1);
@@ -60,7 +114,5 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;
 	}
-        err_fflush(stdout);
-        err_fclose(stdout);
 	return 0;
 }

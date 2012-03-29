@@ -130,7 +130,7 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 	}
 	*n = n_seqs;
 	if (n_seqs && trim_qual >= 1)
-		fprintf(stderr, "[bwa_read_seq] %.1f%% bases are trimmed.\n", 100.0f * n_trimmed/n_tot);
+		fprintf(stderr, "[bwa_read_bam] %.1f%% bases are trimmed.\n", 100.0f * n_trimmed/n_tot);
 	if (n_seqs == 0) {
 		free(seqs);
 		bam_destroy1(b);

@@ -44,40 +44,6 @@ void bwt_gen_cnt_table(bwt_t *bwt)
 	}
 }
 
-// bwt->bwt and bwt->occ must be precalculated
-void bwt_cal_sa(bwt_t *bwt, int intv)
-{
-	bwtint_t isa, sa, i; // S(isa) = sa
-
-	xassert(bwt->bwt, "bwt_t::bwt is not initialized.");
-
-	if (bwt->sa) free(bwt->sa);
-	bwt->sa_intv = intv;
-	bwt->n_sa = (bwt->seq_len + intv) / intv;
-	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
-	// calculate SA value
-	isa = 0; sa = bwt->seq_len;
-	for (i = 0; i < bwt->seq_len; ++i) {
-		if (isa % intv == 0) bwt->sa[isa/intv] = sa;
-		--sa;
-		isa = bwt_invPsi(bwt, isa);
-	}
-	if (isa % intv == 0) bwt->sa[isa/intv] = sa;
-	bwt->sa[0] = (bwtint_t)-1; // before this line, bwt->sa[0] = bwt->seq_len
-}
-
-bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k)
-{
-	bwtint_t sa = 0;
-	while (k % bwt->sa_intv != 0) {
-		++sa;
-		k = bwt_invPsi(bwt, k);
-	}
-	/* without setting bwt->sa[0] = -1, the following line should be
-	   changed to (sa + bwt->sa[k/bwt->sa_intv]) % (bwt->seq_len + 1) */
-	return sa + bwt->sa[k/bwt->sa_intv];
-}
-
 static inline int __occ_aux(uint64_t y, int c)
 {
 	// reduce nucleotide counting to bits counting
@@ -87,7 +53,7 @@ static inline int __occ_aux(uint64_t y, int c)
 	return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
 }
 
-inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
+static inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 {
 	bwtint_t n, l, j;
 	uint32_t *p;
@@ -110,6 +76,47 @@ inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 	if (c == 0) n -= ~k&31; // corrected for the masked bits
 
 	return n;
+}
+
+// inverse Psi function
+#define bwt_invPsi(bwt, k)                                                                                              \
+        (((k) == (bwt)->primary)? 0 :                                                                           \
+         ((k) < (bwt)->primary)?                                                                                        \
+         (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))            \
+         : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
+
+bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k)
+{
+	bwtint_t sa = 0;
+	while (k % bwt->sa_intv != 0) {
+		++sa;
+		k = bwt_invPsi(bwt, k);
+	}
+	/* without setting bwt->sa[0] = -1, the following line should be
+	   changed to (sa + bwt->sa[k/bwt->sa_intv]) % (bwt->seq_len + 1) */
+	return sa + bwt->sa[k/bwt->sa_intv];
+}
+
+// bwt->bwt and bwt->occ must be precalculated
+void bwt_cal_sa(bwt_t *bwt, int intv)
+{
+	bwtint_t isa, sa, i; // S(isa) = sa
+
+	xassert(bwt->bwt, "bwt_t::bwt is not initialized.");
+
+	if (bwt->sa) free(bwt->sa);
+	bwt->sa_intv = intv;
+	bwt->n_sa = (bwt->seq_len + intv) / intv;
+	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
+	// calculate SA value
+	isa = 0; sa = bwt->seq_len;
+	for (i = 0; i < bwt->seq_len; ++i) {
+		if (isa % intv == 0) bwt->sa[isa/intv] = sa;
+		--sa;
+		isa = bwt_invPsi(bwt, isa);
+	}
+	if (isa % intv == 0) bwt->sa[isa/intv] = sa;
+	bwt->sa[0] = (bwtint_t)-1; // before this line, bwt->sa[0] = bwt->seq_len
 }
 
 // an analogy to bwt_occ() but more efficient, requiring k <= l

@@ -62,12 +62,14 @@ typedef struct {
 
 #define bwt_occ_intv(b, k) ((b)->bwt + (k)/OCC_INTERVAL*12)
 
+#if 0
 // inverse Psi function
 #define bwt_invPsi(bwt, k)												\
 	(((k) == (bwt)->primary)? 0 :										\
 	 ((k) < (bwt)->primary)?											\
 	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
 	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -86,7 +88,9 @@ extern "C" {
 
 	void bwt_bwtupdate_core(bwt_t *bwt);
 
+#if 0
 	inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c);
+#endif
 	inline void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4]);
 	bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k);
 

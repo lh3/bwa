@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/time.h>
 #include <time.h>
 #include <stdint.h>
 #ifdef HAVE_CONFIG_H
@@ -15,6 +16,11 @@
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
+
+extern char bwaversionstr[];
+extern char bwablddatestr[];
+
+extern int adj_n_needed;
 
 gap_opt_t *gap_init_opt()
 {
@@ -164,6 +170,25 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	bwa_seqio_t *ks;
 	clock_t t;
 	bwt_t *bwt[2];
+	int n_needed;
+	int max_threads = 1;
+
+#ifdef _SC_NPROCESSORS_ONLN
+	max_threads = sysconf(_SC_NPROCESSORS_ONLN);
+#else
+	max_threads = MAX_CPUS;
+#endif
+
+	fprintf(stderr, "[bwa_aln] version: %s (%s)\n",
+			bwaversionstr, bwablddatestr);
+	fprintf(stderr, "[bwa_aln] num threads: %d (max: %d)\n",
+			opt->n_threads, max_threads);
+
+	n_needed = 262144;
+	if(adj_n_needed)
+		n_needed = 1048576;
+
+	fprintf(stderr, "[bwa_aln] bsize: %dk\n", n_needed / 1024);
 
 	// initialization
 	ks = bwa_open_reads(opt->mode, fn_fa);
@@ -176,8 +201,8 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	}
 
 	// core loop
-	err_fwrite(opt, sizeof(gap_opt_t), 1, stdout);
-	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt->mode, opt->trim_qual)) != 0) {
+	fwrite(opt, sizeof(gap_opt_t), 1, stdout);
+	while ((seqs = bwa_read_seq(ks, n_needed, &n_seqs, opt->mode, opt->trim_qual)) != 0) {
 		tot_seqs += n_seqs;
 		t = clock();
 
@@ -210,12 +235,61 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		t = clock();
+#ifdef _REMOVE_SHADOW
+		fprintf(stderr, "[bwa_aln_core] write to the disk... \n");
+		for (i = 0; i < n_seqs; ++i) {
+			bwa_seq_t *p = seqs + i;
+
+			int k,l;
+			int nhits;
+			int do_add;
+			bwt_aln1_t ps[5000];
+
+			nhits = 0;
+			for(k=0; k < p->n_aln; k++){
+				do_add = 1;
+				for(l=0; l < p->n_aln; l++){
+					if(l != k){
+						if( ( (p->aln[k].k >= p->aln[l].k) &&
+						      (p->aln[k].k <= p->aln[l].l) ) &&
+						    ( (p->aln[k].l <= p->aln[l].l) &&
+						      (p->aln[k].l >= p->aln[l].k) ) ){
+							fprintf(stderr,"shadow hit: %d %d %d %d\n",
+								p->aln[k].k, p->aln[k].l, p->aln[l].k, p->aln[l].l);
+							do_add = 0;
+							break;
+						}
+					}
+				}
+				if(do_add){
+					if(nhits < 5000-1){
+						ps[nhits].n_mm = p->aln[k].n_mm;
+						ps[nhits].n_gapo = p->aln[k].n_gapo;
+						ps[nhits].n_gape = p->aln[k].n_gape;
+						ps[nhits].a = p->aln[k].a;
+						ps[nhits].k = p->aln[k].k;
+						ps[nhits].l = p->aln[k].l;
+						ps[nhits].score = p->aln[k].score;
+						nhits++;
+					}else{
+						fprintf(stderr,"Warning - hit limit exceeded\n");
+					}
+				}
+			}
+
+			fwrite(&nhits, 4, 1, stdout);
+			if(nhits > 0){
+				fwrite(ps, sizeof(bwt_aln1_t), nhits, stdout);
+			}
+		}
+#else // _REMOVE_SHADOW
 		fprintf(stderr, "[bwa_aln_core] write to the disk... ");
 		for (i = 0; i < n_seqs; ++i) {
 			bwa_seq_t *p = seqs + i;
-			err_fwrite(&p->n_aln, 4, 1, stdout);
-			if (p->n_aln) err_fwrite(p->aln, sizeof(bwt_aln1_t), p->n_aln, stdout);
+			fwrite(&p->n_aln, 4, 1, stdout);
+			if (p->n_aln) fwrite(p->aln, sizeof(bwt_aln1_t), p->n_aln, stdout);
 		}
+#endif // _REMOVE_SHADOW
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		bwa_free_read_seq(n_seqs, seqs);
@@ -231,9 +305,16 @@ int bwa_aln(int argc, char *argv[])
 {
 	int c, opte = -1;
 	gap_opt_t *opt;
+	struct timeval st;
+	uint64_t s1, e1;
+	double total_time = 0.0;
+
+	gettimeofday(&st, NULL);
+	s1 = st.tv_sec * 1000000L + (time_t)st.tv_usec;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
+
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYTB:")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -263,6 +344,7 @@ int bwa_aln(int argc, char *argv[])
 		case 'I': opt->mode |= BWA_MODE_IL13; break;
 		case 'Y': opt->mode |= BWA_MODE_CFY; break;
 		case 'B': opt->mode |= atoi(optarg) << 24; break;
+		case 'T': adj_n_needed = 0; break;
 		default: return 1;
 		}
 	}
@@ -289,7 +371,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -E INT    gap extension penalty [%d]\n", opt->s_gape);
 		fprintf(stderr, "         -R INT    stop searching when there are >INT equally best hits [%d]\n", opt->max_top2);
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
-        fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
+		fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
 		fprintf(stderr, "         -B INT    length of barcode\n");
 		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
@@ -300,6 +382,7 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -1        use the 1st read in a pair (effective with -b)\n");
 		fprintf(stderr, "         -2        use the 2nd read in a pair (effective with -b)\n");
 		fprintf(stderr, "         -Y        filter Casava-filtered sequences\n");
+		fprintf(stderr, "         -T        use original read buffer size\n");
 		fprintf(stderr, "\n");
 		return 1;
 	}
@@ -313,6 +396,21 @@ int bwa_aln(int argc, char *argv[])
 	}
 	bwa_aln_core(argv[optind], argv[optind+1], opt);
 	free(opt);
+
+	// cant use getrusage for ru.maxrss until kernel 2.6.36 ...
+	int srtn = 0;
+	long maxrsskb = 0L;
+	srtn = getmaxrss(&maxrsskb);
+	if(srtn == 0){
+		fprintf(stderr,"[bwa_aln] mem rss max = %ld (mb)\n",maxrsskb / 1024L);
+	}
+
+	gettimeofday(&st, NULL);
+	e1 = st.tv_sec * 1000000L + (time_t)st.tv_usec;
+	total_time = (double)((double)e1 - (double)s1) / 1000000.0;
+
+	fprintf(stderr,"[bwa_aln] total time = %lf (sec)\n",total_time);
+
 	return 0;
 }
 

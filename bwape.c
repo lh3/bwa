@@ -1,6 +1,7 @@
 #include <unistd.h>
 #include <math.h>
 #include <stdlib.h>
+#include <sys/time.h>
 #include <time.h>
 #include <stdio.h>
 #include <string.h>
@@ -9,16 +10,7 @@
 #include "bntseq.h"
 #include "utils.h"
 #include "stdaln.h"
-
-typedef struct {
-	int n;
-	bwtint_t *a;
-} poslist_t;
-
-typedef struct {
-	double avg, std, ap_prior;
-	bwtint_t low, high, high_bayesian;
-} isize_info_t;
+#include "bwatpx.h"
 
 #include "khash.h"
 KHASH_MAP_INIT_INT64(64, poslist_t)
@@ -26,26 +18,53 @@ KHASH_MAP_INIT_INT64(64, poslist_t)
 #include "ksort.h"
 KSORT_INIT_GENERIC(uint64_t)
 
-typedef struct {
-	kvec_t(uint64_t) arr;
-	kvec_t(uint64_t) pos[2];
-	kvec_t(bwt_aln1_t) aln[2];
-} pe_data_t;
-
 #define MIN_HASH_WIDTH 1000
 
-extern int g_log_n[256]; // in bwase.c
-static kh_64_t *g_hash;
+kh_64_t *g_hash[MAX_CPUS];
+
+uint64_t n_tot[2], n_mapped[2];
+
+extern int g_log_n[]; // in bwase.c
+
+extern char bwaversionstr[];
+extern char bwablddatestr[];
 
 void bwase_initialize();
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi);
 void bwa_aln2seq(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s);
 void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, bntseq_t *ntbns);
-int bwa_approx_mapQ(const bwa_seq_t *p, int mm);
+int  bwa_approx_mapQ(const bwa_seq_t *p, int mm);
 void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, int mode, int max_top2);
 bntseq_t *bwa_open_nt(const char *prefix);
 void bwa_print_sam_SQ(const bntseq_t *bns);
-void bwa_print_sam_PG();
+void bwa_print_sam_PG(void);
+extern void bwa_read_seq2_tpx(bwa_seqio_t *ks1, bwa_seqio_t *ks2, int n_needed, int *n,
+				int mode1, int mode2, int trim_qual1, int trim_qual2,
+				bwa_seq_t **seq1, bwa_seq_t **seq2, pe_data_t *d[MAX_CPUS], 
+				aln_buf_t **buf1, aln_buf_t **buf2, int nexti, FILE *fp_sa[2]);
+extern void bwa_read_seq2_wait_tpx(void);
+extern void bwa_se_tpx(int iidx, bwt_t *bwt[2], int n_seqs1, int n_seqs2, bwa_seq_t *seqs[2], const gap_opt_t *gopt);
+extern int  bwa_pe_tpx(int iidx, bwt_t *bwt[2], int n_seqs1, int n_seqs2, bwa_seq_t *seqs[2], isize_info_t *ii,
+			const pe_opt_t *opt, const gap_opt_t *gopt, pe_data_t *d[MAX_CPUS], aln_buf_t *buf[2]);
+extern void bwa_sw_tpx(int iidx, const bntseq_t *bns, const ubyte_t *pacseq, int n_seqs1, int n_seqs2, bwa_seq_t *seqs[2], 
+			const pe_opt_t *popt, const isize_info_t *ii);
+extern void bwa_print2_tpx(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs[2], const gap_opt_t opt);
+extern void bwa_print2_wait_tpx(void);
+
+int num_sampe_threads = 1;
+THR_BWA_SE_TPX thr_bwa_se_info[MAX_CPUS];
+THR_BWA_PE_TPX thr_bwa_pe_info[MAX_CPUS];
+THR_BWA_SW_TPX thr_bwa_sw_info[MAX_CPUS];
+
+int adj_n_needed = 1;
+int async_read_seq = 1;
+int async_print_res = 1;
+int use_soap2_format = 0;
+int soap2_qual_adj = 33;
+
+static clock_t read_aln_clocks = 0;
+
+// -------------------
 
 pe_opt_t *bwa_init_pe_opt()
 {
@@ -158,137 +177,96 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	return 0;
 }
 
-static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm, const isize_info_t *ii)
+// -------------------
+
+void thr_bwa_se_tpx(long idx)
 {
-	int i, j, o_n, subo_n, cnt_chg = 0, low_bound = ii->low, max_len;
-	uint64_t last_pos[2][2], o_pos[2], subo_score, o_score;
-	max_len = p[0]->full_len;
-	if (max_len < p[1]->full_len) max_len = p[1]->full_len;
-	if (low_bound < max_len) low_bound = max_len;
+  int iidx = (int)idx;
 
-	// here v>=u. When ii is set, we check insert size with ii; otherwise with opt->max_isize
-#define __pairing_aux(u,v) do {											\
-		bwtint_t l = ((v)>>32) + p[(v)&1]->len - ((u)>>32);				\
-		if ((u) != (uint64_t)-1 && (v)>>32 > (u)>>32 && l >= max_len	\
-			&& ((ii->high && l <= ii->high_bayesian) || (ii->high == 0 && l <= opt->max_isize))) \
-		{																\
-			uint64_t s = d->aln[(v)&1].a[(uint32_t)(v)>>1].score + d->aln[(u)&1].a[(uint32_t)(u)>>1].score; \
-			s *= 10;													\
-			if (ii->high) s += (int)(-4.343 * log(.5 * erfc(M_SQRT1_2 * fabs(l - ii->avg) / ii->std)) + .499); \
-			s = s<<32 | (uint32_t)hash_64((u)>>32<<32 | (v)>>32);		\
-			if (s>>32 == o_score>>32) ++o_n;							\
-			else if (s>>32 < o_score>>32) { subo_n += o_n; o_n = 1; }	\
-			else ++subo_n;												\
-			if (s < o_score) subo_score = o_score, o_score = s, o_pos[(u)&1] = (u), o_pos[(v)&1] = (v); \
-			else if (s < subo_score) subo_score = s;					\
-		}																\
-	} while (0)
+  bwa_se_tpx(iidx,
+             thr_bwa_se_info[iidx].bwt,
+             thr_bwa_se_info[iidx].start,
+             thr_bwa_se_info[iidx].end,
+             thr_bwa_se_info[iidx].seqs,
+             thr_bwa_se_info[iidx].gopt);
 
-#define __pairing_aux2(q, w) do {										\
-		const bwt_aln1_t *r = d->aln[(w)&1].a + ((uint32_t)(w)>>1);		\
-		(q)->extra_flag |= SAM_FPP;										\
-		if ((q)->pos != (w)>>32 || (q)->strand != r->a) {				\
-			(q)->n_mm = r->n_mm; (q)->n_gapo = r->n_gapo; (q)->n_gape = r->n_gape; (q)->strand = r->a; \
-			(q)->score = r->score;										\
-			(q)->pos = (w)>>32;											\
-			if ((q)->mapQ > 0) ++cnt_chg;								\
-		}																\
-	} while (0)
-
-	o_score = subo_score = (uint64_t)-1;
-	o_n = subo_n = 0;
-	ks_introsort(uint64_t, d->arr.n, d->arr.a);
-	for (j = 0; j < 2; ++j) last_pos[j][0] = last_pos[j][1] = (uint64_t)-1;
-	if (opt->type == BWA_PET_STD) {
-		for (i = 0; i < d->arr.n; ++i) {
-			uint64_t x = d->arr.a[i];
-			int strand = d->aln[x&1].a[(uint32_t)x>>1].a;
-			if (strand == 1) { // reverse strand, then check
-				int y = 1 - (x&1);
-				__pairing_aux(last_pos[y][1], x);
-				__pairing_aux(last_pos[y][0], x);
-			} else { // forward strand, then push
-				last_pos[x&1][0] = last_pos[x&1][1];
-				last_pos[x&1][1] = x;
-			}
-		}
-	} else if (opt->type == BWA_PET_SOLID) {
-		for (i = 0; i < d->arr.n; ++i) {
-			uint64_t x = d->arr.a[i];
-			int strand = d->aln[x&1].a[(uint32_t)x>>1].a;
-			if ((strand^x)&1) { // push
-				int y = 1 - (x&1);
-				__pairing_aux(last_pos[y][1], x);
-				__pairing_aux(last_pos[y][0], x);
-			} else { // check
-				last_pos[x&1][0] = last_pos[x&1][1];
-				last_pos[x&1][1] = x;
-			}
-		}
-	} else {
-		fprintf(stderr, "[paring] not implemented yet!\n");
-		exit(1);
-	}
-	// set pairing
-	//fprintf(stderr, "[%d, %d, %d, %d]\n", d->arr.n, (int)(o_score>>32), (int)(subo_score>>32), o_n);
-	if (o_score != (uint64_t)-1) {
-		int mapQ_p = 0; // this is the maximum mapping quality when one end is moved
-		int rr[2];
-		//fprintf(stderr, "%d, %d\n", o_n, subo_n);
-		if (o_n == 1) {
-			if (subo_score == (uint64_t)-1) mapQ_p = 29; // no sub-optimal pair
-			else if ((subo_score>>32) - (o_score>>32) > s_mm * 10) mapQ_p = 23; // poor sub-optimal pair
-			else {
-				int n = subo_n > 255? 255 : subo_n;
-				mapQ_p = ((subo_score>>32) - (o_score>>32)) / 2 - g_log_n[n];
-				if (mapQ_p < 0) mapQ_p = 0;
-			}
-		}
-		rr[0] = d->aln[o_pos[0]&1].a[(uint32_t)o_pos[0]>>1].a;
-		rr[1] = d->aln[o_pos[1]&1].a[(uint32_t)o_pos[1]>>1].a;
-		if ((p[0]->pos == o_pos[0]>>32 && p[0]->strand == rr[0]) && (p[1]->pos == o_pos[1]>>32 && p[1]->strand == rr[1])) { // both ends not moved
-			if (p[0]->mapQ > 0 && p[1]->mapQ > 0) {
-				int mapQ = p[0]->mapQ + p[1]->mapQ;
-				if (mapQ > 60) mapQ = 60;
-				p[0]->mapQ = p[1]->mapQ = mapQ;
-			} else {
-				if (p[0]->mapQ == 0) p[0]->mapQ = (mapQ_p + 7 < p[1]->mapQ)? mapQ_p + 7 : p[1]->mapQ;
-				if (p[1]->mapQ == 0) p[1]->mapQ = (mapQ_p + 7 < p[0]->mapQ)? mapQ_p + 7 : p[0]->mapQ;
-			}
-		} else if (p[0]->pos == o_pos[0]>>32 && p[0]->strand == rr[0]) { // [1] moved
-			p[1]->seQ = 0; p[1]->mapQ = p[0]->mapQ;
-			if (p[1]->mapQ > mapQ_p) p[1]->mapQ = mapQ_p;
-		} else if (p[1]->pos == o_pos[1]>>32 && p[1]->strand == rr[1]) { // [0] moved
-			p[0]->seQ = 0; p[0]->mapQ = p[1]->mapQ;
-			if (p[0]->mapQ > mapQ_p) p[0]->mapQ = mapQ_p;
-		} else { // both ends moved
-			p[0]->seQ = p[1]->seQ = 0;
-			mapQ_p -= 20;
-			if (mapQ_p < 0) mapQ_p = 0;
-			p[0]->mapQ = p[1]->mapQ = mapQ_p;
-		}
-		__pairing_aux2(p[0], o_pos[0]);
-		__pairing_aux2(p[1], o_pos[1]);
-	}
-	return cnt_chg;
+  return;
 }
 
-typedef struct {
-	kvec_t(bwt_aln1_t) aln;
-} aln_buf_t;
+// -------------------
+
+void thr_bwa_pe_tpx(long idx)
+{
+  int iidx = (int)idx;
+
+  thr_bwa_pe_info[iidx].cnt_chg = bwa_pe_tpx(iidx,
+                                             thr_bwa_pe_info[iidx].bwt,
+                                             thr_bwa_pe_info[iidx].start,
+                                             thr_bwa_pe_info[iidx].end,
+                                             thr_bwa_pe_info[iidx].seqs,
+                                             thr_bwa_pe_info[iidx].ii,
+                                             thr_bwa_pe_info[iidx].opt,
+                                             thr_bwa_pe_info[iidx].gopt,
+                                             thr_bwa_pe_info[iidx].d,
+                                             thr_bwa_pe_info[iidx].buf);
+
+  return;
+}
+
+// -------------------
 
 int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa_seq_t *seqs[2], FILE *fp_sa[2], isize_info_t *ii,
-					   const pe_opt_t *opt, const gap_opt_t *gopt, const isize_info_t *last_ii)
+			const pe_opt_t *opt, const gap_opt_t *gopt, const isize_info_t *last_ii, pe_data_t *d[MAX_CPUS], aln_buf_t *buf[2])
 {
 	int i, j, cnt_chg = 0;
 	char str[1024];
 	bwt_t *bwt[2];
-	pe_data_t *d;
-	aln_buf_t *buf[2];
+	// clock_t t;
+#ifdef HAVE_PTHREAD
+	int srtn = 0;
+	long delta = 0L;
+	pthread_t tid;
+#endif // HAVE_PTHREAD
 
-	d = (pe_data_t*)calloc(1, sizeof(pe_data_t));
-	buf[0] = (aln_buf_t*)calloc(n_seqs, sizeof(aln_buf_t));
-	buf[1] = (aln_buf_t*)calloc(n_seqs, sizeof(aln_buf_t));
+#if 0
+	// ---------------
+
+	fprintf(stderr, "[bwa_sai2sam_pe_core] read alignments... ");
+
+	t = clock();
+
+	// SE
+	for (i = 0; i < n_seqs; ++i) {
+		bwa_seq_t *p[2];
+		for (j = 0; j < 2; ++j) {
+			int n_aln;
+			p[j] = seqs[j] + i;
+			p[j]->n_multi = 0;
+			p[j]->extra_flag |= SAM_FPD | (j == 0? SAM_FR1 : SAM_FR2);
+
+			fread(&n_aln, 4, 1, fp_sa[j]);
+
+			if (n_aln > kv_max(d[0]->aln[j]))
+				kv_resize(bwt_aln1_t, d[0]->aln[j], n_aln);
+
+			d[0]->aln[j].n = n_aln;
+
+			fread(d[0]->aln[j].a, sizeof(bwt_aln1_t), n_aln, fp_sa[j]);
+
+			kv_copy(bwt_aln1_t, buf[j][i].aln, d[0]->aln[j]); // backup d[0]->aln[j]
+
+			// generate SE alignment and mapping quality
+			bwa_aln2seq(n_aln, d[0]->aln[j].a, p[j]);
+		}
+	}
+
+	read_aln_clocks = clock() - t;
+
+	fprintf(stderr, "%.2f sec\n", (float)(read_aln_clocks) / CLOCKS_PER_SEC); t = clock();
+#endif
+	// ---------------
+
+	fprintf(stderr, "[bwa_sai2sam_pe_core] convert to sequence coordinate... \n");
 
 	if (_bwt[0] == 0) { // load forward SA
 		strcpy(str, prefix); strcat(str, ".bwt");  bwt[0] = bwt_restore_bwt(str);
@@ -297,125 +275,158 @@ int bwa_cal_pac_pos_pe(const char *prefix, bwt_t *const _bwt[2], int n_seqs, bwa
 		strcpy(str, prefix); strcat(str, ".rsa"); bwt_restore_sa(str, bwt[1]);
 	} else bwt[0] = _bwt[0], bwt[1] = _bwt[1];
 
-	// SE
-	for (i = 0; i != n_seqs; ++i) {
-		bwa_seq_t *p[2];
-		for (j = 0; j < 2; ++j) {
-			int n_aln;
-			p[j] = seqs[j] + i;
-			p[j]->n_multi = 0;
-			p[j]->extra_flag |= SAM_FPD | (j == 0? SAM_FR1 : SAM_FR2);
-			fread(&n_aln, 4, 1, fp_sa[j]);
-			if (n_aln > kv_max(d->aln[j]))
-				kv_resize(bwt_aln1_t, d->aln[j], n_aln);
-			d->aln[j].n = n_aln;
-			fread(d->aln[j].a, sizeof(bwt_aln1_t), n_aln, fp_sa[j]);
-			kv_copy(bwt_aln1_t, buf[j][i].aln, d->aln[j]); // backup d->aln[j]
-			// generate SE alignment and mapping quality
-			bwa_aln2seq(n_aln, d->aln[j].a, p[j]);
-			if (p[j]->type == BWA_TYPE_UNIQUE || p[j]->type == BWA_TYPE_REPEAT) {
-				int max_diff = gopt->fnr > 0.0? bwa_cal_maxdiff(p[j]->len, BWA_AVG_ERR, gopt->fnr) : gopt->max_diff;
-				p[j]->pos = p[j]->strand? bwt_sa(bwt[0], p[j]->sa)
-					: bwt[1]->seq_len - (bwt_sa(bwt[1], p[j]->sa) + p[j]->len);
-				p[j]->seQ = p[j]->mapQ = bwa_approx_mapQ(p[j], max_diff);
-			}
-		}
+	// tpx
+
+        // -----------------
+
+#ifdef HAVE_PTHREAD
+        if(num_sampe_threads > 1){
+
+          delta = n_seqs / num_sampe_threads;
+       
+          for(i=0;i<num_sampe_threads;i++){
+            thr_bwa_se_info[i].end = delta * (i+1);
+            thr_bwa_se_info[i].bwt[0] = bwt[0];
+            thr_bwa_se_info[i].bwt[1] = bwt[1];
+            thr_bwa_se_info[i].seqs[0] = seqs[0];
+            thr_bwa_se_info[i].seqs[1] = seqs[1];
+            thr_bwa_se_info[i].gopt = gopt;
+          }
+       
+          thr_bwa_se_info[num_sampe_threads-1].end = n_seqs;
+       
+          thr_bwa_se_info[0].start = 0;
+       
+          for(i=1;i<num_sampe_threads;i++){
+            thr_bwa_se_info[i].start = thr_bwa_se_info[i-1].end;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            srtn = pthread_create(&tid,NULL,(void *(*)(void *))thr_bwa_se_tpx,(void *)(long)i);
+            if(srtn != 0){
+              fprintf(stderr,"[%s] pthread_create thr_bwa_se_tpx error %d\n", __func__, srtn);
+              exit(1);
+            }
+            thr_bwa_se_info[i].tid = tid;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            pthread_join(thr_bwa_se_info[i].tid,NULL);
+          }
+
+        }else{
+
+	  bwa_se_tpx(0, bwt, 0, n_seqs, seqs, gopt);
+
 	}
+#else // HAVE_PTHREAD
+	bwa_se_tpx(0, bwt, 0, n_seqs, seqs, gopt);
+#endif // HAVE_PTHREAD
+
+        // -----------------
+
+	// tpx
 
 	// infer isize
 	infer_isize(n_seqs, seqs, ii, opt->ap_prior, bwt[0]->seq_len);
+
 	if (ii->avg < 0.0 && last_ii->avg > 0.0) *ii = *last_ii;
+
 	if (opt->force_isize) {
 		fprintf(stderr, "[%s] discard insert size estimate as user's request.\n", __func__);
 		ii->low = ii->high = 0; ii->avg = ii->std = -1.0;
 	}
 
-	// PE
-	for (i = 0; i != n_seqs; ++i) {
-		bwa_seq_t *p[2];
-		for (j = 0; j < 2; ++j) {
-			p[j] = seqs[j] + i;
-			kv_copy(bwt_aln1_t, d->aln[j], buf[j][i].aln);
-		}
-		if ((p[0]->type == BWA_TYPE_UNIQUE || p[0]->type == BWA_TYPE_REPEAT)
-			&& (p[1]->type == BWA_TYPE_UNIQUE || p[1]->type == BWA_TYPE_REPEAT))
-		{ // only when both ends mapped
-			uint64_t x;
-			int j, k;
-			long long n_occ[2];
-			for (j = 0; j < 2; ++j) {
-				n_occ[j] = 0;
-				for (k = 0; k < d->aln[j].n; ++k)
-					n_occ[j] += d->aln[j].a[k].l - d->aln[j].a[k].k + 1;
-			}
-			if (n_occ[0] > opt->max_occ || n_occ[1] > opt->max_occ) continue;
-			d->arr.n = 0;
-			for (j = 0; j < 2; ++j) {
-				for (k = 0; k < d->aln[j].n; ++k) {
-					bwt_aln1_t *r = d->aln[j].a + k;
-					bwtint_t l;
-					if (r->l - r->k + 1 >= MIN_HASH_WIDTH) { // then check hash table
-						uint64_t key = (uint64_t)r->k<<32 | r->l;
-						int ret;
-						khint_t iter = kh_put(64, g_hash, key, &ret);
-						if (ret) { // not in the hash table; ret must equal 1 as we never remove elements
-							poslist_t *z = &kh_val(g_hash, iter);
-							z->n = r->l - r->k + 1;
-							z->a = (bwtint_t*)malloc(sizeof(bwtint_t) * z->n);
-							for (l = r->k; l <= r->l; ++l)
-								z->a[l - r->k] = r->a? bwt_sa(bwt[0], l) : bwt[1]->seq_len - (bwt_sa(bwt[1], l) + p[j]->len);
-						}
-						for (l = 0; l < kh_val(g_hash, iter).n; ++l) {
-							x = kh_val(g_hash, iter).a[l];
-							x = x<<32 | k<<1 | j;
-							kv_push(uint64_t, d->arr, x);
-						}
-					} else { // then calculate on the fly
-						for (l = r->k; l <= r->l; ++l) {
-							x = r->a? bwt_sa(bwt[0], l) : bwt[1]->seq_len - (bwt_sa(bwt[1], l) + p[j]->len);
-							x = x<<32 | k<<1 | j;
-							kv_push(uint64_t, d->arr, x);
-						}
-					}
-				}
-			}
-			cnt_chg += pairing(p, d, opt, gopt->s_mm, ii);
-		}
+	// tpx
 
-		if (opt->N_multi || opt->n_multi) {
-			for (j = 0; j < 2; ++j) {
-				if (p[j]->type != BWA_TYPE_NO_MATCH) {
-					int k;
-					if (!(p[j]->extra_flag&SAM_FPP) && p[1-j]->type != BWA_TYPE_NO_MATCH) {
-						bwa_aln2seq_core(d->aln[j].n, d->aln[j].a, p[j], 0, p[j]->c1+p[j]->c2-1 > opt->N_multi? opt->n_multi : opt->N_multi);
-					} else bwa_aln2seq_core(d->aln[j].n, d->aln[j].a, p[j], 0, opt->n_multi);
-					for (k = 0; k < p[j]->n_multi; ++k) {
-						bwt_multi1_t *q = p[j]->multi + k;
-						q->pos = q->strand? bwt_sa(bwt[0], q->pos) : bwt[1]->seq_len - (bwt_sa(bwt[1], q->pos) + p[j]->len);
-					}
-				}
-			}
-		}
-	}
+        // -----------------
+
+	// PE
+#ifdef HAVE_PTHREAD
+        if(num_sampe_threads > 1){
+
+	  for(i=1; i<num_sampe_threads; i++){
+            for(j=0; j<2; j++){
+              d[i]->aln[j].n = d[0]->aln[j].n;
+              kv_copy(bwt_aln1_t, d[i]->aln[j], d[0]->aln[j]);
+            }
+	  }
+
+          delta = n_seqs / num_sampe_threads;
+       
+          for(i=0;i<num_sampe_threads;i++){
+            thr_bwa_pe_info[i].end = delta * (i+1);
+            thr_bwa_pe_info[i].cnt_chg = 0;
+            thr_bwa_pe_info[i].bwt[0] = bwt[0];
+            thr_bwa_pe_info[i].bwt[1] = bwt[1];
+            thr_bwa_pe_info[i].seqs[0] = seqs[0];
+            thr_bwa_pe_info[i].seqs[1] = seqs[1];
+            thr_bwa_pe_info[i].ii = ii;
+            thr_bwa_pe_info[i].opt = opt;
+            thr_bwa_pe_info[i].gopt = gopt;
+            for(j=0;j<num_sampe_threads;j++){
+              thr_bwa_pe_info[i].d[j] = d[j];
+            }
+            thr_bwa_pe_info[i].buf[0] = buf[0];
+            thr_bwa_pe_info[i].buf[1] = buf[1];
+          }
+       
+          thr_bwa_pe_info[num_sampe_threads-1].end = n_seqs;
+       
+          thr_bwa_pe_info[0].start = 0;
+       
+          for(i=1;i<num_sampe_threads;i++){
+            thr_bwa_pe_info[i].start = thr_bwa_pe_info[i-1].end;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            srtn = pthread_create(&tid,NULL,(void *(*)(void *))thr_bwa_pe_tpx,(void *)(long)i);
+            if(srtn != 0){
+              fprintf(stderr,"[%s] pthread_create thr_bwa_pe_tpx error %d\n", __func__, srtn);
+              exit(1);
+            }
+            thr_bwa_pe_info[i].tid = tid;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            pthread_join(thr_bwa_pe_info[i].tid,NULL);
+            cnt_chg += thr_bwa_pe_info[i].cnt_chg;
+          }
+
+        }else{
+
+	  cnt_chg = bwa_pe_tpx(0, bwt, 0, n_seqs, seqs, ii, opt, gopt, d, buf);
+
+        }
+#else // HAVE_PTHREAD
+	cnt_chg = bwa_pe_tpx(0, bwt, 0, n_seqs, seqs, ii, opt, gopt, d, buf);
+#endif // HAVE_PTHREAD
+
+        // -----------------
+
+	// tpx
 
 	// free
 	for (i = 0; i < n_seqs; ++i) {
 		kv_destroy(buf[0][i].aln);
 		kv_destroy(buf[1][i].aln);
 	}
-	free(buf[0]); free(buf[1]);
+
 	if (_bwt[0] == 0) {
 		bwt_destroy(bwt[0]); bwt_destroy(bwt[1]);
 	}
-	kv_destroy(d->arr);
-	kv_destroy(d->pos[0]); kv_destroy(d->pos[1]);
-	kv_destroy(d->aln[0]); kv_destroy(d->aln[1]);
-	free(d);
+
+        for(i=0;i<num_sampe_threads;i++){
+		kv_destroy(d[i]->arr);
+		kv_destroy(d[i]->pos[0]); kv_destroy(d[i]->pos[1]);
+		kv_destroy(d[i]->aln[0]); kv_destroy(d[i]->aln[1]);
+	}
+
 	return cnt_chg;
 }
 
-#define SW_MIN_MATCH_LEN 20
-#define SW_MIN_MAPQ 17
+// tpx #define SW_MIN_MATCH_LEN 20
+// tpx #define SW_MIN_MAPQ 17
 
 // cnt = n_mm<<16 | n_gapo<<8 | n_gape
 bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const ubyte_t *seq, int64_t *beg, int reglen,
@@ -504,11 +515,37 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	return cigar;
 }
 
-ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, bwa_seq_t *seqs[2], const pe_opt_t *popt, const isize_info_t *ii)
+// -------------------
+
+void thr_bwa_sw_tpx(long idx)
+{
+  int iidx = (int)idx;
+
+  bwa_sw_tpx(iidx,
+             thr_bwa_sw_info[iidx].bns,
+             thr_bwa_sw_info[iidx].pacseq,
+             thr_bwa_sw_info[iidx].start,
+             thr_bwa_sw_info[iidx].end,
+             thr_bwa_sw_info[iidx].seqs,
+             thr_bwa_sw_info[iidx].popt,
+             thr_bwa_sw_info[iidx].ii);
+
+  return;
+}
+
+// -------------------
+
+ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, bwa_seq_t *seqs[2], 
+                       const pe_opt_t *popt, const isize_info_t *ii)
 {
 	ubyte_t *pacseq;
-	int i;
-	uint64_t n_tot[2], n_mapped[2];
+	// tpx int i;
+#ifdef HAVE_PTHREAD
+	int i = 0;
+	int srtn = 0;
+	long delta = 0L;
+	pthread_t tid;
+#endif // HAVE_PTHREAD
 
 	// load reference sequence
 	if (_pacseq == 0) {
@@ -520,122 +557,60 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 
 	// perform mate alignment
 	n_tot[0] = n_tot[1] = n_mapped[0] = n_mapped[1] = 0;
-	for (i = 0; i != n_seqs; ++i) {
-		bwa_seq_t *p[2];
-		p[0] = seqs[0] + i; p[1] = seqs[1] + i;
-		if ((p[0]->mapQ >= SW_MIN_MAPQ || p[1]->mapQ >= SW_MIN_MAPQ) && (p[0]->extra_flag&SAM_FPP) == 0) { // unpaired and one read has high mapQ
-			int k, n_cigar[2], is_singleton, mapQ = 0, mq_adjust[2];
-			int64_t beg[2], end[2];
-			bwa_cigar_t *cigar[2];
-			uint32_t cnt[2];
 
-			/* In the following, _pref points to the reference read
-			 * which must be aligned; _pmate points to its mate which is
-			 * considered to be modified. */
+	// tpx
 
-#define __set_rght_coor(_a, _b, _pref, _pmate) do {						\
-				(_a) = (int64_t)_pref->pos + ii->avg - 3 * ii->std - _pmate->len * 1.5; \
-				(_b) = (_a) + 6 * ii->std + 2 * _pmate->len;			\
-				if ((_a) < (int64_t)_pref->pos + _pref->len) (_a) = _pref->pos + _pref->len; \
-				if ((_b) > bns->l_pac) (_b) = bns->l_pac;				\
-			} while (0)
+        // -----------------
 
-#define __set_left_coor(_a, _b, _pref, _pmate) do {						\
-				(_a) = (int64_t)_pref->pos + _pref->len - ii->avg - 3 * ii->std - _pmate->len * 0.5; \
-				(_b) = (_a) + 6 * ii->std + 2 * _pmate->len;			\
-				if ((_a) < 0) (_a) = 0;									\
-				if ((_b) > _pref->pos) (_b) = _pref->pos;				\
-			} while (0)
-			
-#define __set_fixed(_pref, _pmate, _beg, _cnt) do {						\
-				_pmate->type = BWA_TYPE_MATESW;							\
-				_pmate->pos = _beg;										\
-				_pmate->seQ = _pref->seQ;								\
-				_pmate->strand = (popt->type == BWA_PET_STD)? 1 - _pref->strand : _pref->strand; \
-				_pmate->n_mm = _cnt>>16; _pmate->n_gapo = _cnt>>8&0xff; _pmate->n_gape = _cnt&0xff; \
-				_pmate->extra_flag |= SAM_FPP;							\
-				_pref->extra_flag |= SAM_FPP;							\
-			} while (0)
+#ifdef HAVE_PTHREAD
+        if(num_sampe_threads > 1){
 
-			mq_adjust[0] = mq_adjust[1] = 255; // not effective
-			is_singleton = (p[0]->type == BWA_TYPE_NO_MATCH || p[1]->type == BWA_TYPE_NO_MATCH)? 1 : 0;
+          delta = n_seqs / num_sampe_threads;
+       
+          for(i=0;i<num_sampe_threads;i++){
+            thr_bwa_sw_info[i].end = delta * (i+1);
+            thr_bwa_sw_info[i].bns = bns;
+            thr_bwa_sw_info[i].pacseq = pacseq;
+            thr_bwa_sw_info[i].seqs[0] = seqs[0];
+            thr_bwa_sw_info[i].seqs[1] = seqs[1];
+            thr_bwa_sw_info[i].popt = popt;
+            thr_bwa_sw_info[i].ii = ii;
+          }
+       
+          thr_bwa_sw_info[num_sampe_threads-1].end = n_seqs;
+       
+          thr_bwa_sw_info[0].start = 0;
+       
+          for(i=1;i<num_sampe_threads;i++){
+            thr_bwa_sw_info[i].start = thr_bwa_sw_info[i-1].end;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            srtn = pthread_create(&tid,NULL,(void *(*)(void *))thr_bwa_sw_tpx,(void *)(long)i);
+            if(srtn != 0){
+              fprintf(stderr,"[%s] pthread_create thr_bwa_sw_tpx error %d\n", __func__, srtn);
+              exit(1);
+            }
+            thr_bwa_sw_info[i].tid = tid;
+          }
+       
+          for(i=0;i<num_sampe_threads;i++){
+            pthread_join(thr_bwa_sw_info[i].tid,NULL);
+          }
 
-			++n_tot[is_singleton];
-			cigar[0] = cigar[1] = 0;
-			n_cigar[0] = n_cigar[1] = 0;
-			if (popt->type != BWA_PET_STD && popt->type != BWA_PET_SOLID) continue; // other types of pairing is not considered
-			for (k = 0; k < 2; ++k) { // p[1-k] is the reference read and p[k] is the read considered to be modified
-				ubyte_t *seq;
-				if (p[1-k]->type == BWA_TYPE_NO_MATCH) continue; // if p[1-k] is unmapped, skip
-				if (popt->type == BWA_PET_STD) {
-					if (p[1-k]->strand == 0) { // then the mate is on the reverse strand and has larger coordinate
-						__set_rght_coor(beg[k], end[k], p[1-k], p[k]);
-						seq = p[k]->rseq;
-					} else { // then the mate is on forward stand and has smaller coordinate
-						__set_left_coor(beg[k], end[k], p[1-k], p[k]);
-						seq = p[k]->seq;
-						seq_reverse(p[k]->len, seq, 0); // because ->seq is reversed; this will reversed back shortly
-					}
-				} else { // BWA_PET_SOLID
-					if (p[1-k]->strand == 0) { // R3-F3 pairing
-						if (k == 0) __set_left_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is R3
-						else __set_rght_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is F3
-						seq = p[k]->rseq;
-						seq_reverse(p[k]->len, seq, 0); // because ->seq is reversed
-					} else { // F3-R3 pairing
-						if (k == 0) __set_rght_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is R3
-						else __set_left_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is F3
-						seq = p[k]->seq;
-					}
-				}
-				// perform SW alignment
-				cigar[k] = bwa_sw_core(bns->l_pac, pacseq, p[k]->len, seq, &beg[k], end[k] - beg[k], &n_cigar[k], &cnt[k]);
-				if (cigar[k] && p[k]->type != BWA_TYPE_NO_MATCH) { // re-evaluate cigar[k]
-					int s_old, clip = 0, s_new;
-					if (__cigar_op(cigar[k][0]) == 3) clip += __cigar_len(cigar[k][0]);
-					if (__cigar_op(cigar[k][n_cigar[k]-1]) == 3) clip += __cigar_len(cigar[k][n_cigar[k]-1]);
-					s_old = (int)((p[k]->n_mm * 9 + p[k]->n_gapo * 13 + p[k]->n_gape * 2) / 3. * 8. + .499);
-					s_new = (int)(((cnt[k]>>16) * 9 + (cnt[k]>>8&0xff) * 13 + (cnt[k]&0xff) * 2 + clip * 3) / 3. * 8. + .499);
-					s_old += -4.343 * log(ii->ap_prior / bns->l_pac);
-					s_new += (int)(-4.343 * log(.5 * erfc(M_SQRT1_2 * 1.5) + .499)); // assume the mapped isize is 1.5\sigma
-					if (s_old < s_new) { // reject SW alignment
-						mq_adjust[k] = s_new - s_old;
-						free(cigar[k]); cigar[k] = 0; n_cigar[k] = 0;
-					} else mq_adjust[k] = s_old - s_new;
-				}
-				// now revserse sequence back such that p[*]->seq looks untouched
-				if (popt->type == BWA_PET_STD) {
-					if (p[1-k]->strand == 1) seq_reverse(p[k]->len, seq, 0);
-				} else {
-					if (p[1-k]->strand == 0) seq_reverse(p[k]->len, seq, 0);
-				}
-			}
-			k = -1; // no read to be changed
-			if (cigar[0] && cigar[1]) {
-				k = p[0]->mapQ < p[1]->mapQ? 0 : 1; // p[k] to be fixed
-				mapQ = abs(p[1]->mapQ - p[0]->mapQ);
-			} else if (cigar[0]) k = 0, mapQ = p[1]->mapQ;
-			else if (cigar[1]) k = 1, mapQ = p[0]->mapQ;
-			if (k >= 0 && p[k]->pos != beg[k]) {
-				++n_mapped[is_singleton];
-				{ // recalculate mapping quality
-					int tmp = (int)p[1-k]->mapQ - p[k]->mapQ/2 - 8;
-					if (tmp <= 0) tmp = 1;
-					if (mapQ > tmp) mapQ = tmp;
-					p[k]->mapQ = p[1-k]->mapQ = mapQ;
-					p[k]->seQ = p[1-k]->seQ = p[1-k]->seQ < mapQ? p[1-k]->seQ : mapQ;
-					if (p[k]->mapQ > mq_adjust[k]) p[k]->mapQ = mq_adjust[k];
-					if (p[k]->seQ > mq_adjust[k]) p[k]->seQ = mq_adjust[k];
-				}
-				// update CIGAR
-				free(p[k]->cigar); p[k]->cigar = cigar[k]; cigar[k] = 0;
-				p[k]->n_cigar = n_cigar[k];
-				// update the rest of information
-				__set_fixed(p[1-k], p[k], beg[k], cnt[k]);
-			}
-			free(cigar[0]); free(cigar[1]);
-		}
-	}
+        }else{
+
+          bwa_sw_tpx(0, bns, pacseq, 0, n_seqs, seqs, popt, ii);
+
+        }
+#else // HAVE_PTHREAD
+        bwa_sw_tpx(0, bns, pacseq, 0, n_seqs, seqs, popt, ii);
+#endif // HAVE_PTHREAD
+
+        // -----------------
+
+	// tpx
+
 	fprintf(stderr, "[bwa_paired_sw] %lld out of %lld Q%d singletons are mated.\n",
 			(long long)n_mapped[1], (long long)n_tot[1], SW_MIN_MAPQ);
 	fprintf(stderr, "[bwa_paired_sw] %lld out of %lld Q%d discordant pairs are fixed.\n",
@@ -645,19 +620,56 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 
 void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt)
 {
-	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, j, n_seqs, tot_seqs = 0;
-	bwa_seq_t *seqs[2];
+	int i, j, n_seqs[3], tot_seqs = 0;
+	bwa_seq_t *seqs[3][2];
 	bwa_seqio_t *ks[2];
 	clock_t t;
+	clock_t t2;
 	bntseq_t *bns, *ntbns = 0;
 	FILE *fp_sa[2];
 	gap_opt_t opt, opt0;
-	khint_t iter;
 	isize_info_t last_ii; // this is for the last batch of reads
 	char str[1024];
 	bwt_t *bwt[2];
 	uint8_t *pac;
+	int n_needed;
+	int nexti1;
+	int nexti2;
+	int seqsd[3];
+	int max_threads = 1;
+	clock_t tio;
+	int first = 1;
+	pe_data_t *d[3][MAX_CPUS];
+	aln_buf_t *alnbuf[3][2];
+
+	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
+      
+#ifdef _SC_NPROCESSORS_ONLN
+	max_threads = sysconf(_SC_NPROCESSORS_ONLN);
+#else
+	max_threads = MAX_CPUS;
+#endif
+ 
+	if(max_threads > MAX_CPUS)
+		max_threads = MAX_CPUS;
+       
+	if(max_threads < 1)
+		max_threads = 1;
+       
+	if(num_sampe_threads > max_threads)
+		num_sampe_threads = max_threads;
+
+	if(num_sampe_threads < 1)
+		num_sampe_threads = max_threads;
+
+	n_needed = 262144;
+	if(adj_n_needed)
+		n_needed = 1048576;
+
+	fprintf(stderr, "[bwa_sai2sam_pe_core] version: %s (%s)\n",
+			bwaversionstr, bwablddatestr);
+	fprintf(stderr, "[bwa_sai2sam_pe_core] num threads: %d (max: %d)\n", 
+			num_sampe_threads, max_threads);
 
 	// initialization
 	bwase_initialize(); // initialize g_log_n[] in bwase.c
@@ -667,7 +679,11 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	srand48(bns->seed);
 	fp_sa[0] = xopen(fn_sa[0], "r");
 	fp_sa[1] = xopen(fn_sa[1], "r");
-	g_hash = kh_init(64);
+#ifndef _USE_LOCAL_GHASH
+	for(i=0; i<num_sampe_threads; i++){
+		g_hash[i] = kh_init(64);
+	}
+#endif // ! _USE_LOCAL_GHASH
 	last_ii.avg = -1.0;
 
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
@@ -690,51 +706,183 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 		}
 	}
 
+	if( (opt0.mode & BWA_MODE_IL13) && (opt.mode & BWA_MODE_IL13) ){
+		// fprintf(stderr,"[bwa_sai2sam_pe_core] aln files in Illumina 1.3+ format\n");
+		soap2_qual_adj = 64;
+	}
+
 	// core loop
 	bwa_print_sam_SQ(bns);
 	bwa_print_sam_PG();
-	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt0.mode, opt0.trim_qual)) != 0) {
+
+	first = 1;
+	seqsd[0] = 0;
+	seqsd[1] = 0;
+	seqsd[2] = 0;
+	nexti1 = 0;
+	nexti2 = 0;
+	n_seqs[0] = 0;
+	n_seqs[1] = 0;
+	n_seqs[2] = 0;
+	seqs[0][0] = NULL;
+	seqs[0][1] = NULL;
+	seqs[1][0] = NULL;
+	seqs[1][1] = NULL;
+	seqs[2][0] = NULL;
+	seqs[2][1] = NULL;
+	alnbuf[0][0] = NULL;
+	alnbuf[0][1] = NULL;
+	alnbuf[1][0] = NULL;
+	alnbuf[1][1] = NULL;
+	alnbuf[2][0] = NULL;
+	alnbuf[2][1] = NULL;
+
+	for(i=0; i<num_sampe_threads; i++){
+		d[0][i] = (pe_data_t*)calloc(1, sizeof(pe_data_t));
+		d[1][i] = (pe_data_t*)calloc(1, sizeof(pe_data_t));
+		d[2][i] = (pe_data_t*)calloc(1, sizeof(pe_data_t));
+	}
+
+	t = tio = clock();
+
+	bwa_read_seq2_tpx(ks[0], ks[1], n_needed, &n_seqs[nexti1], opt0.mode, opt.mode, 
+				opt0.trim_qual, opt.trim_qual, &seqs[nexti1][0], &seqs[nexti1][1], 
+				d[nexti1], &alnbuf[nexti1][0], &alnbuf[nexti1][1], nexti1, fp_sa);
+
+        while(1){
+
 		int cnt_chg;
 		isize_info_t ii;
 		ubyte_t *pacseq;
 
-		seqs[1] = bwa_read_seq(ks[1], 0x40000, &n_seqs, opt.mode, opt.trim_qual);
-		tot_seqs += n_seqs;
+                // ---------------
+
+		if( ( (async_read_seq) && (num_sampe_threads > 1) ) || (!first) ){
+			tio = clock();
+		}
+
+		bwa_read_seq2_wait_tpx();
+
+		if(seqs[nexti1][0] == NULL){
+			break;
+		}
+
+		tot_seqs += n_seqs[nexti1];
+
+		seqsd[nexti1] = 1;
+
+		nexti2 = nexti1 + 1;
+		if(nexti2 > 2){
+			nexti2 = 0;
+		}
+
+		bwa_read_seq2_tpx(ks[0], ks[1], n_needed, &n_seqs[nexti2], opt0.mode, opt.mode, 
+					opt0.trim_qual, opt.trim_qual, &seqs[nexti2][0], &seqs[nexti2][1], 
+					d[nexti2], &alnbuf[nexti2][0], &alnbuf[nexti2][1], nexti2, fp_sa);
+
+		fprintf(stderr, "[bwa_sai2sam_pe_core] bwa_read_seq2... %.2f sec", (float)(clock() - tio) / CLOCKS_PER_SEC);
+		if( (async_read_seq) && (num_sampe_threads > 1) && (!first) ){
+			fprintf(stderr," (async, bsize=%dk)\n", n_needed / 1024);
+		}else{
+			fprintf(stderr," (bsize=%dk)\n", n_needed / 1024);
+		}
+
+		first = 0;
+
+                // ---------------
+
 		t = clock();
 
-		fprintf(stderr, "[bwa_sai2sam_pe_core] convert to sequence coordinate... \n");
-		cnt_chg = bwa_cal_pac_pos_pe(prefix, bwt, n_seqs, seqs, fp_sa, &ii, popt, &opt, &last_ii);
-		fprintf(stderr, "[bwa_sai2sam_pe_core] time elapses: %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+		cnt_chg = bwa_cal_pac_pos_pe(prefix, bwt, n_seqs[nexti1], seqs[nexti1], fp_sa, &ii, popt, 
+						&opt, &last_ii, d[nexti1], alnbuf[nexti1]);
+		t2 = clock() - read_aln_clocks;
+		fprintf(stderr, "[bwa_sai2sam_pe_core] time elapses: %.2f sec\n", (float)(t2 - t) / CLOCKS_PER_SEC); t = clock();
+
+                // ---------------
+
 		fprintf(stderr, "[bwa_sai2sam_pe_core] changing coordinates of %d alignments.\n", cnt_chg);
 
 		fprintf(stderr, "[bwa_sai2sam_pe_core] align unmapped mate...\n");
-		pacseq = bwa_paired_sw(bns, pac, n_seqs, seqs, popt, &ii);
+		pacseq = bwa_paired_sw(bns, pac, n_seqs[nexti1], seqs[nexti1], popt, &ii);
 		fprintf(stderr, "[bwa_sai2sam_pe_core] time elapses: %.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+
+                // ---------------
 
 		fprintf(stderr, "[bwa_sai2sam_pe_core] refine gapped alignments... ");
 		for (j = 0; j < 2; ++j)
-			bwa_refine_gapped(bns, n_seqs, seqs[j], pacseq, ntbns);
+			bwa_refine_gapped(bns, n_seqs[nexti1], seqs[nexti1][j], pacseq, ntbns);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+
 		if (pac == 0) free(pacseq);
 
-		fprintf(stderr, "[bwa_sai2sam_pe_core] print alignments... ");
-		for (i = 0; i < n_seqs; ++i) {
-			bwa_seq_t *p[2];
-			p[0] = seqs[0] + i; p[1] = seqs[1] + i;
-			if (p[0]->bc[0] || p[1]->bc[0]) {
-				strcat(p[0]->bc, p[1]->bc);
-				strcpy(p[1]->bc, p[0]->bc);
-			}
-			bwa_print_sam1(bns, p[0], p[1], opt.mode, opt.max_top2);
-			bwa_print_sam1(bns, p[1], p[0], opt.mode, opt.max_top2);
-		}
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+		// ---------------
 
-		for (j = 0; j < 2; ++j)
-			bwa_free_read_seq(n_seqs, seqs[j]);
+		fprintf(stderr, "[bwa_sai2sam_pe_core] print alignments... ");
+		bwa_print2_tpx(bns, n_seqs[nexti1], seqs[nexti1], opt);
+		fprintf(stderr, "%.2f sec", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+		if( (async_print_res) && (num_sampe_threads > 1) ){
+			fprintf(stderr," (async)\n");
+		}else{
+			fprintf(stderr,"\n");
+		}
+
+		// ---------------
+
 		fprintf(stderr, "[bwa_sai2sam_pe_core] %d sequences have been processed.\n", tot_seqs);
+
 		last_ii = ii;
+
+		// ---------------
+
+		nexti1 = nexti2;
+
+		nexti2 = nexti1 + 1;
+		if(nexti2 > 2){
+			nexti2 = 0;
+		}
+
+		if(seqsd[nexti2]){
+			for (j = 0; j < 2; ++j){
+				bwa_free_read_seq(n_seqs[nexti2], seqs[nexti2][j]);
+			}
+			seqsd[nexti2] = 0;
+		}
+
 	}
+
+	// ---------------
+
+	if( (async_print_res) && (num_sampe_threads > 1) ){
+		t = clock();
+		fprintf(stderr, "[bwa_sai2sam_pe_core] wait for final print alignments... ");
+	}
+
+	bwa_print2_wait_tpx();
+
+	if( (async_print_res) && (num_sampe_threads > 1) ){
+		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
+	}
+
+	for(nexti1=0; nexti1<3; nexti1++){
+		if(seqsd[nexti1]){
+			for (j = 0; j < 2; ++j){
+				bwa_free_read_seq(n_seqs[nexti1], seqs[nexti1][j]);
+				if(alnbuf[nexti1][j] != NULL){
+					free(alnbuf[nexti1][j]);
+					alnbuf[nexti1][j] = NULL;
+				}
+			}
+			seqsd[nexti1] = 0;
+		}
+	}
+
+	for(i=0; i<num_sampe_threads; i++){
+		free(d[0][i]);
+		free(d[1][i]);
+		free(d[2][i]);
+	}
+
+	// ---------------
 
 	// destroy
 	bns_destroy(bns);
@@ -743,12 +891,23 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 		bwa_seq_close(ks[i]);
 		fclose(fp_sa[i]);
 	}
-	for (iter = kh_begin(g_hash); iter != kh_end(g_hash); ++iter)
-		if (kh_exist(g_hash, iter)) free(kh_val(g_hash, iter).a);
-	kh_destroy(64, g_hash);
+
+#ifndef _USE_LOCAL_GHASH
+	for(i=0; i<num_sampe_threads; i++){
+		khint_t iter;
+		for (iter = kh_begin(g_hash[i]); iter != kh_end(g_hash[i]); ++iter) {
+			if (kh_exist(g_hash[i], iter)) 
+				free(kh_val(g_hash[i], iter).a);
+		}
+		kh_destroy(64, g_hash[i]);
+	}
+#endif // ! _USE_LOCAL_GHASH
+
 	if (pac) {
 		free(pac); bwt_destroy(bwt[0]); bwt_destroy(bwt[1]);
 	}
+
+	return;
 }
 
 int bwa_sai2sam_pe(int argc, char *argv[])
@@ -757,8 +916,16 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	extern int bwa_set_rg(const char *s);
 	int c;
 	pe_opt_t *popt;
+	struct timeval st;
+	uint64_t s1, e1;
+	double total_time = 0.0;
+
+	gettimeofday(&st, NULL);
+	s1 = st.tv_sec * 1000000L + (time_t)st.tv_usec;
+
 	popt = bwa_init_pe_opt();
-	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
+
+	while ((c = getopt(argc, argv, "a:t:o:ISTXYsPn:N:c:f:Ar:")) >= 0) {
 		switch (c) {
 		case 'r':
 			if (bwa_set_rg(optarg) < 0) {
@@ -766,6 +933,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 				return 1;
 			}
 			break;
+		case 't': num_sampe_threads = atoi(optarg); break;
 		case 'a': popt->max_isize = atoi(optarg); break;
 		case 'o': popt->max_occ = atoi(optarg); break;
 		case 's': popt->is_sw = 0; break;
@@ -775,6 +943,11 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		case 'c': popt->ap_prior = atof(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'A': popt->force_isize = 1; break;
+		case 'T': adj_n_needed = 0; break;
+		case 'X': async_read_seq = 0; break;
+		case 'Y': async_print_res = 0; break;
+		case 'S': use_soap2_format = 1; break;
+		case 'I': soap2_qual_adj = 64; break;
 		default: return 1;
 		}
 	}
@@ -787,19 +960,43 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "         -n INT   maximum hits to output for paired reads [%d]\n", popt->n_multi);
 		fprintf(stderr, "         -N INT   maximum hits to output for discordant pairs [%d]\n", popt->N_multi);
 		fprintf(stderr, "         -c FLOAT prior of chimeric rate (lower bound) [%.1le]\n", popt->ap_prior);
-        fprintf(stderr, "         -f FILE  sam file to output results to [stdout]\n");
+        	fprintf(stderr, "         -f FILE  sam file to output results to [stdout]\n");
 		fprintf(stderr, "         -r STR   read group header line such as `@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "         -P       preload index into memory (for base-space reads only)\n");
 		fprintf(stderr, "         -s       disable Smith-Waterman for the unmapped mate\n");
-		fprintf(stderr, "         -A       disable insert size estimate (force -s)\n\n");
+		fprintf(stderr, "         -A       disable insert size estimate (force -s)\n");
+		fprintf(stderr, "         -t INT   number of threads [%d] (use <=0 for all)\n", num_sampe_threads);
+		fprintf(stderr, "         -I       adjust quality to Illumina v1.3+ format\n");
+		fprintf(stderr, "         -S       output SOAP2 format\n");
+		fprintf(stderr, "         -T       use original read buffer size\n");
+		fprintf(stderr, "         -X       disable async read seq/aln method\n");
+		fprintf(stderr, "         -Y       disable async print results method\n");
+		fprintf(stderr, "\n");
 		fprintf(stderr, "Notes: 1. For SOLiD reads, <in1.fq> corresponds R3 reads and <in2.fq> to F3.\n");
 		fprintf(stderr, "       2. For reads shorter than 30bp, applying a smaller -o is recommended to\n");
 		fprintf(stderr, "          to get a sensible speed at the cost of pairing accuracy.\n");
 		fprintf(stderr, "\n");
 		return 1;
 	}
+
 	bwa_sai2sam_pe_core(argv[optind], argv + optind + 1, argv + optind+3, popt);
+
 	free(bwa_rg_line); free(bwa_rg_id);
 	free(popt);
+
+	// cant use getrusage for ru.maxrss until kernel 2.6.36 ...
+	int srtn = 0;
+	long maxrsskb = 0L;
+	srtn = getmaxrss(&maxrsskb);
+	if(srtn == 0){
+		fprintf(stderr,"[bwa_sai2sam_pe] mem rss max = %ld (mb)\n",maxrsskb / 1024L);
+	}
+
+	gettimeofday(&st, NULL);
+	e1 = st.tv_sec * 1000000L + (time_t)st.tv_usec;
+	total_time = (double)((double)e1 - (double)s1) / 1000000.0;
+
+	fprintf(stderr,"[bwa_sai2sam_pe] total time = %lf (sec)\n",total_time);
+
 	return 0;
 }

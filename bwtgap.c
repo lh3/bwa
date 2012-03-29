@@ -182,7 +182,9 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwts[2], int len, const ubyte_t *seq[2], 
 			}
 			if (do_add) { // append
 				bwt_aln1_t *p;
+#ifndef _REMOVE_SHADOW
 				gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos, width);
+#endif // _REMOVE_SHADOW
 				if (n_aln == m_aln) {
 					m_aln <<= 1;
 					aln = (bwt_aln1_t*)realloc(aln, m_aln * sizeof(bwt_aln1_t));

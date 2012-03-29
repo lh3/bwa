@@ -1,4 +1,4 @@
-CC=			gcc
+CC=		gcc
 CFLAGS=		-g -Wall -O2 -m64 # comment out `-m64' for 32-bit compilation
 DFLAGS=		-D_FILE_OFFSET_BITS=64
 OBJS=		bwt_gen.o QSufSort.o
