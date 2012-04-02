@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
-#include <assert.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -45,8 +44,6 @@ unsigned char nt_comp_table[256] = {
 
 extern int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS);
 extern int bsw2_resolve_query_overlaps(bwtsw2_t *b, float mask_level);
-
-static int64_t g_l_pac = 0;
 
 bsw2opt_t *bsw2_init_opt()
 {
@@ -191,7 +188,6 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 		beg = (p->flag & 0x10)? lq - p->end : p->beg;
 		end = (p->flag & 0x10)? lq - p->beg : p->end;
 		query = seq[(p->flag & 0x10)? 1 : 0] + beg;
-		assert(p->k + p->len <= g_l_pac);
 		for (k = p->k; k < p->k + p->len; ++k) // in principle, no out-of-boundary here
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
@@ -201,14 +197,8 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 			for (j = 0; j < q->n_cigar; ++j)
 				if ((q->cigar[j]&0xf) == 1 || (q->cigar[j]&0xf) == 2)
 					glen += q->cigar[j]>>4;
-			fprintf(stderr, "[E::%s] %s - unequal score: %d != %d; (qlen, aqlen, arlen, glen) = (%d, %d, %d, %d)\n", __func__, name, score, p->G, lq, end - beg, p->len, glen);
-			if (p->G - score > 100) {
-				char *t;
-				t = malloc((p->len > end - beg? p->len : end - beg) + 2);
-				for (j = 0; j < p->len;    ++j) t[j] = "ACGTN"[target[j]]; t[j++] = '\n'; t[j] = 0; fputs(t, stderr);
-				for (j = 0; j < end - beg; ++j) t[j] = "ACGTN"[query[j]];  t[j++] = '\n'; t[j] = 0; fputs(t, stderr);
-				free(t);
-			}
+			fprintf(stderr, "[E::%s] %s - unequal score: %d != %d; (qlen, aqlen, arlen, glen, bw) = (%d, %d, %d, %d, %d)\n",
+					__func__, name, score, p->G, lq, end - beg, p->len, glen, opt->bw);
 		}
 		if (beg != 0 || end < lq) { // write soft clipping
 			q->cigar = realloc(q->cigar, 4 * (q->n_cigar + 2));
@@ -572,12 +562,27 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 	free(ks->name); ks->name = 0;
 }
 
+static void update_opt(bsw2opt_t *dst, const bsw2opt_t *src, int qlen)
+{
+	double ll = log(qlen);
+	int i, k;
+	*dst = *src;
+	dst->t = src->t;
+	if (dst->t < ll * dst->coef) dst->t = (int)(ll * dst->coef + .499);
+	// set band width: the query length sets a boundary on the maximum band width
+	k = (qlen * dst->a - 2 * dst->q) / (2 * dst->r + dst->a);
+	i = (qlen * dst->a - dst->a - dst->t) / dst->r;
+	if (k > i) k = i;
+	if (k < 1) k = 1; // I do not know if k==0 causes troubles
+	dst->bw = src->bw < k? src->bw : k;
+}
+
 /* Core routine to align reads in _seq. It is separated from
  * process_seqs() to realize multi-threading */ 
 static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t *bns, uint8_t *pac, const bwt_t *target, int is_pe)
 {
 	int x;
-	bsw2opt_t opt = *_opt;
+	bsw2opt_t opt;
 	bsw2global_t *pool = bsw2_global_init();
 	bwtsw2_t **buf;
 	buf = calloc(_seq->n, sizeof(void*));
@@ -587,21 +592,12 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 		int i, l, k;
 		bwtsw2_t *b[2];
 		l = p->l;
-		// set opt->t
-		opt.t = _opt->t;
-		if (opt.t < log(l) * opt.coef) opt.t = (int)(log(l) * opt.coef + .499);
+		update_opt(&opt, _opt, p->l);
 		if (pool->max_l < l) { // then enlarge working space for aln_extend_core()
 			int tmp = ((l + 1) / 2 * opt.a + opt.r) / opt.r + l;
 			pool->max_l = l;
 			pool->aln_mem = realloc(pool->aln_mem, (tmp + 2) * 24);
 		}
-		// set opt->bw
-		opt.bw = _opt->bw;
-		k = (l * opt.a - 2 * opt.q) / (2 * opt.r + opt.a);
-		i = (l * opt.a - opt.a - opt.t) / opt.r;
-		if (k > i) k = i;
-		if (k < 1) k = 1; // I do not know if k==0 causes troubles
-		opt.bw = _opt->bw < k? _opt->bw : k;
 		// set seq[2] and rseq[2]
 		seq[0] = calloc(l * 4, 1);
 		seq[1] = seq[0] + l;
@@ -655,6 +651,7 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 			seq[0][i] = c;
 			seq[1][p->l-1-i] = 3 - c;
 		}
+		update_opt(&opt, _opt, p->l);
 		write_aux(&opt, bns, p->l, seq, pac, buf[x], _seq->seq[x].name);
 		free(seq[0]);
 	}
@@ -766,7 +763,6 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	uint8_t *pac;
 	bsw2seq_t *_seq;
 
-	g_l_pac = bns->l_pac;
 	pac = calloc(bns->l_pac/4+1, 1);
 	if (pac == 0) {
 		fprintf(stderr, "[bsw2_aln] insufficient memory!\n");
