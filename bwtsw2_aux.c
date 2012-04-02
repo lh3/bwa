@@ -567,7 +567,6 @@ static void update_opt(bsw2opt_t *dst, const bsw2opt_t *src, int qlen)
 	double ll = log(qlen);
 	int i, k;
 	*dst = *src;
-	dst->t = src->t;
 	if (dst->t < ll * dst->coef) dst->t = (int)(ll * dst->coef + .499);
 	// set band width: the query length sets a boundary on the maximum band width
 	k = (qlen * dst->a - 2 * dst->q) / (2 * dst->r + dst->a);
