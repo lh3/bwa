@@ -165,7 +165,7 @@ void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq,
 }
 
 /* generate CIGAR array(s) in b->cigar[] */
-static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b)
+static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b, const char *name)
 {
 	uint8_t *target;
 	int i, matrix[25];
@@ -192,6 +192,18 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
 		q->cigar = aln_path2cigar32(path, path_len, &q->n_cigar);
+		if (name && score != p->G) { // debugging only
+			int j, glen = 0;
+			for (j = 0; j < q->n_cigar; ++j)
+				if ((q->cigar[j]&0xf) == 1 || (q->cigar[j]&0xf) == 2)
+					glen += q->cigar[j]>>4;
+			fprintf(stderr, "[E::%s] %s - unequal score: %d != %d; (qlen, aqlen, arlen, glen) = (%d, %d, %d, %d)\n", __func__, name, score, p->G, lq, end - beg, p->len, glen);
+			fprintf(stderr, "%d, %d\n", ((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, path_len);
+			if (p->G - score > 100) {
+				for (j = 0; j < p->len;    ++j) fputc("ACGTN"[target[j]], stderr); fputc('\n', stderr);
+				for (j = 0; j < end - beg; ++j) fputc("ACGTN"[query[j]],  stderr); fputc('\n', stderr); 
+			}
+		}
 		if (beg != 0 || end < lq) { // write soft clipping
 			q->cigar = realloc(q->cigar, 4 * (q->n_cigar + 2));
 			if (beg != 0) {
@@ -413,7 +425,7 @@ static int compute_nm(bsw2hit_t *p, int n_cigar, const uint32_t *cigar, const ui
 	return n_mm + n_gap;
 }
 
-static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b)
+static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b, const char *name)
 {
 	int i;
 	// allocate for b->aux
@@ -424,7 +436,7 @@ static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8
 	}
 	b->aux = calloc(b->n, sizeof(bsw2aux_t));
 	// generate CIGAR
-	gen_cigar(opt, qlen, seq, pac, b);
+	gen_cigar(opt, qlen, seq, pac, b, name);
 	// fix CIGAR, generate mapQ, and write chromosomal position
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = &b->hits[i];
@@ -637,7 +649,7 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 			seq[0][i] = c;
 			seq[1][p->l-1-i] = 3 - c;
 		}
-		write_aux(&opt, bns, p->l, seq, pac, buf[x]);
+		write_aux(&opt, bns, p->l, seq, pac, buf[x], _seq->seq[x].name);
 		free(seq[0]);
 	}
 	for (x = 0; x < _seq->n; ++x) {

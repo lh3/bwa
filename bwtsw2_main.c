@@ -85,7 +85,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 
 	bns_destroy(bns);
 	bwt_destroy(target);
-	free(opt);
+	free(opt); free(prefix);
 	
 	return 0;
 }
