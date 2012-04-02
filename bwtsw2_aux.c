@@ -192,6 +192,7 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
 		q->cigar = aln_path2cigar32(path, path_len, &q->n_cigar);
+#if 0
 		if (name && score != p->G) { // debugging only
 			int j, glen = 0;
 			for (j = 0; j < q->n_cigar; ++j)
@@ -200,6 +201,7 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 			fprintf(stderr, "[E::%s] %s - unequal score: %d != %d; (qlen, aqlen, arlen, glen, bw) = (%d, %d, %d, %d, %d)\n",
 					__func__, name, score, p->G, lq, end - beg, p->len, glen, opt->bw);
 		}
+#endif
 		if (beg != 0 || end < lq) { // write soft clipping
 			q->cigar = realloc(q->cigar, 4 * (q->n_cigar + 2));
 			if (beg != 0) {
