@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <assert.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -44,6 +45,8 @@ unsigned char nt_comp_table[256] = {
 
 extern int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int IS);
 extern int bsw2_resolve_query_overlaps(bwtsw2_t *b, float mask_level);
+
+static int64_t g_l_pac = 0;
 
 bsw2opt_t *bsw2_init_opt()
 {
@@ -188,6 +191,7 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 		beg = (p->flag & 0x10)? lq - p->end : p->beg;
 		end = (p->flag & 0x10)? lq - p->beg : p->end;
 		query = seq[(p->flag & 0x10)? 1 : 0] + beg;
+		assert(p->k + p->len <= g_l_pac);
 		for (k = p->k; k < p->k + p->len; ++k) // in principle, no out-of-boundary here
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
@@ -198,10 +202,12 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 				if ((q->cigar[j]&0xf) == 1 || (q->cigar[j]&0xf) == 2)
 					glen += q->cigar[j]>>4;
 			fprintf(stderr, "[E::%s] %s - unequal score: %d != %d; (qlen, aqlen, arlen, glen) = (%d, %d, %d, %d)\n", __func__, name, score, p->G, lq, end - beg, p->len, glen);
-			fprintf(stderr, "%d, %d\n", ((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, path_len);
 			if (p->G - score > 100) {
-				for (j = 0; j < p->len;    ++j) fputc("ACGTN"[target[j]], stderr); fputc('\n', stderr);
-				for (j = 0; j < end - beg; ++j) fputc("ACGTN"[query[j]],  stderr); fputc('\n', stderr); 
+				char *t;
+				t = malloc((p->len > end - beg? p->len : end - beg) + 2);
+				for (j = 0; j < p->len;    ++j) t[j] = "ACGTN"[target[j]]; t[j++] = '\n'; t[j] = 0; fputs(t, stderr);
+				for (j = 0; j < end - beg; ++j) t[j] = "ACGTN"[query[j]];  t[j++] = '\n'; t[j] = 0; fputs(t, stderr);
+				free(t);
 			}
 		}
 		if (beg != 0 || end < lq) { // write soft clipping
@@ -760,6 +766,7 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	uint8_t *pac;
 	bsw2seq_t *_seq;
 
+	g_l_pac = bns->l_pac;
 	pac = calloc(bns->l_pac/4+1, 1);
 	if (pac == 0) {
 		fprintf(stderr, "[bsw2_aln] insufficient memory!\n");
