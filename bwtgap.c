@@ -10,19 +10,18 @@
 
 #define aln_score(m,o,e,p) ((m)*(p)->s_mm + (o)*(p)->s_gapo + (e)*(p)->s_gape)
 
-gap_stack_t *gap_init_stack(int max_mm, int max_gapo, int max_gape, const gap_opt_t *opt)
+gap_stack_t *gap_init_stack2(int max_score)
 {
-	int i;
 	gap_stack_t *stack;
 	stack = (gap_stack_t*)calloc(1, sizeof(gap_stack_t));
-	stack->n_stacks = aln_score(max_mm+1, max_gapo+1, max_gape+1, opt);
+	stack->n_stacks = max_score;
 	stack->stacks = (gap_stack1_t*)calloc(stack->n_stacks, sizeof(gap_stack1_t));
-	for (i = 0; i != stack->n_stacks; ++i) {
-		gap_stack1_t *p = stack->stacks + i;
-		p->m_entries = 4;
-		p->stack = (gap_entry_t*)calloc(p->m_entries, sizeof(gap_entry_t));
-	}
 	return stack;
+}
+
+gap_stack_t *gap_init_stack(int max_mm, int max_gapo, int max_gape, const gap_opt_t *opt)
+{
+	return gap_init_stack2(aln_score(max_mm+1, max_gapo+1, max_gape+1, opt));
 }
 
 void gap_destroy_stack(gap_stack_t *stack)
@@ -51,7 +50,7 @@ static inline void gap_push(gap_stack_t *stack, int i, bwtint_t k, bwtint_t l, i
 	score = aln_score(n_mm, n_gapo, n_gape, opt);
 	q = stack->stacks + score;
 	if (q->n_entries == q->m_entries) {
-		q->m_entries <<= 1;
+		q->m_entries = q->m_entries? q->m_entries<<1 : 4;
 		q->stack = (gap_entry_t*)realloc(q->stack, sizeof(gap_entry_t) * q->m_entries);
 	}
 	p = q->stack + q->n_entries;

@@ -25,6 +25,7 @@ typedef struct {
 extern "C" {
 #endif
 
+	gap_stack_t *gap_init_stack2(int max_score);
 	gap_stack_t *gap_init_stack(int max_mm, int max_gapo, int max_gape, const gap_opt_t *opt);
 	void gap_destroy_stack(gap_stack_t *stack);
 	bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_width_t *w,
