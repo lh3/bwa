@@ -124,3 +124,25 @@ bwa_alnpre_t *bwa_aln_pre(const bwa_idx_t *idx, bwa_aux_t *aux, const char *seq,
 		s[i] = s[i] > 3? 4 : 3 - s[i];
 	return (bwa_alnpre_t*)bwt_match_gap(idx->bwt, seq_len, s, w, seq_len <= aux->opt->seed_len? 0 : seed_w, &opt2, n_aln, aux->stack);
 }
+/*
+bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_aux_t *aux, const char *seq, uint64_t sa, int n_gaps)
+{
+	extern bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int len, int *strand);
+	extern bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const uint8_t *seq, bwtint_t *_pos, int ext, int *n_cigar, int is_end_correct);
+	int strand, seq_len, n_cigar;
+	uint64_t pos;
+	uint8_t *s[2];
+	bwa_aln_t aln;
+	bwa_cigar_t *cigar16;
+
+	seq_len = strlen(seq);
+	if (seq_len<<1 > aux->max_buf) {
+		aux->max_buf = seq_len<<1;
+		kroundup32(aux->max_buf);
+		aux->buf = realloc(aux->buf, aux->max_buf);
+	}
+	pos = bwa_sa2pos(idx->bns, idx->bwt, sa, seq_len, &strand);
+	cigar16 = bwa_refine_gapped_core(idx->bns->l_pac, idx->pac, len, s[strand], &pos, strand? n_gaps : -n_gaps, &n_cigar, 1);
+	return aln;
+}
+*/

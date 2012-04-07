@@ -25,6 +25,13 @@ typedef struct {
 	uint64_t k, l;
 } bwa_alnpre_t;
 
+typedef struct {
+	uint32_t n_cigar:15, gap:8, mm:8, strand:1;
+	uint32_t ref_id;
+	uint64_t offset;
+	uint32_t *cigar;
+} bwa_aln_t;
+
 extern bwa_opt_t bwa_def_opt;
 
 #ifdef __cplusplus
