@@ -328,7 +328,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos,
 									  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 1);
 	}
-
+#if 0
 	if (ntbns) { // in color space
 		for (i = 0; i < n_seqs; ++i) {
 			bwa_seq_t *s = seqs + i;
@@ -349,7 +349,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 			}
 		}
 	}
-
+#endif
 	// generate MD tag
 	str = (kstring_t*)calloc(1, sizeof(kstring_t));
 	for (i = 0; i != n_seqs; ++i) {
@@ -602,7 +602,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	if (!(opt.mode & BWA_MODE_COMPREAD)) // in color space; initialize ntpac
 		ntbns = bwa_open_nt(prefix);
 	bwa_print_sam_SQ(bns);
-	bwa_print_sam_PG();
+	//bwa_print_sam_PG();
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
 	// core loop

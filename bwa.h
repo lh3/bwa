@@ -26,9 +26,11 @@ typedef struct {
 } bwa_alnpre_t;
 
 typedef struct {
-	uint32_t n_cigar:15, gap:8, mm:8, strand:1;
-	uint32_t ref_id;
-	uint64_t offset;
+	uint32_t n_n:8, n_gap:12, n_mm:12;
+	int32_t ref_id;
+	uint32_t offset;
+	uint32_t n_cigar:16, flag:16;
+	uint64_t pac_pos;
 	uint32_t *cigar;
 } bwa_aln_t;
 
@@ -43,6 +45,7 @@ extern "C" {
 	bwa_aux_t *bwa_aux_init(const bwa_opt_t *opt, int max_score);
 	void bwa_aux_destroy(bwa_aux_t *p);
 	bwa_alnpre_t *bwa_aln_pre(const bwa_idx_t *idx, bwa_aux_t *aux, const char *seq, int *n_aln);
+	bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_aux_t *aux, const char *seq, uint64_t sa, int n_gaps);
 
 #ifdef __cplusplus
 }

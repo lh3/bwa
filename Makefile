@@ -5,10 +5,10 @@ CXXFLAGS=	$(CFLAGS)
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
 LOBJS=		bwa.o bamlite.o utils.o bwt.o bwtio.o bwtaln.o bwtgap.o bntseq.o stdaln.o \
-			bwaseqio.o
+			bwaseqio.o bwase.o kstring.o
 AOBJS=		QSufSort.o bwt_gen.o \
 			is.o bwtmisc.o bwtindex.o ksw.o simple_dp.o \
-			bwase.o bwape.o kstring.o cs2nt.o \
+			bwape.o cs2nt.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
 			bwtsw2_chain.o fastmap.o bwtsw2_pair.o
 PROG=		bwa
