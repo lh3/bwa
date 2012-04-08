@@ -55,6 +55,11 @@ typedef struct {
 	bwa_aln_t one;
 } bwa_one_t;
 
+typedef struct {
+	double avg, std, ap_prior;
+	uint64_t low, high, high_bayesian;
+} bwa_pestat_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -89,9 +94,9 @@ extern "C" {
 	 *
 	 * @return        An alignment
 	 */
-	bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t sa, int n_gaps);
+	void bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t sa, int n_gaps, bwa_aln_t *aln);
 
-	bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq);
+	bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen_cigar);
 
 	void bwa_one_destroy(bwa_one_t *one);
 
