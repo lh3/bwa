@@ -205,7 +205,7 @@ bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint
 	return aln;
 }
 
-bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen_cigar)
+bwa_one_t *bwa_se2(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen_cigar)
 {
 	bwa_one_t *one;
 	int best, cnt, i, seq_len;
@@ -247,6 +247,11 @@ bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen
 	one->one.ref_id = -1;
 	if (gen_cigar) one->one = bwa_sa2aln(idx, buf, seq, one->sa, one->which->n_gapo + one->which->n_gape);
 	return one;
+}
+
+bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq)
+{
+	return bwa_se2(idx, buf, seq, 1);
 }
 
 void bwa_one_destroy(bwa_one_t *one)

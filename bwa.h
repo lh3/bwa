@@ -91,7 +91,7 @@ extern "C" {
 	 */
 	bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t sa, int n_gaps);
 
-	bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen_cigar);
+	bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq);
 
 	void bwa_one_destroy(bwa_one_t *one);
 
