@@ -47,6 +47,14 @@ typedef struct {
 	uint32_t *cigar;                   // CIGAR in the BAM 28+4 encoding; having n_cigar operations
 } bwa_aln_t;
 
+typedef struct {
+	int mapQs, mapQ, c1, c2;
+	uint64_t sa;
+	bwa_sai1_t *which;
+	bwa_sai_t sai;
+	bwa_aln_t one;
+} bwa_one_t;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -82,6 +90,10 @@ extern "C" {
 	 * @return        An alignment
 	 */
 	bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t sa, int n_gaps);
+
+	bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen_cigar);
+
+	void bwa_one_destroy(bwa_one_t *one);
 
 #ifdef __cplusplus
 }

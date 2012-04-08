@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>
 #include "bwa.h"
 #include "bwt.h"
 #include "bwtgap.h"
@@ -27,6 +28,7 @@ struct bwa_buf_t {
 	gap_opt_t *opt;
 	int *diff_tab;
 	uint8_t *buf;
+	int *logn;
 };
 
 bwa_idx_t *bwa_idx_load(const char *prefix)
@@ -80,13 +82,16 @@ bwa_buf_t *bwa_buf_init(const bwa_opt_t *opt, int max_score)
 	p->diff_tab = calloc(BWA_MAX_QUERY_LEN, sizeof(int));
 	for (i = 1; i < BWA_MAX_QUERY_LEN; ++i)
 		p->diff_tab[i] = bwa_cal_maxdiff(i, BWA_AVG_ERR, opt->fnr);
+	p->logn = calloc(256, sizeof(int));
+	for (i = 1; i != 256; ++i)
+		p->logn[i] = (int)(4.343 * log(i) + 0.499);
 	return p;
 }
 
 void bwa_buf_destroy(bwa_buf_t *p)
 {
 	gap_destroy_stack(p->stack);
-	free(p->diff_tab); free(p->opt);
+	free(p->diff_tab); free(p->logn); free(p->opt);
 	free(p);
 }
 
@@ -198,4 +203,55 @@ bwa_aln_t bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint
 	aln.n_mm = n_mm;
 	aln.n_gap = n_gap;
 	return aln;
+}
+
+bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen_cigar)
+{
+	bwa_one_t *one;
+	int best, cnt, i, seq_len;
+
+	seq_len = strlen(seq);
+	one = calloc(1, sizeof(bwa_one_t));
+	one->sai = bwa_sai(idx, buf, seq);
+	if (one->sai.n == 0) return one;
+	// count number of hits; randomly select one alignment
+	best = one->sai.sai[0].score;
+	for (i = cnt = 0; i < one->sai.n; ++i) {
+		bwa_sai1_t *p = &one->sai.sai[i];
+		if (p->score > best) break;
+		if (drand48() * (p->l - p->k + 1 + cnt) > (double)cnt) {
+			one->which = p;
+			one->sa = p->k + (bwtint_t)((p->l - p->k + 1) * drand48());
+		}
+		cnt += p->l - p->k + 1;
+	}
+	one->c1 = cnt;
+	for (; i < one->sai.n; ++i)
+		cnt += one->sai.sai[i].l - one->sai.sai[i].k + 1;
+	one->c2 = cnt - one->c1;
+	// estimate single-end mapping quality
+	one->mapQs = -1;
+	if (one->c1 == 0) one->mapQs = 23; // FIXME: is it possible?
+	else if (one->c1 > 1) one->mapQs = 0;
+	else {
+		int diff = one->which->n_mm + one->which->n_gapo + one->which->n_gape;
+		if (diff >= buf->diff_tab[seq_len]) one->mapQs = 25;
+		else if (one->c2 == 0) one->mapQs = 37;
+	}
+	if (one->mapQs < 0) {
+		cnt = (one->c2 >= 255)? 255 : one->c2;
+		one->mapQs = 23 < buf->logn[cnt]? 0 : 23 - buf->logn[cnt];
+	}
+	one->mapQ = one->mapQs;
+	// compute CIGAR on request
+	one->one.ref_id = -1;
+	if (gen_cigar) one->one = bwa_sa2aln(idx, buf, seq, one->sa, one->which->n_gapo + one->which->n_gape);
+	return one;
+}
+
+void bwa_one_destroy(bwa_one_t *one)
+{
+	free(one->sai.sai);
+	free(one->one.cigar);
+	free(one);
 }
