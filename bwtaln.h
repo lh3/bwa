@@ -35,8 +35,8 @@ typedef struct {
 
 typedef struct {
 	uint32_t n_mm:16, n_gapo:8, n_gape:8;
-	bwtint_t k, l;
 	int score;
+	bwtint_t k, l;
 } bwt_aln1_t;
 
 typedef uint16_t bwa_cigar_t;
