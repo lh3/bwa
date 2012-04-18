@@ -12,7 +12,6 @@
 #include "stdaln.h"
 #endif
 
-#define MAX_INS       20000
 #define MIN_RATIO     0.8
 #define OUTLIER_BOUND 2.0
 #define MAX_STDDEV    4.0
@@ -23,7 +22,7 @@ typedef struct {
 	double avg, std;
 } bsw2pestat_t;
 
-bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg)
+bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 {
 	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 	int i, k, x, p25, p50, p75, tmp, max_len = 0;
@@ -40,6 +39,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg)
 		if (t[0]->G2 > 0.8 * t[0]->G) continue; // the best hit is not good enough
 		if (t[1]->G2 > 0.8 * t[1]->G) continue; // the best hit is not good enough
 		l = t[0]->k > t[1]->k? t[0]->k - t[1]->k + t[1]->len : t[1]->k - t[0]->k + t[0]->len;
+		if (l >= max_ins) continue; // skip pairs with excessively large insert
 		max_len = max_len > t[0]->end - t[0]->beg? max_len : t[0]->end - t[0]->beg;
 		max_len = max_len > t[1]->end - t[1]->beg? max_len : t[1]->end - t[1]->beg;
 		isize[k++] = l;
@@ -186,7 +186,7 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 	int8_t g_mat[25];
 	kstring_t msg;
 	memset(&msg, 0, sizeof(kstring_t));
-	pes = bsw2_stat(n, hits, &msg);
+	pes = bsw2_stat(n, hits, &msg, opt->max_ins);
 	for (i = k = 0; i < 5; ++i) {
 		for (j = 0; j < 4; ++j)
 			g_mat[k++] = i == j? opt->a : -opt->b;
@@ -207,8 +207,10 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 		if (hits[i] == 0 || hits[i+1] == 0) continue; // one end has excessive N
 		if (hits[i]->n != 1 && hits[i+1]->n != 1) continue; // no end has exactly one hit
 		if (hits[i]->n > 1 || hits[i+1]->n > 1) continue; // one read has more than one hit
-		if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1], g_mat);
-		if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0], g_mat);
+		if (!opt->skip_sw) {
+			if (hits[i+0]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+0]->hits[0], seq[i+1].l, seq[i+1].seq, &a[1], g_mat);
+			if (hits[i+1]->n == 1) bsw2_pair1(opt, l_pac, pac, &pes, &hits[i+1]->hits[0], seq[i+0].l, seq[i+0].seq, &a[0], g_mat);
+		} // else a[0].G == a[1].G == a[0].G2 == a[1].G2 == 0
 		// the following enumerate all possibilities. It is tedious but necessary...
 		if (hits[i]->n + hits[i+1]->n == 1) { // one end mapped; the other not;
 			bwtsw2_t *p[2];

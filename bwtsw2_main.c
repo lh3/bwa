@@ -18,7 +18,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 
 	opt = bsw2_init_opt();
 	srand48(11);
-	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:M")) >= 0) {
+	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:S")) >= 0) {
 		switch (c) {
 		case 'q': opt->q = atoi(optarg); break;
 		case 'r': opt->r = atoi(optarg); break;
@@ -35,6 +35,8 @@ int bwa_bwtsw2(int argc, char *argv[])
 		case 'M': opt->multi_2nd = 1; break;
 		case 'H': opt->hard_clip = 1; break;
 		case 'f': xreopen(optarg, "w", stdout); break;
+		case 'I': opt->max_ins = atoi(optarg); break;
+		case 'S': opt->skip_sw = 1; break;
 		}
 	}
 	opt->qr = opt->q + opt->r;
@@ -50,9 +52,11 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -m FLOAT mask level [%.2f]\n", opt->mask_level);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
-        fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n");
+		fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n");
 		fprintf(stderr, "         -H       in SAM output, use hard clipping instead of soft clipping\n");
 		fprintf(stderr, "         -M       mark multi-part alignments as secondary\n");
+		fprintf(stderr, "         -S       skip Smith-Waterman read pairing\n");
+		fprintf(stderr, "         -I INT   ignore pairs with insert >=INT for inferring the size distr [%d]\n", opt->max_ins);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "         -T INT   score threshold divided by a [%d]\n", opt->t);
 		fprintf(stderr, "         -c FLOAT coefficient of length-threshold adjustment [%.1f]\n", opt->coef);

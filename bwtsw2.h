@@ -12,8 +12,9 @@
 #define BSW2_FLAG_RESCUED 0x800
 
 typedef struct {
-	int a, b, q, r, t, qr, bw;
-	int z, is, t_seeds, hard_clip, multi_2nd;
+	int skip_sw:16, hard_clip:16;
+	int a, b, q, r, t, qr, bw, max_ins;
+	int z, is, t_seeds, multi_2nd;
 	float mask_level, coef;
 	int n_threads, chunk_size;
 } bsw2opt_t;
