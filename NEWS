@@ -1,3 +1,22 @@
+Release 0.6.2 (19 June, 2012)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is largely a bug-fix release. Notable changes in BWA-short and BWA-SW:
+
+ * Bugfix: BWA-SW may give bad alignments due to incorrect band width.
+
+ * Bugfix: A segmentation fault due to an out-of-boundary error. The fix is a
+   temporary solution. The real cause has not been identified.
+
+ * Attempt to read index from prefix.64.bwt, such that the 32-bit and 64-bit
+   index can coexist.
+
+ * Added options '-I' and '-S' to control BWA-SW pairing.
+
+(0.6.2: 19 June 2012, r126)
+
+
+
 Release 0.6.1 (28 November, 2011)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
