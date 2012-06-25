@@ -65,7 +65,7 @@ inline uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c)
 	if (c == 0) n -= 15 - (k&15); // corrected for the masked bits
 	return n;
 }
-inline void bwtl_occ4(const bwtl_t *bwt, uint32_t k, uint32_t cnt[4])
+void bwtl_occ4(const bwtl_t *bwt, uint32_t k, uint32_t cnt[4])
 {
 	uint32_t x, b;
 	if (k == (uint32_t)(-1)) {
@@ -80,7 +80,7 @@ inline void bwtl_occ4(const bwtl_t *bwt, uint32_t k, uint32_t cnt[4])
 	x -= 15 - (k&15);
 	cnt[0] += x&0xff; cnt[1] += x>>8&0xff; cnt[2] += x>>16&0xff; cnt[3] += x>>24;
 }
-inline void bwtl_2occ4(const bwtl_t *bwt, uint32_t k, uint32_t l, uint32_t cntk[4], uint32_t cntl[4])
+void bwtl_2occ4(const bwtl_t *bwt, uint32_t k, uint32_t l, uint32_t cntk[4], uint32_t cntl[4])
 {
 	bwtl_occ4(bwt, k, cntk);
 	bwtl_occ4(bwt, l, cntl);
