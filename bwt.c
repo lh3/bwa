@@ -95,7 +95,7 @@ static inline int __occ_aux(uint64_t y, int c)
 	return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
 }
 
-inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
+bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 {
 	bwtint_t n, l, j;
 	uint32_t *p;
@@ -121,7 +121,7 @@ inline bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 }
 
 // an analogy to bwt_occ() but more efficient, requiring k <= l
-inline void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok, bwtint_t *ol)
+void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok, bwtint_t *ol)
 {
 	bwtint_t _k, _l;
 	_k = (k >= bwt->primary)? k-1 : k;
@@ -158,7 +158,7 @@ inline void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint
 	((bwt)->cnt_table[(b)&0xff] + (bwt)->cnt_table[(b)>>8&0xff]		\
 	 + (bwt)->cnt_table[(b)>>16&0xff] + (bwt)->cnt_table[(b)>>24])
 
-inline void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
+void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 {
 	bwtint_t l, j, x;
 	uint32_t *p;
@@ -178,7 +178,7 @@ inline void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 }
 
 // an analogy to bwt_occ4() but more efficient, requiring k <= l
-inline void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4], bwtint_t cntl[4])
+void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4], bwtint_t cntl[4])
 {
 	bwtint_t _k, _l;
 	_k = (k >= bwt->primary)? k-1 : k;
