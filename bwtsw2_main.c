@@ -18,7 +18,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 
 	opt = bsw2_init_opt();
 	srand48(11);
-	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:S")) >= 0) {
+	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:SG:")) >= 0) {
 		switch (c) {
 		case 'q': opt->q = atoi(optarg); break;
 		case 'r': opt->r = atoi(optarg); break;
@@ -37,6 +37,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'I': opt->max_ins = atoi(optarg); break;
 		case 'S': opt->skip_sw = 1; break;
+		case 'G': opt->max_chain_gap = atoi(optarg); break;
 		}
 	}
 	opt->qr = opt->q + opt->r;
@@ -62,7 +63,8 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -c FLOAT coefficient of length-threshold adjustment [%.1f]\n", opt->coef);
 		fprintf(stderr, "         -z INT   Z-best [%d]\n", opt->z);
 		fprintf(stderr, "         -s INT   maximum seeding interval size [%d]\n", opt->is);
-		fprintf(stderr, "         -N INT   # seeds to trigger reverse alignment [%d]\n", opt->t_seeds);
+		fprintf(stderr, "         -N INT   # seeds to trigger rev aln; 2*INT is also the chaining threshold [%d]\n", opt->t_seeds);
+		fprintf(stderr, "         -G INT   maximum gap size during chaining [%d]\n", opt->max_chain_gap);
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Note: For long Illumina, 454 and Sanger reads, assembly contigs, fosmids and\n");
 		fprintf(stderr, "      BACs, the default setting usually works well. For the current PacBio\n");

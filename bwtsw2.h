@@ -13,7 +13,7 @@
 
 typedef struct {
 	int skip_sw:16, hard_clip:16;
-	int a, b, q, r, t, qr, bw, max_ins;
+	int a, b, q, r, t, qr, bw, max_ins, max_chain_gap;
 	int z, is, t_seeds, multi_2nd;
 	float mask_level, coef;
 	int n_threads, chunk_size;

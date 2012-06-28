@@ -54,6 +54,7 @@ bsw2opt_t *bsw2_init_opt()
 	o->z = 1; o->is = 3; o->t_seeds = 5; o->hard_clip = 0; o->skip_sw = 0;
 	o->mask_level = 0.50f; o->coef = 5.5f;
 	o->qr = o->q + o->r; o->n_threads = 1; o->chunk_size = 10000000;
+	o->max_chain_gap = 10000;
 	return o;
 }
 
@@ -286,7 +287,7 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 		}
 	}
 	b[0] = bb[0][1]; b[1] = bb[1][1]; // bb[*][1] are "narrow SA hits"
-	bsw2_chain_filter(opt, l, b);
+	bsw2_chain_filter(opt, l, b); // NB: only unique seeds are chained
 	for (k = 0; k < 2; ++k) {
 		bsw2_extend_left(opt, bb[k][1], seq[k], l, pac, bns->l_pac, pool->aln_mem);
 		merge_hits(bb[k], l, 0); // bb[k][1] is merged to bb[k][0] here

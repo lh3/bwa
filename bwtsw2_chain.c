@@ -23,15 +23,15 @@ static int chaining(const bsw2opt_t *opt, int shift, int n, hsaip_t *z, hsaip_t 
 			hsaip_t *q = chain + k;
 			int x = p->qbeg - q->qbeg; // always positive
 			int y = p->tbeg - q->tbeg;
-			if (y > 0 && x - y <= opt->bw && y - x <= opt->bw) {
+			if (y > 0 && x < opt->max_chain_gap && y < opt->max_chain_gap && x - y <= opt->bw && y - x <= opt->bw) { // chained
 				if (p->qend > q->qend) q->qend = p->qend;
 				if (p->tend > q->tend) q->tend = p->tend;
 				++q->chain;
 				p->chain = shift + k;
 				break;
-			}
+			} else if (q->chain > opt->t_seeds * 2) k = 0; // if the chain is strong enough, do not check the previous chains
 		}
-		if (k < 0) {
+		if (k < 0) { // not added to any previous chains
 			chain[m] = *p;
 			chain[m].chain = 1;
 			chain[m].idx = p->chain = shift + m;
@@ -44,7 +44,7 @@ static int chaining(const bsw2opt_t *opt, int shift, int n, hsaip_t *z, hsaip_t 
 void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2])
 {
 	hsaip_t *z[2], *chain[2];
-	int i, j, k, n[2], m[2];
+	int i, j, k, n[2], m[2], thres = opt->t_seeds * 2;
 	char *flag;
 	// initialization
 	n[0] = b[0]->n; n[1] = b[1]->n;
@@ -71,6 +71,7 @@ void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2])
 		int tmp = p->qbeg;
 		p->qbeg = len - p->qend; p->qend = len - tmp;
 	}
+	//for (k = 0; k < m[0]; ++k) printf("%d, [%d,%d), [%d,%d)\n", chain[0][k].chain, chain[0][k].tbeg, chain[0][k].tend, chain[0][k].qbeg, chain[0][k].qend);
 	// filtering
 	flag = calloc(m[0] + m[1], 1);
 	ks_introsort(hsaip, m[0] + m[1], chain[0]);
@@ -79,7 +80,7 @@ void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2])
 		for (j = 0; j < k; ++j) {
 			hsaip_t *q = chain[0] + j;
 			if (flag[q->idx]) continue;
-			if (q->qend >= p->qend && q->chain > p->chain * opt->t_seeds * 2) {
+			if (q->qend >= p->qend && q->chain > p->chain * thres && p->chain < thres) {
 				flag[p->idx] = 1;
 				break;
 			}
