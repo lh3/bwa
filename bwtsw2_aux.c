@@ -227,7 +227,7 @@ void bsw2_debug_hits(const bwtsw2_t *b)
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		if (p->G > 0)
-			printf("G=%d, len=%d, [%d,%d), k=%lu, l=%lu, #seeds=%d, is_rev=%d\n", p->G, p->len, p->beg, p->end, (long)p->k, (long)p->l, p->n_seeds, p->is_rev);
+			printf("G=%d, G2=%d, len=%d, [%d,%d), k=%lu, l=%lu, #seeds=%d, is_rev=%d\n", p->G, p->G2, p->len, p->beg, p->end, (long)p->k, (long)p->l, p->n_seeds, p->is_rev);
 	}
 }
 
@@ -292,6 +292,7 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 		merge_hits(bb[k], l, 0); // bb[k][1] is merged to bb[k][0] here
 		bsw2_resolve_duphits(0, 0, bb[k][0], 0);
 		bsw2_extend_rght(opt, bb[k][0], seq[k], l, pac, bns->l_pac, pool->aln_mem);
+		bsw2_resolve_duphits(0, 0, bb[k][0], 0);
 		b[k] = bb[k][0];
 		free(bb[k]);		
 	}
