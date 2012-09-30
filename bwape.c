@@ -67,6 +67,7 @@ pe_opt_t *bwa_init_pe_opt()
 	po->type = BWA_PET_STD;
 	po->is_sw = 1;
 	po->ap_prior = 1e-5;
+	po->cap_rescue = 0;
 	return po;
 }
 
@@ -512,7 +513,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 		}
 		*_cnt = (uint32_t)n_mm<<16 | n_gapo<<8 | n_gape;
 	}
-	
+
 	free(ref_seq); free(path);
 	return cigar;
 }
@@ -533,6 +534,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 
 	// perform mate alignment
 	n_tot[0] = n_tot[1] = n_mapped[0] = n_mapped[1] = 0;
+	int n_attempts = 0; // number of rescue attempts
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *p[2];
 		p[0] = seqs[0] + i; p[1] = seqs[1] + i;
@@ -541,6 +543,15 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 			int64_t beg[2], end[2];
 			bwa_cigar_t *cigar[2];
 			uint32_t cnt[2];
+
+			if (popt->cap_rescue) {
+				// If we reached the cap for rescue attempts, stop rescuing
+				if (n_attempts > popt->cap_rescue) {
+					fprintf(stderr, "[bwa_paired_sw] Too many rescue attemps, disabling Smith-Waterman for unmapped mates.\n");
+					break;
+				}
+				++n_attempts;
+			}
 
 			/* In the following, _pref points to the reference read
 			 * which must be aligned; _pmate points to its mate which is
@@ -559,7 +570,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 				if ((_a) < 0) (_a) = 0;									\
 				if ((_b) > _pref->pos) (_b) = _pref->pos;				\
 			} while (0)
-			
+
 #define __set_fixed(_pref, _pmate, _beg, _cnt) do {						\
 				_pmate->type = BWA_TYPE_MATESW;							\
 				_pmate->pos = _beg;										\
@@ -772,7 +783,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	char *prefix;
 
 	popt = bwa_init_pe_opt();
-	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
+	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:d:")) >= 0) {
 		switch (c) {
 		case 'r':
 			if (bwa_set_rg(optarg) < 0) {
@@ -789,6 +800,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		case 'c': popt->ap_prior = atof(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'A': popt->force_isize = 1; break;
+		case 'd': popt->cap_rescue = atoi(optarg); break;
 		default: return 1;
 		}
 	}
@@ -805,6 +817,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "         -r STR   read group header line such as `@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "         -P       preload index into memory (for base-space reads only)\n");
 		fprintf(stderr, "         -s       disable Smith-Waterman for the unmapped mate\n");
+		fprintf(stderr, "         -d INT   disable Smith-Waterman for the unmapped mate when cap is reached [%d]\n", popt->cap_rescue);
 		fprintf(stderr, "         -A       disable insert size estimate (force -s)\n\n");
 		fprintf(stderr, "Notes: 1. For SOLiD reads, <in1.fq> corresponds R3 reads and <in2.fq> to F3.\n");
 		fprintf(stderr, "       2. For reads shorter than 30bp, applying a smaller -o is recommended to\n");

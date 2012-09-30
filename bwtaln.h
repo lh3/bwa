@@ -110,7 +110,7 @@ typedef struct {
 #define BWA_PET_SOLID 2
 
 typedef struct {
-	int max_isize, force_isize;
+	int max_isize, force_isize, cap_rescue;
 	int max_occ;
 	int n_multi, N_multi;
 	int type, is_sw, is_preload;
