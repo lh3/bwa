@@ -18,7 +18,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 
 	opt = bsw2_init_opt();
 	srand48(11);
-	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:SG:")) >= 0) {
+	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:SG:C")) >= 0) {
 		switch (c) {
 		case 'q': opt->q = atoi(optarg); break;
 		case 'r': opt->r = atoi(optarg); break;
@@ -37,6 +37,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'I': opt->max_ins = atoi(optarg); break;
 		case 'S': opt->skip_sw = 1; break;
+		case 'C': opt->cpy_cmt = 1; break;
 		case 'G': opt->max_chain_gap = atoi(optarg); break;
 		}
 	}
@@ -55,6 +56,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n");
 		fprintf(stderr, "         -H       in SAM output, use hard clipping instead of soft clipping\n");
+		fprintf(stderr, "         -C       copy FASTA/Q comment to SAM output\n");
 		fprintf(stderr, "         -M       mark multi-part alignments as secondary\n");
 		fprintf(stderr, "         -S       skip Smith-Waterman read pairing\n");
 		fprintf(stderr, "         -I INT   ignore pairs with insert >=INT for inferring the size distr [%d]\n", opt->max_ins);

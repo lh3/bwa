@@ -55,6 +55,7 @@ bsw2opt_t *bsw2_init_opt()
 	o->mask_level = 0.50f; o->coef = 5.5f;
 	o->qr = o->q + o->r; o->n_threads = 1; o->chunk_size = 10000000;
 	o->max_chain_gap = 10000;
+	o->cpy_cmt = 0;
 	return o;
 }
 
@@ -551,7 +552,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 				if (p->flag&0x10) kputc(ks->qual[ks->l - 1 - j], &str);
 				else kputc(ks->qual[j], &str);
 			}
-		} else ksprintf(&str, "\t*");
+		} else kputs("\t*", &str);
 		// print optional tags
 		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d\tNM:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds, q->nm);
 		if (q->nn) ksprintf(&str, "\tXN:i:%d", q->nn);
@@ -559,6 +560,12 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		if (p->flag&BSW2_FLAG_MATESW) type |= 1;
 		if (p->flag&BSW2_FLAG_TANDEM) type |= 2;
 		if (type) ksprintf(&str, "\tXT:i:%d", type);
+		if (opt->cpy_cmt && ks->comment) {
+			int l = strlen(ks->comment);
+			if (l >= 6 && ks->comment[2] == ':' && ks->comment[4] == ':') {
+				kputc('\t', &str); kputs(ks->comment, &str);
+			}
+		}
 		kputc('\n', &str);
 	}
 	ks->sam = str.s;
@@ -756,6 +763,7 @@ static void kseq_to_bsw2seq(const kseq_t *ks, bsw2seq1_t *p)
 	p->name = strdup(ks->name.s);
 	p->seq = strdup(ks->seq.s);
 	p->qual = ks->qual.l? strdup(ks->qual.s) : 0;
+	p->comment = ks->comment.l? strdup(ks->comment.s) : 0;
 	p->sam = 0;
 }
 

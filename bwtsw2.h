@@ -12,7 +12,7 @@
 #define BSW2_FLAG_RESCUED 0x800
 
 typedef struct {
-	int skip_sw:16, hard_clip:16;
+	int skip_sw:8, cpy_cmt:8, hard_clip:16;
 	int a, b, q, r, t, qr, bw, max_ins, max_chain_gap;
 	int z, is, t_seeds, multi_2nd;
 	float mask_level, coef;
@@ -45,7 +45,7 @@ typedef struct {
 
 typedef struct {
 	int l, tid;
-	char *name, *seq, *qual, *sam;
+	char *name, *seq, *qual, *sam, *comment;
 } bsw2seq1_t;
 
 #ifdef __cplusplus
