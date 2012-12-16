@@ -41,33 +41,44 @@ FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
 	if (strcmp(fn, "-") == 0)
 		return (strstr(mode, "r"))? stdin : stdout;
 	if ((fp = fopen(fn, mode)) == 0) {
-		fprintf(stderr, "[%s] fail to open file '%s'. Abort!\n", func, fn);
-		abort();
+		err_fatal(func, "fail to open file '%s' : %s", fn, strerror(errno));
 	}
 	return fp;
 }
 FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE *fp)
 {
 	if (freopen(fn, mode, fp) == 0) {
-		fprintf(stderr, "[%s] fail to open file '%s': ", func, fn);
-		perror(NULL);
-		fprintf(stderr, "Abort!\n");
-		abort();
+		err_fatal(func, "fail to open file '%s' : %s", fn, strerror(errno));
 	}
 	return fp;
 }
 gzFile err_xzopen_core(const char *func, const char *fn, const char *mode)
 {
 	gzFile fp;
-	if (strcmp(fn, "-") == 0)
-		return gzdopen(fileno((strstr(mode, "r"))? stdin : stdout), mode);
+	if (strcmp(fn, "-") == 0) {
+		fp = gzdopen(fileno((strstr(mode, "r"))? stdin : stdout), mode);
+		/* According to zlib.h, this is the only reason gzdopen can fail */
+		if (!fp) err_fatal(func, "Out of memory");
+		return fp;
+	}
 	if ((fp = gzopen(fn, mode)) == 0) {
-		fprintf(stderr, "[%s] fail to open file '%s'. Abort!\n", func, fn);
-		abort();
+		err_fatal(func, "fail to open file '%s' : %s", fn, errno ? strerror(errno) : "Out of memory");
 	}
 	return fp;
 }
+
 void err_fatal(const char *header, const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	fprintf(stderr, "[%s] ", header);
+	vfprintf(stderr, fmt, args);
+	fprintf(stderr, "\n");
+	va_end(args);
+	exit(EXIT_FAILURE);
+}
+
+void err_fatal_core(const char *header, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
@@ -78,7 +89,13 @@ void err_fatal(const char *header, const char *fmt, ...)
 	abort();
 }
 
-void err_fatal_simple_core(const char *func, const char *msg)
+void _err_fatal_simple(const char *func, const char *msg)
+{
+	fprintf(stderr, "[%s] %s\n", func, msg);
+	exit(EXIT_FAILURE);
+}
+
+void _err_fatal_simple_core(const char *func, const char *msg)
 {
 	fprintf(stderr, "[%s] %s Abort!\n", func, msg);
 	abort();
@@ -89,9 +106,53 @@ size_t err_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
     size_t ret = fwrite(ptr, size, nmemb, stream);
     if (ret != nmemb) 
     {
-        err_fatal_simple_core("fwrite", strerror(errno));
+        _err_fatal_simple("fwrite", strerror(errno));
     }
     return ret;
+}
+
+size_t err_fread_noeof(void *ptr, size_t size, size_t nmemb, FILE *stream)
+{
+	size_t ret = fread(ptr, size, nmemb, stream);
+	if (ret != nmemb)
+	{
+		_err_fatal_simple("fread", ferror(stream) ? strerror(errno) : "Unexpected end of file");
+	}
+	return ret;
+}
+
+int err_gzread(gzFile file, void *ptr, unsigned int len)
+{
+	int ret = gzread(file, ptr, len);
+
+	if (ret < 0)
+	{
+		int errnum = 0;
+		const char *msg = gzerror(file, &errnum);
+		_err_fatal_simple("gzread", Z_ERRNO == errnum ? strerror(errno) : msg);
+	}
+
+	return ret;
+}
+
+int err_fseek(FILE *stream, long offset, int whence)
+{
+	int ret = fseek(stream, offset, whence);
+	if (0 != ret)
+	{
+		_err_fatal_simple("fseek", strerror(errno));
+	}
+	return ret;
+}
+
+long err_ftell(FILE *stream)
+{
+	long ret = ftell(stream);
+	if (-1 == ret)
+	{
+		_err_fatal_simple("ftell", strerror(errno));
+	}
+	return ret;
 }
 
 int err_printf(const char *format, ...) 
@@ -106,7 +167,7 @@ int err_printf(const char *format, ...)
 
     if (done < 0) 
     {
-        err_fatal_simple_core("vfprintf(stdout)", strerror(saveErrno));
+        _err_fatal_simple("vfprintf(stdout)", strerror(saveErrno));
     }
     return done;
 }
@@ -123,7 +184,7 @@ int err_fprintf(FILE *stream, const char *format, ...)
 
     if (done < 0) 
     {
-        err_fatal_simple_core("vfprintf", strerror(saveErrno));
+        _err_fatal_simple("vfprintf", strerror(saveErrno));
     }
     return done;
 }
@@ -133,7 +194,7 @@ int err_fflush(FILE *stream)
     int ret = fflush(stream);
     if (ret != 0) 
     {
-        err_fatal_simple_core("fflush", strerror(errno));
+        _err_fatal_simple("fflush", strerror(errno));
     }
     return ret;
 }
@@ -143,9 +204,50 @@ int err_fclose(FILE *stream)
     int ret = fclose(stream);
     if (ret != 0) 
     {
-        err_fatal_simple_core("fclose", strerror(errno));
+        _err_fatal_simple("fclose", strerror(errno));
     }
     return ret;
+}
+
+void *err_calloc(size_t nmemb, size_t size, const char *file, unsigned int line, const char *func)
+{
+	void *p = calloc(nmemb, size);
+	if (NULL == p)
+	{
+		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", nmemb * size, file, line, strerror(errno));
+	}
+	return p;
+}
+
+void *err_malloc(size_t size, const char *file, unsigned int line, const char *func)
+{
+	void *p = malloc(size);
+	if (NULL == p)
+	{
+		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", size, file, line, strerror(errno));
+	}
+	return p;
+}
+
+void *err_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func)
+{
+	void *p = realloc(ptr, size);
+	if (NULL == p)
+	{
+		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", size, file, line, strerror(errno));
+	}
+	return p;
+}
+
+char *err_strdup(const char *s, const char *file, unsigned int line, const char *func)
+{
+	char *p = strdup(s);
+
+	if (NULL == p)
+	{
+		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", strlen(s), file, line, strerror(errno));
+	}
+	return p;
 }
 
 double cputime()

@@ -40,28 +40,49 @@
 
 
 
-#define err_fatal_simple(msg) err_fatal_simple_core(__func__, msg)
+#define err_fatal_simple(msg) _err_fatal_simple(__func__, msg)
+#define err_fatal_simple_core(msg) _err_fatal_simple_core(__func__, msg)
 #define xopen(fn, mode) err_xopen_core(__func__, fn, mode)
 #define xreopen(fn, mode, fp) err_xreopen_core(__func__, fn, mode, fp)
 #define xzopen(fn, mode) err_xzopen_core(__func__, fn, mode)
-#define xassert(cond, msg) if ((cond) == 0) err_fatal_simple_core(__func__, msg)
+
+#define xassert(cond, msg) if ((cond) == 0) _err_fatal_simple_core(__func__, msg)
+
+#define xcalloc(n, s)  err_calloc( (n), (s), __FILE__, __LINE__, __func__)
+#define xmalloc(s)     err_malloc( (s),      __FILE__, __LINE__, __func__)
+#define xrealloc(p, s) err_realloc((p), (s), __FILE__, __LINE__, __func__)
+#define xstrdup(s)     err_strdup( (s),      __FILE__, __LINE__, __func__)
+
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-	void err_fatal(const char *header, const char *fmt, ...);
-	void err_fatal_simple_core(const char *func, const char *msg);
+	void err_fatal(const char *header, const char *fmt, ...) ATTRIBUTE((noreturn));
+	void err_fatal_core(const char *header, const char *fmt, ...) ATTRIBUTE((noreturn));
+	void _err_fatal_simple(const char *func, const char *msg) ATTRIBUTE((noreturn));
+	void _err_fatal_simple_core(const char *func, const char *msg) ATTRIBUTE((noreturn));
 	FILE *err_xopen_core(const char *func, const char *fn, const char *mode);
 	FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE *fp);
 	gzFile err_xzopen_core(const char *func, const char *fn, const char *mode);
     size_t err_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream);
+	size_t err_fread_noeof(void *ptr, size_t size, size_t nmemb, FILE *stream);
+
+	int err_gzread(gzFile file, void *ptr, unsigned int len);
+	int err_fseek(FILE *stream, long offset, int whence);
+#define err_rewind(FP) err_fseek((FP), 0, SEEK_SET)
+	long err_ftell(FILE *stream);
 	int err_fprintf(FILE *stream, const char *format, ...)
         ATTRIBUTE((format(printf, 2, 3)));
 	int err_printf(const char *format, ...)
         ATTRIBUTE((format(printf, 1, 2)));
 	int err_fflush(FILE *stream);
 	int err_fclose(FILE *stream);
+
+	void *err_calloc(size_t nmemb, size_t size, const char *file, unsigned int line, const char *func);
+	void *err_malloc(size_t size, const char *file, unsigned int line, const char *func);
+	void *err_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func);
+	char *err_strdup(const char *s, const char *file, unsigned int line, const char *func);
 
 	double cputime();
 	double realtime();
