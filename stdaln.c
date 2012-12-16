@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "stdaln.h"
+#include "utils.h"
 
 /* char -> 17 (=16+1) nucleotides */
 unsigned char aln_nt16_table[256] = {
@@ -232,7 +233,7 @@ AlnParam aln_param_aa2aa   = { 10,  2,  2, aln_sm_blosum62, 22, 50 };
 AlnAln *aln_init_AlnAln()
 {
 	AlnAln *aa;
-	aa = (AlnAln*)malloc(sizeof(AlnAln));
+	aa = (AlnAln*)xmalloc(sizeof(AlnAln));
 	aa->path = 0;
 	aa->out1 = aa->out2 = aa->outm = 0;
 	aa->path_len = 0;
@@ -382,13 +383,13 @@ int aln_global_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2
 
 	/* allocate memory */
 	end = (b1 + b2 <= len1)? (b1 + b2 + 1) : (len1 + 1);
-	dpcell = (dpcell_t**)malloc(sizeof(dpcell_t*) * (len2 + 1));
+	dpcell = (dpcell_t**)xmalloc(sizeof(dpcell_t*) * (len2 + 1));
 	for (j = 0; j <= len2; ++j)
-		dpcell[j] = (dpcell_t*)malloc(sizeof(dpcell_t) * end);
+		dpcell[j] = (dpcell_t*)xmalloc(sizeof(dpcell_t) * end);
 	for (j = b2 + 1; j <= len2; ++j)
 		dpcell[j] -= j - b2;
-	curr = (dpscore_t*)malloc(sizeof(dpscore_t) * (len1 + 1));
-	last = (dpscore_t*)malloc(sizeof(dpscore_t) * (len1 + 1));
+	curr = (dpscore_t*)xmalloc(sizeof(dpscore_t) * (len1 + 1));
+	last = (dpscore_t*)xmalloc(sizeof(dpscore_t) * (len1 + 1));
 	
 	/* set first row */
 	SET_INF(*curr); curr->M = 0;
@@ -556,11 +557,11 @@ int aln_local_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2,
 	if (len1 == 0 || len2 == 0) return -1;
 
 	/* allocate memory */
-	suba = (int*)malloc(sizeof(int) * (len2 + 1));
-	eh = (NT_LOCAL_SCORE*)malloc(sizeof(NT_LOCAL_SCORE) * (len1 + 1));
-	s_array = (int**)malloc(sizeof(int*) * N_MATRIX_ROW);
+	suba = (int*)xmalloc(sizeof(int) * (len2 + 1));
+	eh = (NT_LOCAL_SCORE*)xmalloc(sizeof(NT_LOCAL_SCORE) * (len1 + 1));
+	s_array = (int**)xmalloc(sizeof(int*) * N_MATRIX_ROW);
 	for (i = 0; i != N_MATRIX_ROW; ++i)
-		s_array[i] = (int*)malloc(sizeof(int) * len1);
+		s_array[i] = (int*)xmalloc(sizeof(int) * len1);
 	/* initialization */
 	aln_init_score_array(seq1, len1, N_MATRIX_ROW, score_matrix, s_array);
 	q = gap_open;
@@ -773,9 +774,9 @@ AlnAln *aln_stdaln_aux(const char *seq1, const char *seq2, const AlnParam *ap,
 	if (len2 < 0) len2 = strlen(seq2);
 
 	aa = aln_init_AlnAln();
-	seq11 = (unsigned char*)malloc(sizeof(unsigned char) * len1);
-	seq22 = (unsigned char*)malloc(sizeof(unsigned char) * len2);
-	aa->path = (path_t*)malloc(sizeof(path_t) * (len1 + len2 + 1));
+	seq11 = (unsigned char*)xmalloc(sizeof(unsigned char) * len1);
+	seq22 = (unsigned char*)xmalloc(sizeof(unsigned char) * len2);
+	aa->path = (path_t*)xmalloc(sizeof(path_t) * (len1 + len2 + 1));
 
 	if (ap->row < 10) { /* 4-nucleotide alignment */
 		for (i = 0; i < len1; ++i)
@@ -805,9 +806,9 @@ AlnAln *aln_stdaln_aux(const char *seq1, const char *seq2, const AlnParam *ap,
 	aa->score = score;
 
 	if (thres > 0) {
-		out1 = aa->out1 = (char*)malloc(sizeof(char) * (aa->path_len + 1));
-		out2 = aa->out2 = (char*)malloc(sizeof(char) * (aa->path_len + 1));
-		outm = aa->outm = (char*)malloc(sizeof(char) * (aa->path_len + 1));
+		out1 = aa->out1 = (char*)xmalloc(sizeof(char) * (aa->path_len + 1));
+		out2 = aa->out2 = (char*)xmalloc(sizeof(char) * (aa->path_len + 1));
+		outm = aa->outm = (char*)xmalloc(sizeof(char) * (aa->path_len + 1));
 
 		--seq1; --seq2;
 		--seq11; --seq22;
@@ -881,10 +882,10 @@ int aln_extend_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2
 	if (len1 == 0 || len2 == 0) return -1;
 
 	/* allocate memory */
-	mem = _mem? _mem : calloc((len1 + 2) * (N_MATRIX_ROW + 1), 4);
+	mem = _mem? _mem : xcalloc((len1 + 2) * (N_MATRIX_ROW + 1), 4);
 	_p = mem;
 	eh = (uint32_t*)_p, _p += 4 * (len1 + 2);
-	s_array = calloc(N_MATRIX_ROW, sizeof(void*));
+	s_array = xcalloc(N_MATRIX_ROW, sizeof(void*));
 	for (i = 0; i != N_MATRIX_ROW; ++i)
 		s_array[i] = (int32_t*)_p, _p += 4 * len1;
 	/* initialization */
@@ -1024,7 +1025,7 @@ uint32_t *aln_path2cigar32(const path_t *path, int path_len, int *n_cigar)
 		last_type = path[i].ctype;
 	}
 	*n_cigar = n;
-	cigar = (uint32_t*)malloc(*n_cigar * 4);
+	cigar = (uint32_t*)xmalloc(*n_cigar * 4);
 
 	cigar[0] = 1u << 4 | path[path_len-1].ctype;
 	last_type = path[path_len-1].ctype;

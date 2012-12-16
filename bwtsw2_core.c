@@ -7,6 +7,7 @@
 #include "bwtsw2.h"
 #include "bwt.h"
 #include "kvec.h"
+#include "utils.h"
 
 typedef struct {
 	bwtint_t k, l;
@@ -71,7 +72,7 @@ typedef struct __mempool_t {
 inline static bsw2entry_p mp_alloc(mempool_t *mp)
 {
 	++mp->cnt;
-	if (kv_size(mp->pool) == 0) return (bsw2entry_t*)calloc(1, sizeof(bsw2entry_t));
+	if (kv_size(mp->pool) == 0) return (bsw2entry_t*)xcalloc(1, sizeof(bsw2entry_t));
 	else return kv_pop(mp->pool);
 }
 inline static void mp_free(mempool_t *mp, bsw2entry_p e)
@@ -133,7 +134,7 @@ static void cut_tail(bsw2entry_t *u, int T, bsw2entry_t *aux)
 	if (u->n <= T) return;
 	if (aux->max < u->n) {
 		aux->max = u->n;
-		aux->array = (bsw2cell_t*)realloc(aux->array, aux->max * sizeof(bsw2cell_t));
+		aux->array = (bsw2cell_t*)xrealloc(aux->array, aux->max * sizeof(bsw2cell_t));
 	}
 	a = (int*)aux->array;
 	for (i = n = 0; i != u->n; ++i)
@@ -184,7 +185,7 @@ static void merge_entry(const bsw2opt_t * __restrict opt, bsw2entry_t *u, bsw2en
 	int i;
 	if (u->n + v->n >= u->max) {
 		u->max = u->n + v->n;
-		u->array = (bsw2cell_t*)realloc(u->array, u->max * sizeof(bsw2cell_t));
+		u->array = (bsw2cell_t*)xrealloc(u->array, u->max * sizeof(bsw2cell_t));
 	}
 	for (i = 0; i != v->n; ++i) {
 		bsw2cell_t *p = v->array + i;
@@ -202,7 +203,7 @@ static inline bsw2cell_t *push_array_p(bsw2entry_t *e)
 {
 	if (e->n == e->max) {
 		e->max = e->max? e->max<<1 : 256;
-		e->array = (bsw2cell_t*)realloc(e->array, sizeof(bsw2cell_t) * e->max);
+		e->array = (bsw2cell_t*)xrealloc(e->array, sizeof(bsw2cell_t) * e->max);
 	}
 	return e->array + e->n;
 }
@@ -250,7 +251,7 @@ static void save_narrow_hits(const bwtl_t *bwtl, bsw2entry_t *u, bwtsw2_t *b1, i
 		if (p->G >= t && p->ql - p->qk + 1 <= IS) { // good narrow hit
 			if (b1->max == b1->n) {
 				b1->max = b1->max? b1->max<<1 : 4;
-				b1->hits = realloc(b1->hits, b1->max * sizeof(bsw2hit_t));
+				b1->hits = xrealloc(b1->hits, b1->max * sizeof(bsw2hit_t));
 			}
 			q = &b1->hits[b1->n++];
 			q->k = p->qk; q->l = p->ql;
@@ -279,7 +280,7 @@ int bsw2_resolve_duphits(const bntseq_t *bns, const bwt_t *bwt, bwtsw2_t *b, int
 			else if (p->G > 0) ++n;
 		}
 		b->n = b->max = n;
-		b->hits = calloc(b->max, sizeof(bsw2hit_t));
+		b->hits = xcalloc(b->max, sizeof(bsw2hit_t));
 		for (i = j = 0; i < old_n; ++i) {
 			bsw2hit_t *p = old_hits + i;
 			if (p->l - p->k + 1 <= IS) { // the hit is no so repetitive
@@ -399,9 +400,9 @@ bsw2global_t *bsw2_global_init()
 {
 	bsw2global_t *pool;
 	bsw2stack_t *stack;
-	pool = calloc(1, sizeof(bsw2global_t));
-	stack = calloc(1, sizeof(bsw2stack_t));
-	stack->pool = (mempool_t*)calloc(1, sizeof(mempool_t));
+	pool = xcalloc(1, sizeof(bsw2global_t));
+	stack = xcalloc(1, sizeof(bsw2stack_t));
+	stack->pool = (mempool_t*)xcalloc(1, sizeof(mempool_t));
 	pool->stack = (void*)stack;
 	return pool;
 }
@@ -461,13 +462,13 @@ bwtsw2_t **bsw2_core(const bntseq_t *bns, const bsw2opt_t *opt, const bwtl_t *ta
 	rhash = kh_init(qintv);
 	init_bwtsw2(target, query, stack);
 	heap_size = opt->z;
-	heap = calloc(heap_size, sizeof(int));
+	heap = xcalloc(heap_size, sizeof(int));
 	// initialize the return struct
-	b = (bwtsw2_t*)calloc(1, sizeof(bwtsw2_t));
+	b = (bwtsw2_t*)xcalloc(1, sizeof(bwtsw2_t));
 	b->n = b->max = target->seq_len * 2;
-	b->hits = calloc(b->max, sizeof(bsw2hit_t));
-	b1 = (bwtsw2_t*)calloc(1, sizeof(bwtsw2_t));
-	b_ret = calloc(2, sizeof(void*));
+	b->hits = xcalloc(b->max, sizeof(bsw2hit_t));
+	b1 = (bwtsw2_t*)xcalloc(1, sizeof(bwtsw2_t));
+	b_ret = xcalloc(2, sizeof(void*));
 	b_ret[0] = b; b_ret[1] = b1;
 	// initialize timer
 	getrusage(0, &last);

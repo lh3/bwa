@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include "utils.h"
 
 #ifndef kroundup32
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
@@ -22,7 +23,7 @@ static inline int kputs(const char *p, kstring_t *s)
 	if (s->l + l + 1 >= s->m) {
 		s->m = s->l + l + 2;
 		kroundup32(s->m);
-		s->s = (char*)realloc(s->s, s->m);
+		s->s = (char*)xrealloc(s->s, s->m);
 	}
 	strcpy(s->s + s->l, p);
 	s->l += l;
@@ -34,7 +35,7 @@ static inline int kputc(int c, kstring_t *s)
 	if (s->l + 1 >= s->m) {
 		s->m = s->l + 2;
 		kroundup32(s->m);
-		s->s = (char*)realloc(s->s, s->m);
+		s->s = (char*)xrealloc(s->s, s->m);
 	}
 	s->s[s->l++] = c;
 	s->s[s->l] = 0;

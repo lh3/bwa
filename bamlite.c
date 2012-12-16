@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
+#include "utils.h"
 #include "bamlite.h"
 
 /*********************
@@ -53,7 +54,7 @@ int bam_is_be;
 bam_header_t *bam_header_init()
 {
 	bam_is_be = bam_is_big_endian();
-	return (bam_header_t*)calloc(1, sizeof(bam_header_t));
+	return (bam_header_t*)xcalloc(1, sizeof(bam_header_t));
 }
 
 void bam_header_destroy(bam_header_t *header)
@@ -62,11 +63,11 @@ void bam_header_destroy(bam_header_t *header)
 	if (header == 0) return;
 	if (header->target_name) {
 		for (i = 0; i < header->n_targets; ++i)
-			free(header->target_name[i]);
+			if (header->target_name[i]) free(header->target_name[i]);
+		if (header->target_len) free(header->target_len);
 		free(header->target_name);
-		free(header->target_len);
 	}
-	free(header->text);
+	if (header->text) free(header->text);
 	free(header);
 }
 
@@ -80,28 +81,33 @@ bam_header_t *bam_header_read(bamFile fp)
 	magic_len = bam_read(fp, buf, 4);
 	if (magic_len != 4 || strncmp(buf, "BAM\001", 4) != 0) {
 		fprintf(stderr, "[bam_header_read] invalid BAM binary header (this is not a BAM file).\n");
-		return 0;
+		return NULL;
 	}
 	header = bam_header_init();
 	// read plain text and the number of reference sequences
-	bam_read(fp, &header->l_text, 4);
+	if (bam_read(fp, &header->l_text, 4) != 4) goto fail; 
 	if (bam_is_be) bam_swap_endian_4p(&header->l_text);
-	header->text = (char*)calloc(header->l_text + 1, 1);
-	bam_read(fp, header->text, header->l_text);
-	bam_read(fp, &header->n_targets, 4);
+	header->text = (char*)xcalloc(header->l_text + 1, 1);
+	if (bam_read(fp, header->text, header->l_text) != header->l_text) goto fail;
+	if (bam_read(fp, &header->n_targets, 4) != 4) goto fail;
 	if (bam_is_be) bam_swap_endian_4p(&header->n_targets);
 	// read reference sequence names and lengths
-	header->target_name = (char**)calloc(header->n_targets, sizeof(char*));
-	header->target_len = (uint32_t*)calloc(header->n_targets, 4);
+	header->target_name = (char**)xcalloc(header->n_targets, sizeof(char*));
+	header->target_len = (uint32_t*)xcalloc(header->n_targets, 4);
 	for (i = 0; i != header->n_targets; ++i) {
-		bam_read(fp, &name_len, 4);
+		if (bam_read(fp, &name_len, 4) != 4) goto fail;
 		if (bam_is_be) bam_swap_endian_4p(&name_len);
-		header->target_name[i] = (char*)calloc(name_len, 1);
-		bam_read(fp, header->target_name[i], name_len);
-		bam_read(fp, &header->target_len[i], 4);
+		header->target_name[i] = (char*)xcalloc(name_len, 1);
+		if (bam_read(fp, header->target_name[i], name_len) != name_len) {
+			goto fail;
+		}
+		if (bam_read(fp, &header->target_len[i], 4) != 4) goto fail;
 		if (bam_is_be) bam_swap_endian_4p(&header->target_len[i]);
 	}
 	return header;
+ fail:
+	bam_header_destroy(header);
+	return NULL;
 }
 
 static void swap_endian_data(const bam1_core_t *c, int data_len, uint8_t *data)
@@ -146,7 +152,7 @@ int bam_read1(bamFile fp, bam1_t *b)
 	if (b->m_data < b->data_len) {
 		b->m_data = b->data_len;
 		kroundup32(b->m_data);
-		b->data = (uint8_t*)realloc(b->data, b->m_data);
+		b->data = (uint8_t*)xrealloc(b->data, b->m_data);
 	}
 	if (bam_read(fp, b->data, b->data_len) != b->data_len) return -4;
 	b->l_aux = b->data_len - c->n_cigar * 4 - c->l_qname - c->l_qseq - (c->l_qseq+1)/2;

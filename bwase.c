@@ -59,7 +59,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 		 * simply output all hits, but the following samples "rest"
 		 * number of random hits. */
 		rest = n_occ > n_multi + 1? n_multi + 1 : n_occ; // find one additional for ->sa
-		s->multi = calloc(rest, sizeof(bwt_multi1_t));
+		s->multi = xcalloc(rest, sizeof(bwt_multi1_t));
 		for (k = 0; k < n_aln; ++k) {
 			const bwt_aln1_t *q = aln + k;
 			if (q->l - q->k + 1 <= rest) {
@@ -172,16 +172,16 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 
 	ref_len = len + abs(ext);
 	if (ext > 0) {
-		ref_seq = (ubyte_t*)calloc(ref_len, 1);
+		ref_seq = (ubyte_t*)xcalloc(ref_len, 1);
 		for (k = __pos; k < __pos + ref_len && k < l_pac; ++k)
 			ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
 	} else {
 		int64_t x = __pos + (is_end_correct? len : ref_len);
-		ref_seq = (ubyte_t*)calloc(ref_len, 1);
+		ref_seq = (ubyte_t*)xcalloc(ref_len, 1);
 		for (l = 0, k = x - ref_len > 0? x - ref_len : 0; k < x && k < l_pac; ++k)
 			ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
 	}
-	path = (path_t*)calloc(l+len, sizeof(path_t));
+	path = (path_t*)xcalloc(l+len, sizeof(path_t));
 
 	aln_global_core(ref_seq, l, (ubyte_t*)seq, len, &ap, path, &path_len);
 	cigar = bwa_aln_path2cigar(path, path_len, n_cigar);
@@ -257,7 +257,7 @@ char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_
 	}
 	ksprintf(str, "%d", u);
 	*_nm = nm;
-	return strdup(str->s);
+	return xstrdup(str->s);
 }
 
 void bwa_correct_trimmed(bwa_seq_t *s)
@@ -269,11 +269,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 		} else {
 			if (s->cigar == 0) {
 				s->n_cigar = 2;
-				s->cigar = calloc(s->n_cigar, sizeof(bwa_cigar_t));
+				s->cigar = xcalloc(s->n_cigar, sizeof(bwa_cigar_t));
 				s->cigar[0] = __cigar_create(0, s->len);
 			} else {
 				++s->n_cigar;
-				s->cigar = realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
+				s->cigar = xrealloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
 			}
 			s->cigar[s->n_cigar-1] = __cigar_create(3, (s->full_len - s->len));
 		}
@@ -283,11 +283,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 		} else {
 			if (s->cigar == 0) {
 				s->n_cigar = 2;
-				s->cigar = calloc(s->n_cigar, sizeof(bwa_cigar_t));
+				s->cigar = xcalloc(s->n_cigar, sizeof(bwa_cigar_t));
 				s->cigar[1] = __cigar_create(0, s->len);
 			} else {
 				++s->n_cigar;
-				s->cigar = realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
+				s->cigar = xrealloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
 				memmove(s->cigar + 1, s->cigar, (s->n_cigar-1) * sizeof(bwa_cigar_t));
 			}
 			s->cigar[0] = __cigar_create(3, (s->full_len - s->len));
@@ -303,15 +303,15 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 	kstring_t *str;
 
 	if (ntbns) { // in color space
-		ntpac = (ubyte_t*)calloc(ntbns->l_pac/4+1, 1);
-		rewind(ntbns->fp_pac);
-		fread(ntpac, 1, ntbns->l_pac/4 + 1, ntbns->fp_pac);
+		ntpac = (ubyte_t*)xcalloc(ntbns->l_pac/4+1, 1);
+		err_rewind(ntbns->fp_pac);
+		err_fread_noeof(ntpac, 1, ntbns->l_pac/4 + 1, ntbns->fp_pac);
 	}
 
 	if (!_pacseq) {
-		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
-		rewind(bns->fp_pac);
-		fread(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
+		pacseq = (ubyte_t*)xcalloc(bns->l_pac/4+1, 1);
+		err_rewind(bns->fp_pac);
+		err_fread_noeof(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
 	} else pacseq = _pacseq;
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *s = seqs + i;
@@ -351,7 +351,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 	}
 #endif
 	// generate MD tag
-	str = (kstring_t*)calloc(1, sizeof(kstring_t));
+	str = (kstring_t*)xcalloc(1, sizeof(kstring_t));
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *s = seqs + i;
 		if (s->type != BWA_TYPE_NO_MATCH) {
@@ -523,7 +523,7 @@ bntseq_t *bwa_open_nt(const char *prefix)
 {
 	bntseq_t *ntbns;
 	char *str;
-	str = (char*)calloc(strlen(prefix) + 10, 1);
+	str = (char*)xcalloc(strlen(prefix) + 10, 1);
 	strcat(strcpy(str, prefix), ".nt");
 	ntbns = bns_restore(str);
 	free(str);
@@ -566,14 +566,14 @@ int bwa_set_rg(const char *s)
 	if (strstr(s, "@RG") != s) return -1;
 	if (bwa_rg_line) free(bwa_rg_line);
 	if (bwa_rg_id) free(bwa_rg_id);
-	bwa_rg_line = strdup(s);
+	bwa_rg_line = xstrdup(s);
 	bwa_rg_id = 0;
 	bwa_escape(bwa_rg_line);
 	p = strstr(bwa_rg_line, "\tID:");
 	if (p == 0) return -1;
 	p += 4;
 	for (q = p; *q && *q != '\t' && *q != '\n'; ++q);
-	bwa_rg_id = calloc(q - p + 1, 1);
+	bwa_rg_id = xcalloc(q - p + 1, 1);
 	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n'; ++q)
 		*r++ = *q;
 	return 0;
@@ -598,7 +598,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	fp_sa = xopen(fn_sa, "r");
 
 	m_aln = 0;
-	fread(&opt, sizeof(gap_opt_t), 1, fp_sa);
+	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa);
 	if (!(opt.mode & BWA_MODE_COMPREAD)) // in color space; initialize ntpac
 		ntbns = bwa_open_nt(prefix);
 	bwa_print_sam_SQ(bns);
@@ -614,12 +614,12 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		for (i = 0; i < n_seqs; ++i) {
 			bwa_seq_t *p = seqs + i;
 			int n_aln;
-			fread(&n_aln, 4, 1, fp_sa);
+			err_fread_noeof(&n_aln, 4, 1, fp_sa);
 			if (n_aln > m_aln) {
 				m_aln = n_aln;
-				aln = (bwt_aln1_t*)realloc(aln, sizeof(bwt_aln1_t) * m_aln);
+				aln = (bwt_aln1_t*)xrealloc(aln, sizeof(bwt_aln1_t) * m_aln);
 			}
-			fread(aln, sizeof(bwt_aln1_t), n_aln, fp_sa);
+			err_fread_noeof(aln, sizeof(bwt_aln1_t), n_aln, fp_sa);
 			bwa_aln2seq_core(n_aln, aln, p, 1, n_occ);
 		}
 
@@ -644,7 +644,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	bwa_seq_close(ks);
 	if (ntbns) bns_destroy(ntbns);
 	bns_destroy(bns);
-	fclose(fp_sa);
+	err_fclose(fp_sa);
 	free(aln);
 }
 

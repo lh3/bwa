@@ -28,6 +28,7 @@
 #include <stdint.h>
 #include <emmintrin.h>
 #include "ksw.h"
+#include "utils.h"
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -51,7 +52,7 @@ ksw_query_t *ksw_qinit(int size, int qlen, const uint8_t *query, int m, const in
 	size = size > 1? 2 : 1;
 	p = 8 * (3 - size); // # values per __m128i
 	slen = (qlen + p - 1) / p; // segmented length
-	q = malloc(sizeof(ksw_query_t) + 256 + 16 * slen * (m + 4)); // a single block of memory
+	q = xmalloc(sizeof(ksw_query_t) + 256 + 16 * slen * (m + 4)); // a single block of memory
 	q->qp = (__m128i*)(((size_t)q + sizeof(ksw_query_t) + 15) >> 4 << 4); // align memory
 	q->H0 = q->qp + slen * m;
 	q->H1 = q->H0 + slen;
@@ -169,7 +170,7 @@ end_loop16:
 			if (n_b == 0 || (int32_t)b[n_b-1] + 1 != i) { // then append
 				if (n_b == m_b) {
 					m_b = m_b? m_b<<1 : 8;
-					b = realloc(b, 8 * m_b);
+					b = xrealloc(b, 8 * m_b);
 				}
 				b[n_b++] = (uint64_t)imax<<32 | i;
 			} else if ((int)(b[n_b-1]>>32) < imax) b[n_b-1] = (uint64_t)imax<<32 | i; // modify the last
@@ -264,7 +265,7 @@ end_loop8:
 			if (n_b == 0 || (int32_t)b[n_b-1] + 1 != i) {
 				if (n_b == m_b) {
 					m_b = m_b? m_b<<1 : 8;
-					b = realloc(b, 8 * m_b);
+					b = xrealloc(b, 8 * m_b);
 				}
 				b[n_b++] = (uint64_t)imax<<32 | i;
 			} else if ((int)(b[n_b-1]>>32) < imax) b[n_b-1] = (uint64_t)imax<<32 | i; // modify the last
@@ -310,7 +311,7 @@ int ksw_sse2(ksw_query_t *q, int tlen, const uint8_t *target, ksw_aux_t *a)
 #include <stdio.h>
 #include <zlib.h>
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_INIT(gzFile, err_gzread)
 
 unsigned char seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 

@@ -3,12 +3,13 @@
 
 #include <stdint.h>
 #include <zlib.h>
+#include "utils.h"
 
 typedef gzFile bamFile;
-#define bam_open(fn, mode) gzopen(fn, mode)
+#define bam_open(fn, mode) xzopen(fn, mode)
 #define bam_dopen(fd, mode) gzdopen(fd, mode)
 #define bam_close(fp) gzclose(fp)
-#define bam_read(fp, buf, size) gzread(fp, buf, size)
+#define bam_read(fp, buf, size) err_gzread(fp, buf, size)
 
 typedef struct {
 	int32_t n_targets;
@@ -71,7 +72,7 @@ typedef struct {
 #define bam1_seqi(s, i) ((s)[(i)/2] >> 4*(1-(i)%2) & 0xf)
 #define bam1_aux(b) ((b)->data + (b)->core.n_cigar*4 + (b)->core.l_qname + (b)->core.l_qseq + ((b)->core.l_qseq + 1)/2)
 
-#define bam_init1() ((bam1_t*)calloc(1, sizeof(bam1_t)))
+#define bam_init1() ((bam1_t*)xcalloc(1, sizeof(bam1_t)))
 #define bam_destroy1(b) do {					\
 		if (b) { free((b)->data); free(b); }	\
 	} while (0)

@@ -6,7 +6,8 @@
 #include "bwt.h"
 #include "kvec.h"
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+#include "utils.h"
+KSEQ_INIT(gzFile, err_gzread)
 
 extern unsigned char nst_nt4_table[256];
 
@@ -20,11 +21,11 @@ typedef struct {
 smem_i *smem_iter_init(const bwt_t *bwt)
 {
 	smem_i *iter;
-	iter = calloc(1, sizeof(smem_i));
+	iter = xcalloc(1, sizeof(smem_i));
 	iter->bwt = bwt;
-	iter->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
-	iter->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
-	iter->matches   = calloc(1, sizeof(bwtintv_v));
+	iter->tmpvec[0] = xcalloc(1, sizeof(bwtintv_v));
+	iter->tmpvec[1] = xcalloc(1, sizeof(bwtintv_v));
+	iter->matches   = xcalloc(1, sizeof(bwtintv_v));
 	return iter;
 }
 
@@ -78,7 +79,7 @@ int main_fastmap(int argc, char *argv[])
 	fp = gzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
 	{ // load the packed sequences, BWT and SA
-		char *tmp = calloc(strlen(argv[optind]) + 5, 1);
+		char *tmp = xcalloc(strlen(argv[optind]) + 5, 1);
 		strcat(strcpy(tmp, argv[optind]), ".bwt");
 		bwt = bwt_restore_bwt(tmp);
 		strcat(strcpy(tmp, argv[optind]), ".sa");

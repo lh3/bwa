@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "bwt_lite.h"
+#include "utils.h"
 
 int is_sa(const uint8_t *T, uint32_t *SA, int n);
 int is_bwt(uint8_t *T, int n);
@@ -10,21 +11,21 @@ bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq)
 {
 	bwtl_t *b;
 	int i;
-	b = (bwtl_t*)calloc(1, sizeof(bwtl_t));
+	b = (bwtl_t*)xcalloc(1, sizeof(bwtl_t));
 	b->seq_len = len;
 
 	{ // calculate b->bwt
 		uint8_t *s;
-		b->sa = (uint32_t*)calloc(len + 1, 4);
+		b->sa = (uint32_t*)xcalloc(len + 1, 4);
 		is_sa(seq, b->sa, len);
-		s = (uint8_t*)calloc(len + 1, 1);
+		s = (uint8_t*)xcalloc(len + 1, 1);
 		for (i = 0; i <= len; ++i) {
 			if (b->sa[i] == 0) b->primary = i;
 			else s[i] = seq[b->sa[i] - 1];
 		}
 		for (i = b->primary; i < len; ++i) s[i] = s[i + 1];
 		b->bwt_size = (len + 15) / 16;
-		b->bwt = (uint32_t*)calloc(b->bwt_size, 4);
+		b->bwt = (uint32_t*)xcalloc(b->bwt_size, 4);
 		for (i = 0; i < len; ++i)
 			b->bwt[i>>4] |= s[i] << ((15 - (i&15)) << 1);
 		free(s);
@@ -32,7 +33,7 @@ bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq)
 	{ // calculate b->occ
 		uint32_t c[4];
 		b->n_occ = (len + 15) / 16 * 4;
-		b->occ = (uint32_t*)calloc(b->n_occ, 4);
+		b->occ = (uint32_t*)xcalloc(b->n_occ, 4);
 		memset(c, 0, 16);
 		for (i = 0; i < len; ++i) {
 			if (i % 16 == 0)

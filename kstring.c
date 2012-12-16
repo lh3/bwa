@@ -1,6 +1,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include "kstring.h"
+#include "utils.h"
 
 int ksprintf(kstring_t *s, const char *fmt, ...)
 {
@@ -12,7 +13,7 @@ int ksprintf(kstring_t *s, const char *fmt, ...)
 	if (l + 1 > s->m - s->l) {
 		s->m = s->l + l + 2;
 		kroundup32(s->m);
-		s->s = (char*)realloc(s->s, s->m);
+		s->s = (char*)xrealloc(s->s, s->m);
 		va_start(ap, fmt);
 		l = vsnprintf(s->s + s->l, s->m - s->l, fmt, ap);
 	}

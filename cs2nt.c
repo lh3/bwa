@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "bwtaln.h"
 #include "stdaln.h"
+#include "utils.h"
 
 /*
   Here is a delicate example. ref_nt=ATTAAC(RBRBG), read_cs=RBBOG. If we
@@ -118,7 +119,7 @@ void bwa_cs2nt_core(bwa_seq_t *p, bwtint_t l_pac, ubyte_t *pac)
 	// set temporary arrays
 	if (p->type == BWA_TYPE_NO_MATCH) return;
 	len = p->len + p->n_gapo + p->n_gape + 100; // leave enough space
-	ta = (uint8_t*)malloc(len * 7);
+	ta = (uint8_t*)xmalloc(len * 7);
 	nt_ref = ta;
 	cs_read = nt_ref + len;
 	nt_read = cs_read + len;

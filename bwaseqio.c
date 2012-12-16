@@ -5,7 +5,7 @@
 #include "bamlite.h"
 
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_INIT(gzFile, err_gzread)
 
 extern unsigned char nst_nt4_table[256];
 static char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
@@ -22,7 +22,7 @@ bwa_seqio_t *bwa_bam_open(const char *fn, int which)
 {
 	bwa_seqio_t *bs;
 	bam_header_t *h;
-	bs = (bwa_seqio_t*)calloc(1, sizeof(bwa_seqio_t));
+	bs = (bwa_seqio_t*)xcalloc(1, sizeof(bwa_seqio_t));
 	bs->is_bam = 1;
 	bs->which = which;
 	bs->fp = bam_open(fn, "r");
@@ -35,7 +35,7 @@ bwa_seqio_t *bwa_seq_open(const char *fn)
 {
 	gzFile fp;
 	bwa_seqio_t *bs;
-	bs = (bwa_seqio_t*)calloc(1, sizeof(bwa_seqio_t));
+	bs = (bwa_seqio_t*)xcalloc(1, sizeof(bwa_seqio_t));
 	fp = xzopen(fn, "r");
 	bs->ks = kseq_init(fp);
 	return bs;
@@ -93,7 +93,7 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 
 	b = bam_init1();
 	n_seqs = 0;
-	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
+	seqs = (bwa_seq_t*)xcalloc(n_needed, sizeof(bwa_seq_t));
 	while (bam_read1(bs->fp, b) >= 0) {
 		uint8_t *s, *q;
 		int go = 0;
@@ -108,8 +108,8 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 		p->full_len = p->clip_len = p->len = l;
 		n_tot += p->full_len;
 		s = bam1_seq(b); q = bam1_qual(b);
-		p->seq = (ubyte_t*)calloc(p->len + 1, 1);
-		p->qual = (ubyte_t*)calloc(p->len + 1, 1);
+		p->seq = (ubyte_t*)xcalloc(p->len + 1, 1);
+		p->qual = (ubyte_t*)xcalloc(p->len + 1, 1);
 		for (i = 0; i != p->full_len; ++i) {
 			p->seq[i] = bam_nt16_nt4_table[(int)bam1_seqi(s, i)];
 			p->qual[i] = q[i] + 33 < 126? q[i] + 33 : 126;
@@ -119,11 +119,11 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 			seq_reverse(p->len, p->qual, 0);
 		}
 		if (trim_qual >= 1) n_trimmed += bwa_trim_read(trim_qual, p);
-		p->rseq = (ubyte_t*)calloc(p->full_len, 1);
+		p->rseq = (ubyte_t*)xcalloc(p->full_len, 1);
 		memcpy(p->rseq, p->seq, p->len);
 		seq_reverse(p->len, p->seq, 0); // *IMPORTANT*: will be reversed back in bwa_refine_gapped()
 		seq_reverse(p->len, p->rseq, is_comp);
-		p->name = strdup((const char*)bam1_qname(b));
+		p->name = xstrdup((const char*)bam1_qname(b));
 		if (n_seqs == n_needed) break;
 	}
 	*n = n_seqs;
@@ -153,7 +153,7 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 	}
 	if (bs->is_bam) return bwa_read_bam(bs, n_needed, n, is_comp, trim_qual); // l_bc has no effect for BAM input
 	n_seqs = 0;
-	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
+	seqs = (bwa_seq_t*)xcalloc(n_needed, sizeof(bwa_seq_t));
 	while ((l = kseq_read(seq)) >= 0) {
 		if ((mode & BWA_MODE_CFY) && (seq->comment.l != 0)) {
 			// skip reads that are marked to be filtered by Casava
@@ -184,18 +184,18 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 		p->qual = 0;
 		p->full_len = p->clip_len = p->len = l;
 		n_tot += p->full_len;
-		p->seq = (ubyte_t*)calloc(p->len, 1);
+		p->seq = (ubyte_t*)xcalloc(p->full_len, 1);
 		for (i = 0; i != p->full_len; ++i)
 			p->seq[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		if (seq->qual.l) { // copy quality
-			p->qual = (ubyte_t*)strdup((char*)seq->qual.s);
+			p->qual = (ubyte_t*)xstrdup((char*)seq->qual.s);
 			if (trim_qual >= 1) n_trimmed += bwa_trim_read(trim_qual, p);
 		}
-		p->rseq = (ubyte_t*)calloc(p->full_len, 1);
+		p->rseq = (ubyte_t*)xcalloc(p->full_len, 1);
 		memcpy(p->rseq, p->seq, p->len);
 		seq_reverse(p->len, p->seq, 0); // *IMPORTANT*: will be reversed back in bwa_refine_gapped()
 		seq_reverse(p->len, p->rseq, is_comp);
-		p->name = strdup((const char*)seq->name.s);
+		p->name = xstrdup((const char*)seq->name.s);
 		{ // trim /[12]$
 			int t = strlen(p->name);
 			if (t > 2 && p->name[t-2] == '/' && (p->name[t-1] == '1' || p->name[t-1] == '2')) p->name[t-2] = '\0';

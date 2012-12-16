@@ -95,6 +95,7 @@ int main() {
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include "utils.h"
 
 /* compipler specific configuration */
 
@@ -147,7 +148,7 @@ static const double __ac_HASH_UPPER = 0.77;
 		khval_t *vals;													\
 	} kh_##name##_t;													\
 	static inline kh_##name##_t *kh_init_##name() {						\
-		return (kh_##name##_t*)calloc(1, sizeof(kh_##name##_t));		\
+		return (kh_##name##_t*)xcalloc(1, sizeof(kh_##name##_t));		\
 	}																	\
 	static inline void kh_destroy_##name(kh_##name##_t *h)				\
 	{																	\
@@ -188,12 +189,12 @@ static const double __ac_HASH_UPPER = 0.77;
 			new_n_buckets = __ac_prime_list[t+1];						\
 			if (h->size >= (khint_t)(new_n_buckets * __ac_HASH_UPPER + 0.5)) j = 0;	\
 			else {														\
-				new_flags = (khint32_t*)malloc(((new_n_buckets>>4) + 1) * sizeof(khint32_t));	\
+				new_flags = (khint32_t*)xmalloc(((new_n_buckets>>4) + 1) * sizeof(khint32_t));	\
 				memset(new_flags, 0xaa, ((new_n_buckets>>4) + 1) * sizeof(khint32_t)); \
 				if (h->n_buckets < new_n_buckets) {						\
-					h->keys = (khkey_t*)realloc(h->keys, new_n_buckets * sizeof(khkey_t)); \
+					h->keys = (khkey_t*)xrealloc(h->keys, new_n_buckets * sizeof(khkey_t)); \
 					if (kh_is_map)										\
-						h->vals = (khval_t*)realloc(h->vals, new_n_buckets * sizeof(khval_t)); \
+						h->vals = (khval_t*)xrealloc(h->vals, new_n_buckets * sizeof(khval_t)); \
 				}														\
 			}															\
 		}																\
@@ -227,9 +228,9 @@ static const double __ac_HASH_UPPER = 0.77;
 				}														\
 			}															\
 			if (h->n_buckets > new_n_buckets) {							\
-				h->keys = (khkey_t*)realloc(h->keys, new_n_buckets * sizeof(khkey_t)); \
+				h->keys = (khkey_t*)xrealloc(h->keys, new_n_buckets * sizeof(khkey_t)); \
 				if (kh_is_map)											\
-					h->vals = (khval_t*)realloc(h->vals, new_n_buckets * sizeof(khval_t)); \
+					h->vals = (khval_t*)xrealloc(h->vals, new_n_buckets * sizeof(khval_t)); \
 			}															\
 			free(h->flags);												\
 			h->flags = new_flags;										\

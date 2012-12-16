@@ -3,6 +3,7 @@
 #include <string.h>
 #include "bwtgap.h"
 #include "bwtaln.h"
+#include "utils.h"
 
 #define STATE_M 0
 #define STATE_I 1
@@ -13,9 +14,9 @@
 gap_stack_t *gap_init_stack2(int max_score)
 {
 	gap_stack_t *stack;
-	stack = (gap_stack_t*)calloc(1, sizeof(gap_stack_t));
+	stack = (gap_stack_t*)xcalloc(1, sizeof(gap_stack_t));
 	stack->n_stacks = max_score;
-	stack->stacks = (gap_stack1_t*)calloc(stack->n_stacks, sizeof(gap_stack1_t));
+	stack->stacks = (gap_stack1_t*)xcalloc(stack->n_stacks, sizeof(gap_stack1_t));
 	return stack;
 }
 
@@ -51,7 +52,7 @@ static inline void gap_push(gap_stack_t *stack, int i, bwtint_t k, bwtint_t l, i
 	q = stack->stacks + score;
 	if (q->n_entries == q->m_entries) {
 		q->m_entries = q->m_entries? q->m_entries<<1 : 4;
-		q->stack = (gap_entry_t*)realloc(q->stack, sizeof(gap_entry_t) * q->m_entries);
+		q->stack = (gap_entry_t*)xrealloc(q->stack, sizeof(gap_entry_t) * q->m_entries);
 	}
 	p = q->stack + q->n_entries;
 	p->info = (u_int32_t)score<<21 | i; p->k = k; p->l = l;
@@ -110,7 +111,7 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 	bwt_aln1_t *aln;
 
 	m_aln = 4; n_aln = 0;
-	aln = (bwt_aln1_t*)calloc(m_aln, sizeof(bwt_aln1_t));
+	aln = (bwt_aln1_t*)xcalloc(m_aln, sizeof(bwt_aln1_t));
 
 	// check whether there are too many N
 	for (j = _j = 0; j < len; ++j)
@@ -177,7 +178,7 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 				gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos, width);
 				if (n_aln == m_aln) {
 					m_aln <<= 1;
-					aln = (bwt_aln1_t*)realloc(aln, m_aln * sizeof(bwt_aln1_t));
+					aln = (bwt_aln1_t*)xrealloc(aln, m_aln * sizeof(bwt_aln1_t));
 					memset(aln + m_aln/2, 0, m_aln/2*sizeof(bwt_aln1_t));
 				}
 				p = aln + n_aln;

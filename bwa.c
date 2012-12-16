@@ -1,7 +1,9 @@
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include "utils.h"
 #include "bwa.h"
 #include "bwt.h"
 #include "bwtgap.h"
@@ -38,8 +40,8 @@ bwa_idx_t *bwa_idx_load(const char *prefix)
 	int l;
 	char *str;
 	l = strlen(prefix);
-	p = calloc(1, sizeof(bwa_idx_t));
-	str = malloc(l + 10);
+	p = xcalloc(1, sizeof(bwa_idx_t));
+	str = xmalloc(l + 10);
 	strcpy(str, prefix);
 	p->bns = bns_restore(str);
 	strcpy(str + l, ".bwt");
@@ -48,9 +50,9 @@ bwa_idx_t *bwa_idx_load(const char *prefix)
 	strcpy(str + l, ".sa");
 	bwt_restore_sa(str, p->bwt);
 	free(str);
-	p->pac = calloc(p->bns->l_pac/4+1, 1);
-	fread(p->pac, 1, p->bns->l_pac/4+1, p->bns->fp_pac);
-	fclose(p->bns->fp_pac);
+	p->pac = xcalloc(p->bns->l_pac/4+1, 1);
+	err_fread_noeof(p->pac, 1, p->bns->l_pac/4+1, p->bns->fp_pac);
+	err_fclose(p->bns->fp_pac);
 	p->bns->fp_pac = 0;
 	return p;
 }
@@ -69,7 +71,7 @@ bwa_buf_t *bwa_buf_init(const bwa_opt_t *opt, int max_score)
 	extern int bwa_cal_maxdiff(int l, double err, double thres);
 	int i;
 	bwa_buf_t *p;
-	p = malloc(sizeof(bwa_buf_t));
+	p = xmalloc(sizeof(bwa_buf_t));
 	p->stack = gap_init_stack2(max_score);
 	p->opt = gap_init_opt();
 	p->opt->s_gapo = opt->s_gapo;
@@ -80,10 +82,10 @@ bwa_buf_t *bwa_buf_init(const bwa_opt_t *opt, int max_score)
 	p->opt->seed_len = opt->seed_len;
 	p->opt->max_seed_diff = opt->max_seed_diff;
 	p->opt->fnr = opt->fnr;
-	p->diff_tab = calloc(BWA_MAX_QUERY_LEN, sizeof(int));
+	p->diff_tab = xcalloc(BWA_MAX_QUERY_LEN, sizeof(int));
 	for (i = 1; i < BWA_MAX_QUERY_LEN; ++i)
 		p->diff_tab[i] = bwa_cal_maxdiff(i, BWA_AVG_ERR, opt->fnr);
-	p->logn = calloc(256, sizeof(int));
+	p->logn = xcalloc(256, sizeof(int));
 	for (i = 1; i != 256; ++i)
 		p->logn[i] = (int)(4.343 * log(i) + 0.499);
 	return p;
@@ -111,7 +113,7 @@ bwa_sai_t bwa_sai(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq)
 	if (buf_len > buf->max_buf) {
 		buf->max_buf = buf_len;
 		kroundup32(buf->max_buf);
-		buf->buf = realloc(buf->buf, buf->max_buf);
+		buf->buf = xrealloc(buf->buf, buf->max_buf);
 	}
 	memset(buf->buf, 0, buf_len);
 	seed_w = (bwt_width_t*)buf->buf;
@@ -166,7 +168,7 @@ void bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t 
 	if (seq_len<<1 > buf->max_buf) {
 		buf->max_buf = seq_len<<1;
 		kroundup32(buf->max_buf);
-		buf->buf = realloc(buf->buf, buf->max_buf);
+		buf->buf = xrealloc(buf->buf, buf->max_buf);
 	}
 	s[0] = buf->buf;
 	s[1] = s[0] + seq_len;
@@ -180,7 +182,7 @@ void bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t 
 		bwa_cigar_t *cigar16;
 		cigar16 = bwa_refine_gapped_core(idx->bns->l_pac, idx->pac, seq_len, s[strand], &pac_pos, strand? n_gaps : -n_gaps, &n_cigar, 1);
 		aln->n_cigar = n_cigar;
-		aln->cigar = malloc(n_cigar * 4);
+		aln->cigar = xmalloc(n_cigar * 4);
 		for (i = 0, pos3 = pac_pos; i < n_cigar; ++i) {
 			int op = cigar16[i]>>14;
 			int len = cigar16[i]&0x3fff;
@@ -191,7 +193,7 @@ void bwa_sa2aln(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, uint64_t 
 		free(cigar16);
 	} else { // ungapped
 		aln->n_cigar = 1;
-		aln->cigar = malloc(4);
+		aln->cigar = xmalloc(4);
 		aln->cigar[0] = seq_len<<4 | 0;
 		pos3 = pac_pos + seq_len;
 	}
@@ -214,7 +216,7 @@ bwa_one_t *bwa_se(const bwa_idx_t *idx, bwa_buf_t *buf, const char *seq, int gen
 	int best, cnt, i, seq_len;
 
 	seq_len = strlen(seq);
-	one = calloc(1, sizeof(bwa_one_t));
+	one = xcalloc(1, sizeof(bwa_one_t));
 	one->sai = bwa_sai(idx, buf, seq);
 	if (one->sai.n == 0) return one;
 	// count number of hits; randomly select one alignment

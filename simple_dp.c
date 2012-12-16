@@ -8,7 +8,7 @@
 #include "utils.h"
 
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_INIT(gzFile, err_gzread)
 
 typedef struct {
 	int l;
@@ -64,20 +64,20 @@ static seqs_t *load_seqs(const char *fn)
 
 	fp = xzopen(fn, "r");
 	seq = kseq_init(fp);
-	s = (seqs_t*)calloc(1, sizeof(seqs_t));
+	s = (seqs_t*)xcalloc(1, sizeof(seqs_t));
 	s->m_seqs = 256;
-	s->seqs = (seq1_t*)calloc(s->m_seqs, sizeof(seq1_t));
+	s->seqs = (seq1_t*)xcalloc(s->m_seqs, sizeof(seq1_t));
 	while ((l = kseq_read(seq)) >= 0) {
 		if (s->n_seqs == s->m_seqs) {
 			s->m_seqs <<= 1;
-			s->seqs = (seq1_t*)realloc(s->seqs, s->m_seqs * sizeof(seq1_t));
+			s->seqs = (seq1_t*)xrealloc(s->seqs, s->m_seqs * sizeof(seq1_t));
 		}
 		p = s->seqs + (s->n_seqs++);
 		p->l = seq->seq.l;
-		p->s = (unsigned char*)malloc(p->l + 1);
+		p->s = (unsigned char*)xmalloc(p->l + 1);
 		memcpy(p->s, seq->seq.s, p->l);
 		p->s[p->l] = 0;
-		p->n = strdup((const char*)seq->name.s);
+		p->n = xstrdup((const char*)seq->name.s);
 	}
 	kseq_destroy(seq);
 	gzclose(fp);

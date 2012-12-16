@@ -29,6 +29,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
+#include "utils.h"
 
 #define __KS_TYPE(type_t)						\
 	typedef struct __kstream_t {				\
@@ -43,9 +44,9 @@
 #define __KS_BASIC(type_t, __bufsize)								\
 	static inline kstream_t *ks_init(type_t f)						\
 	{																\
-		kstream_t *ks = (kstream_t*)calloc(1, sizeof(kstream_t));	\
+		kstream_t *ks = (kstream_t*)xcalloc(1, sizeof(kstream_t)); \
 		ks->f = f;													\
-		ks->buf = (char*)malloc(__bufsize);							\
+		ks->buf = (char*)xmalloc(__bufsize);						\
 		return ks;													\
 	}																\
 	static inline void ks_destroy(kstream_t *ks)					\
@@ -107,7 +108,7 @@ typedef struct __kstring_t {
 			if (str->m - str->l < i - ks->begin + 1) {					\
 				str->m = str->l + (i - ks->begin) + 1;					\
 				kroundup32(str->m);										\
-				str->s = (char*)realloc(str->s, str->m);				\
+				str->s = (char*)xrealloc(str->s, str->m);			\
 			}															\
 			memcpy(str->s + str->l, ks->buf + ks->begin, i - ks->begin); \
 			str->l = str->l + (i - ks->begin);							\
@@ -130,7 +131,7 @@ typedef struct __kstring_t {
 #define __KSEQ_BASIC(type_t)											\
 	static inline kseq_t *kseq_init(type_t fd)							\
 	{																	\
-		kseq_t *s = (kseq_t*)calloc(1, sizeof(kseq_t));					\
+		kseq_t *s = (kseq_t*)xcalloc(1, sizeof(kseq_t));				\
 		s->f = ks_init(fd);												\
 		return s;														\
 	}																	\
@@ -170,7 +171,7 @@ typedef struct __kstring_t {
 				if (seq->seq.l + 1 >= seq->seq.m) { /* double the memory */ \
 					seq->seq.m = seq->seq.l + 2;						\
 					kroundup32(seq->seq.m); /* rounded to next closest 2^k */ \
-					seq->seq.s = (char*)realloc(seq->seq.s, seq->seq.m); \
+					seq->seq.s = (char*)xrealloc(seq->seq.s, seq->seq.m); \
 				}														\
 				seq->seq.s[seq->seq.l++] = (char)c;						\
 			}															\
@@ -180,7 +181,7 @@ typedef struct __kstring_t {
 		if (c != '+') return seq->seq.l; /* FASTA */					\
 		if (seq->qual.m < seq->seq.m) {	/* allocate enough memory */	\
 			seq->qual.m = seq->seq.m;									\
-			seq->qual.s = (char*)realloc(seq->qual.s, seq->qual.m);		\
+			seq->qual.s = (char*)xrealloc(seq->qual.s, seq->qual.m);		\
 		}																\
 		while ((c = ks_getc(ks)) != -1 && c != '\n'); /* skip the rest of '+' line */ \
 		if (c == -1) return -2; /* we should not stop here */			\
