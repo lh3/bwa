@@ -201,7 +201,8 @@ int bwa_pac2cspac(int argc, char *argv[])
 	fp = xopen(str, "wb");
 	err_fwrite(cspac, 1, bns->l_pac/4 + 1, fp);
 	ct = bns->l_pac % 4;
-	err_fwrite(&ct, 1, 1, fp);	
+	err_fwrite(&ct, 1, 1, fp);
+	err_fflush(fp);
 	err_fclose(fp);
 	bns_destroy(bns);
 	free(cspac);

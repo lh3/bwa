@@ -89,7 +89,7 @@ int bwa_index(int argc, char *argv[])
 		fprintf(stderr, "[bwa_index] Pack FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 0);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		gzclose(fp);
+		err_gzclose(fp);
 	} else { // color indexing
 		gzFile fp = xzopen(argv[optind], "r");
 		strcat(strcpy(str, prefix), ".nt");
@@ -97,7 +97,7 @@ int bwa_index(int argc, char *argv[])
 		fprintf(stderr, "[bwa_index] Pack nucleotide FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, str, 0);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		gzclose(fp);
+		err_gzclose(fp);
 		{
 			char *tmp_argv[3];
 			tmp_argv[0] = argv[0]; tmp_argv[1] = str; tmp_argv[2] = prefix;
@@ -139,7 +139,7 @@ int bwa_index(int argc, char *argv[])
 		fprintf(stderr, "[bwa_index] Pack forward-only FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 1);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		gzclose(fp);
+		err_gzclose(fp);
 	}
 	{
 		bwt_t *bwt;

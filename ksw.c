@@ -364,8 +364,8 @@ int main(int argc, char *argv[])
 	}
 	for (j = 0; j < 5; ++j) mat[k++] = 0;
 	// open file
-	fpt = gzopen(argv[optind],   "r"); kst = kseq_init(fpt);
-	fpq = gzopen(argv[optind+1], "r"); ksq = kseq_init(fpq);
+	fpt = xzopen(argv[optind],   "r"); kst = kseq_init(fpt);
+	fpq = xzopen(argv[optind+1], "r"); ksq = kseq_init(fpq);
 	// all-pair alignment
 	while (kseq_read(ksq) > 0) {
 		ksw_query_t *q[2];
@@ -394,8 +394,8 @@ int main(int argc, char *argv[])
 		}
 		free(q[0]); free(q[1]);
 	}
-	kseq_destroy(kst); gzclose(fpt);
-	kseq_destroy(ksq); gzclose(fpq);
+	kseq_destroy(kst); err_gzclose(fpt);
+	kseq_destroy(ksq); err_gzclose(fpq);
 	return 0;
 }
 #endif // _KSW_MAIN

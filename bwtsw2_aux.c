@@ -752,7 +752,7 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 		p->tid = -1; p->l = 0;
 		p->name = p->seq = p->qual = p->sam = 0;
 	}
-	fflush(stdout);
+	err_fflush(stdout);
 	_seq->n = 0;
 }
 
@@ -819,9 +819,9 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	free(pac);
 	free(_seq->seq); free(_seq);
 	kseq_destroy(ks);
-	gzclose(fp);
+	err_gzclose(fp);
 	if (fn2) {
 		kseq_destroy(ks2);
-		gzclose(fp2);
+		err_gzclose(fp2);
 	}
 }

@@ -8,7 +8,7 @@
 typedef gzFile bamFile;
 #define bam_open(fn, mode) xzopen(fn, mode)
 #define bam_dopen(fd, mode) gzdopen(fd, mode)
-#define bam_close(fp) gzclose(fp)
+#define bam_close(fp) err_gzclose(fp)
 #define bam_read(fp, buf, size) err_gzread(fp, buf, size)
 
 typedef struct {

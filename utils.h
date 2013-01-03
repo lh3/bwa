@@ -78,6 +78,7 @@ extern "C" {
         ATTRIBUTE((format(printf, 1, 2)));
 	int err_fflush(FILE *stream);
 	int err_fclose(FILE *stream);
+	int err_gzclose(gzFile file);
 
 	void *err_calloc(size_t nmemb, size_t size, const char *file, unsigned int line, const char *func);
 	void *err_malloc(size_t size, const char *file, unsigned int line, const char *func);

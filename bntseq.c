@@ -73,6 +73,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 			else err_fprintf(fp, "\n");
 			err_fprintf(fp, "%lld %d %d\n", (long long)p->offset, p->len, p->n_ambs);
 		}
+		err_fflush(fp);
 		err_fclose(fp);
 	}
 	{ // dump .amb
@@ -83,6 +84,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 			bntamb1_t *p = bns->ambs + i;
 			err_fprintf(fp, "%lld %d %c\n", (long long)p->offset, p->len, p->amb);
 		}
+		err_fflush(fp);
 		err_fclose(fp);
 	}
 }
@@ -279,6 +281,7 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 		ct = bns->l_pac % 4;
 		err_fwrite(&ct, 1, 1, fp);
 		// close .pac file
+		err_fflush(fp);
 		err_fclose(fp);
 	}
 	bns_dump(bns, prefix);
@@ -303,7 +306,7 @@ int bwa_fa2pac(int argc, char *argv[])
 	}
 	fp = xzopen(argv[optind], "r");
 	bns_fasta2bntseq(fp, (optind+1 < argc)? argv[optind+1] : argv[optind], for_only);
-	gzclose(fp);
+	err_gzclose(fp);
 	return 0;
 }
 

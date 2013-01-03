@@ -24,6 +24,7 @@
 */
 
 /* Contact: Heng Li <lh3@sanger.ac.uk> */
+#define FSYNC_ON_FLUSH
 
 #include <stdio.h>
 #include <stdarg.h>
@@ -31,6 +32,11 @@
 #include <string.h>
 #include <zlib.h>
 #include <errno.h>
+#ifdef FSYNC_ON_FLUSH
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 #include <sys/resource.h>
 #include <sys/time.h>
 #include "utils.h"
@@ -196,6 +202,28 @@ int err_fflush(FILE *stream)
     {
         _err_fatal_simple("fflush", strerror(errno));
     }
+#ifdef FSYNC_ON_FLUSH
+	/* Calling fflush() ensures that all the data has made it to the
+	   kernel buffers, but this may not be sufficient for remote filesystems
+	   (e.g. NFS, lustre) as an error may still occur while the kernel
+	   is copying the buffered data to the file server.  To be sure of
+	   catching these errors, we need to call fsync() on the file
+	   descriptor, but only if it is a regular file.  */
+	{
+		struct stat sbuf;
+		if (0 != fstat(fileno(stream), &sbuf))
+		{
+			_err_fatal_simple("fstat", strerror(errno));
+		}
+		if (S_ISREG(sbuf.st_mode))
+		{
+			if (0 != fsync(fileno(stream)))
+			{
+				_err_fatal_simple("fsync", strerror(errno));
+			}
+		}
+	}
+#endif
     return ret;
 }
 
@@ -207,6 +235,17 @@ int err_fclose(FILE *stream)
         _err_fatal_simple("fclose", strerror(errno));
     }
     return ret;
+}
+
+int err_gzclose(gzFile file)
+{
+	int ret = gzclose(file);
+	if (Z_OK != ret)
+	{
+		_err_fatal_simple("gzclose", Z_ERRNO == ret ? strerror(errno) : zError(ret));
+	}
+
+	return ret;
 }
 
 void *err_calloc(size_t nmemb, size_t size, const char *file, unsigned int line, const char *func)

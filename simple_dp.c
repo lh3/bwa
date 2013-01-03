@@ -80,7 +80,7 @@ static seqs_t *load_seqs(const char *fn)
 		p->n = xstrdup((const char*)seq->name.s);
 	}
 	kseq_destroy(seq);
-	gzclose(fp);
+	err_gzclose(fp);
 	fprintf(stderr, "[load_seqs] %d sequences are loaded.\n", s->n_seqs);
 	return s;
 }
@@ -123,7 +123,7 @@ static void aln_seqs(const seqs_t *ss, const char *fn)
 		}
 	}
 	kseq_destroy(seq);
-	gzclose(fp);
+	err_gzclose(fp);
 }
 
 int bwa_stdsw(int argc, char *argv[])

@@ -11,6 +11,7 @@ void bwt_dump_bwt(const char *fn, const bwt_t *bwt)
 	err_fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
 	err_fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
 	err_fwrite(bwt->bwt, 4, bwt->bwt_size, fp);
+	err_fflush(fp);
 	err_fclose(fp);
 }
 
@@ -23,6 +24,7 @@ void bwt_dump_sa(const char *fn, const bwt_t *bwt)
 	err_fwrite(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
 	err_fwrite(&bwt->seq_len, sizeof(bwtint_t), 1, fp);
 	err_fwrite(bwt->sa + 1, sizeof(bwtint_t), bwt->n_sa - 1, fp);
+	err_fflush(fp);
 	err_fclose(fp);
 }
 

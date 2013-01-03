@@ -76,7 +76,7 @@ int main_fastmap(int argc, char *argv[])
 		return 1;
 	}
 
-	fp = gzopen(argv[optind + 1], "r");
+	fp = xzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
 	{ // load the packed sequences, BWT and SA
 		char *tmp = xcalloc(strlen(argv[optind]) + 5, 1);
@@ -123,6 +123,6 @@ int main_fastmap(int argc, char *argv[])
 	bns_destroy(bns);
 	bwt_destroy(bwt);
 	kseq_destroy(seq);
-	gzclose(fp);
+	err_gzclose(fp);
 	return 0;
 }
