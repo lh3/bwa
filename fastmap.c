@@ -91,9 +91,9 @@ int main_fastmap(int argc, char *argv[])
 	while (kseq_read(seq) >= 0) {
 		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {
-			putchar('\t');
-			puts(seq->seq.s);
-		} else putchar('\n');
+			err_putchar('\t');
+			err_puts(seq->seq.s);
+		} else err_putchar('\n');
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		smem_set_query(iter, seq->seq.l, (uint8_t*)seq->seq.s);
@@ -112,11 +112,11 @@ int main_fastmap(int argc, char *argv[])
 						bns_cnt_ambi(bns, pos, len, &ref_id);
 						printf("\t%s:%c%ld", bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
 					}
-				} else fputs("\t*", stdout);
-				putchar('\n');
+				} else err_puts("\t*");
+				err_putchar('\n');
 			}
 		}
-		puts("//");
+		err_puts("//");
 	}
 
 	smem_iter_destroy(iter);

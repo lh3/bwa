@@ -195,6 +195,28 @@ int err_fprintf(FILE *stream, const char *format, ...)
     return done;
 }
 
+int err_fputc(int c, FILE *stream)
+{
+	int ret = putc(c, stream);
+	if (EOF == ret)
+	{
+		_err_fatal_simple("fputc", strerror(errno));
+	}
+
+	return ret;
+}
+
+int err_fputs(const char *s, FILE *stream)
+{
+	int ret = fputs(s, stream);
+	if (EOF == ret)
+	{
+		_err_fatal_simple("fputs", strerror(errno));
+	}
+
+	return ret;
+}
+
 int err_fflush(FILE *stream) 
 {
     int ret = fflush(stream);

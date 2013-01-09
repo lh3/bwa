@@ -404,6 +404,26 @@ static int64_t pos_5(const bwa_seq_t *p)
 	return -1;
 }
 
+void bwa_print_seq(FILE *stream, bwa_seq_t *seq) {
+	char buffer[4096];
+	const int bsz = sizeof(buffer);
+	int i, j, l;
+	
+	if (seq->strand == 0) {
+		for (i = 0; i < seq->full_len; i += bsz) {
+			l = seq->full_len - i > bsz ? bsz : seq->full_len - i;
+			for (j = 0; j < l; j++) buffer[j] = "ACGTN"[seq->seq[i + j]];
+			err_fwrite(buffer, 1, l, stream);
+		}
+	} else {
+		for (i = seq->full_len - 1; i >= 0; i -= bsz) {
+			l = i + 1 > bsz ? bsz : i + 1;
+			for (j = 0; j < l; j++) buffer[j] = "TGCAN"[seq->seq[i - j]];
+			err_fwrite(buffer, 1, l, stream);
+		}
+	}
+}
+
 void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, int mode, int max_top2)
 {
 	int j;
@@ -455,10 +475,8 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		else err_printf("\t*\t0\t0\t");
 
 		// print sequence and quality
-		if (p->strand == 0)
-			for (j = 0; j != p->full_len; ++j) putchar("ACGTN"[(int)p->seq[j]]);
-		else for (j = 0; j != p->full_len; ++j) putchar("TGCAN"[p->seq[p->full_len - 1 - j]]);
-		putchar('\t');
+		bwa_print_seq(stdout, p);
+		err_putchar('\t');
 		if (p->qual) {
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			err_printf("%s", p->qual);
@@ -500,14 +518,16 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				}
 			}
 		}
-		putchar('\n');
+		err_putchar('\n');
 	} else { // this read has no match
-		ubyte_t *s = p->strand? p->rseq : p->seq;
+		//ubyte_t *s = p->strand? p->rseq : p->seq;
 		int flag = p->extra_flag | SAM_FSU;
 		if (mate && mate->type == BWA_TYPE_NO_MATCH) flag |= SAM_FMU;
 		err_printf("%s\t%d\t*\t0\t0\t*\t*\t0\t0\t", p->name, flag);
-		for (j = 0; j != p->len; ++j) putchar("ACGTN"[(int)s[j]]);
-		putchar('\t');
+		//Why did this work differently to the version above??
+		//for (j = 0; j != p->len; ++j) putchar("ACGTN"[(int)s[j]]);
+		bwa_print_seq(stdout, p);
+		err_putchar('\t');
 		if (p->qual) {
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			err_printf("%s", p->qual);
@@ -515,7 +535,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
-		putchar('\n');
+		err_putchar('\n');
 	}
 }
 
