@@ -311,20 +311,19 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, 
 	swap = curr; curr = prev; prev = swap;
 
 	for (i = x - 1; i >= -1; --i) { // backward search for MEMs
-		if (i >= 0 && q[i] > 3) break; // always stop at an ambiguous base as the FM-index does not have any.
-		c = i < 0? 0 : q[i];
+		c = i < 0? -1 : q[i] < 4? q[i] : -1; // c==-1 if i<0 or q[i] is an ambiguous base
 		for (j = 0, curr->n = 0; j < prev->n; ++j) {
 			bwtintv_t *p = &prev->a[j];
 			bwt_extend(bwt, p, ok, 1);
-			if (ok[c].x[2] < min_intv || i == -1) { // keep the hit if reaching the beginning or not extended further
-				if (curr->n == 0) { // curr->n to make sure there is no longer matches
+			if (c < 0 || ok[c].x[2] < min_intv) { // keep the hit if reaching the beginning or an ambiguous base or the intv is small enough
+				if (curr->n == 0) { // test curr->n>0 to make sure there is no longer matches
 					if (mem->n == 0 || i + 1 < mem->a[mem->n-1].info>>32) { // skip contained matches
 						ik = *p; ik.info |= (uint64_t)(i + 1)<<32;
 						kv_push(bwtintv_t, *mem, ik);
 					}
 				} // otherwise the match is contained in another longer match
 			}
-			if (ok[c].x[2] && (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2])) {
+			if (c >= 0 && (ok[c].x[2] && (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2]))) {
 				ok[c].info = p->info;
 				kv_push(bwtintv_t, *curr, ok[c]);
 			}
