@@ -10,50 +10,6 @@ KSEQ_INIT(gzFile, gzread)
 
 extern unsigned char nst_nt4_table[256];
 
-typedef struct {
-	const bwt_t *bwt;
-	const uint8_t *query;
-	int start, len, min_intv;
-	bwtintv_v *tmpvec[2], *matches;
-} smem_i;
-
-smem_i *smem_iter_init(const bwt_t *bwt, int min_intv)
-{
-	smem_i *iter;
-	iter = calloc(1, sizeof(smem_i));
-	iter->bwt = bwt;
-	iter->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
-	iter->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
-	iter->matches   = calloc(1, sizeof(bwtintv_v));
-	iter->min_intv = min_intv > 0? min_intv : 1;
-	return iter;
-}
-
-void smem_iter_destroy(smem_i *iter)
-{
-	free(iter->tmpvec[0]->a);
-	free(iter->tmpvec[1]->a);
-	free(iter->matches->a);
-	free(iter);
-}
-
-void smem_set_query(smem_i *iter, int len, const uint8_t *query)
-{
-	iter->query = query;
-	iter->start = 0;
-	iter->len = len;
-}
-
-int smem_next(smem_i *iter)
-{
-	iter->tmpvec[0]->n = iter->tmpvec[1]->n = iter->matches->n = 0;
-	if (iter->start >= iter->len || iter->start < 0) return -1;
-	while (iter->start < iter->len && iter->query[iter->start] > 3) ++iter->start; // skip ambiguous bases
-	if (iter->start == iter->len) return -1;
-	iter->start = bwt_smem1(iter->bwt, iter->len, iter->query, iter->start, iter->min_intv, iter->matches, iter->tmpvec);
-	return iter->start;
-}
-
 int main_fastmap(int argc, char *argv[])
 {
 	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, min_intv = 1;
@@ -62,7 +18,7 @@ int main_fastmap(int argc, char *argv[])
 	gzFile fp;
 	bwt_t *bwt;
 	bntseq_t *bns;
-	smem_i *iter;
+	smem_i *itr;
 
 	while ((c = getopt(argc, argv, "w:l:sm:")) >= 0) {
 		switch (c) {
@@ -88,7 +44,7 @@ int main_fastmap(int argc, char *argv[])
 		free(tmp);
 		bns = bns_restore(argv[optind]);
 	}
-	iter = smem_iter_init(bwt, min_intv);
+	itr = smem_itr_init(bwt);
 	while (kseq_read(seq) >= 0) {
 		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {
@@ -97,10 +53,10 @@ int main_fastmap(int argc, char *argv[])
 		} else putchar('\n');
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-		smem_set_query(iter, seq->seq.l, (uint8_t*)seq->seq.s);
-		while (smem_next(iter) > 0) {
-			for (i = 0; i < iter->matches->n; ++i) {
-				bwtintv_t *p = &iter->matches->a[i];
+		smem_set_query(itr, min_intv, seq->seq.l, (uint8_t*)seq->seq.s);
+		while (smem_next(itr) > 0) {
+			for (i = 0; i < itr->matches->n; ++i) {
+				bwtintv_t *p = &itr->matches->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;
 				printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
 				if (p->x[2] <= min_iwidth) {
@@ -120,7 +76,7 @@ int main_fastmap(int argc, char *argv[])
 		puts("//");
 	}
 
-	smem_iter_destroy(iter);
+	smem_itr_destroy(itr);
 	bns_destroy(bns);
 	bwt_destroy(bwt);
 	kseq_destroy(seq);
