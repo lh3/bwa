@@ -323,7 +323,7 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, 
 					}
 				} // otherwise the match is contained in another longer match
 			}
-			if (c >= 0 && (ok[c].x[2] && (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2]))) {
+			if (c >= 0 && ok[c].x[2] >= min_intv && (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2])) {
 				ok[c].info = p->info;
 				kv_push(bwtintv_t, *curr, ok[c]);
 			}
