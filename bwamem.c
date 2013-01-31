@@ -81,7 +81,7 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 	return 0;
 }
 
-void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
+static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 {
 	while (smem_next(itr) > 0) {
 		int i;
@@ -89,21 +89,22 @@ void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 			bwtintv_t *p = &itr->matches->a[i];
 			int slen = (uint32_t)p->info - (p->info>>32); // seed length
 			int64_t k;
-			if (slen >= opt->min_seed_len || p->x[2] > opt->max_occ) continue;
+			if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue;
 			for (k = 0; k < p->x[2]; ++k) {
 				memchain1_t tmp, *lower, *upper;
-				memseed_t c1;
+				memseed_t s;
 				int to_add = 0;
-				c1.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k);
-				c1.qbeg = p->info>>32;
-				c1.len  = slen;
+				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k);
+				s.qbeg = p->info>>32;
+				s.len  = slen;
 				if (kb_size(tree)) {
 					kb_intervalp(chn, tree, &tmp, &lower, &upper);
-					if (!test_and_merge(opt, lower, &c1)) to_add = 1;
-				} to_add = 1;
+					if (!lower || !test_and_merge(opt, lower, &s)) to_add = 1;
+				} else to_add = 1;
 				if (to_add) {
 					tmp.n = 1; tmp.m = 4;
 					tmp.seeds = calloc(tmp.m, sizeof(memseed_t));
+					tmp.seeds[0] = s;
 					kb_putp(chn, tree, &tmp);
 				}
 			}
@@ -111,7 +112,7 @@ void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 	}
 }
 
-memchain_t mem_collect_seed(const memopt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
+memchain_t mem_chain(const memopt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
 {
 	memchain_t chain;
 	smem_i *itr;
@@ -122,6 +123,14 @@ memchain_t mem_collect_seed(const memopt_t *opt, const bwt_t *bwt, int len, cons
 	tree = kb_init(chn, KB_DEFAULT_SIZE);
 	itr = smem_itr_init(bwt);
 	smem_set_query(itr, 1, len, seq);
+	mem_insert_seed(opt, tree, itr);
+
+	chain.m = kb_size(tree); chain.n = 0;
+	chain.chains = malloc(chain.m * sizeof(memchain1_t));
+
+	#define traverse_func(p_) (chain.chains[chain.n++] = *(p_))
+	__kb_traverse(memchain1_t, tree, traverse_func);
+	#undef traverse_func
 
 	smem_itr_destroy(itr);
 	kb_destroy(chn, tree);

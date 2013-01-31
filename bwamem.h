@@ -11,7 +11,8 @@ typedef struct {
 } smem_i;
 
 typedef struct {
-	int64_t qbeg, rbeg, len;
+	int64_t rbeg;
+	int32_t qbeg, len;
 } memseed_t;
 
 typedef struct {
@@ -40,6 +41,8 @@ void smem_set_query(smem_i *itr, int min_intv, int len, const uint8_t *query);
 int smem_next(smem_i *itr);
 
 memopt_t *mem_opt_init(void);
+
+memchain_t mem_chain(const memopt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq);
 
 #ifdef __cplusplus
 }
