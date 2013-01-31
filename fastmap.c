@@ -4,11 +4,34 @@
 #include <stdlib.h>
 #include "bntseq.h"
 #include "bwt.h"
+#include "bwamem.h"
 #include "kvec.h"
 #include "kseq.h"
 KSEQ_INIT(gzFile, gzread)
 
 extern unsigned char nst_nt4_table[256];
+
+int main_mem(int argc, char *argv[])
+{
+	memopt_t *opt;
+	bwt_t *bwt;
+	bntseq_t *bns;
+	int c;
+
+	opt = mem_opt_init();
+	while ((c = getopt(argc, argv, "")) >= 0) {
+	}
+	if (optind + 1 >= argc) {
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n");
+		fprintf(stderr, "\n");
+		free(opt);
+		return 1;
+	}
+
+	free(opt);
+	return 0;
+}
 
 int main_fastmap(int argc, char *argv[])
 {

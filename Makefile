@@ -4,7 +4,7 @@ CFLAGS=		-g -Wall -O2
 CXXFLAGS=	$(CFLAGS)
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
-LOBJS=		bwa.o bamlite.o utils.o bwt.o bwtio.o bwtaln.o bwtgap.o bntseq.o stdaln.o \
+LOBJS=		bwa.o bamlite.o utils.o bwt.o bwtio.o bwtaln.o bwtgap.o bntseq.o bwamem.o stdaln.o \
 			bwaseqio.o bwase.o kstring.o
 AOBJS=		QSufSort.o bwt_gen.o \
 			is.o bwtmisc.o bwtindex.o ksw.o simple_dp.o \
@@ -44,6 +44,9 @@ bwtgap.o:bwtgap.h bwtaln.h bwt.h
 bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
 bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
 bwtsw2_main.o:bwtsw2.h
+
+bwamem.o:bwamem.h
+fastmap.o:bwt.h bwamem.h
 
 clean:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a

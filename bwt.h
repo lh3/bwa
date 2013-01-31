@@ -60,13 +60,6 @@ typedef struct {
 
 typedef struct { size_t n, m; bwtintv_t *a; } bwtintv_v;
 
-typedef struct {
-	const bwt_t *bwt;
-	const uint8_t *query;
-	int start, len, min_intv;
-	bwtintv_v *tmpvec[2], *matches;
-} smem_i;
-
 /* For general OCC_INTERVAL, the following is correct:
 #define bwt_bwt(b, k) ((b)->bwt[(k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(bwtint_t)/4*4) + sizeof(bwtint_t)/4*4 + (k)%OCC_INTERVAL/16])
 #define bwt_occ_intv(b, k) ((b)->bwt + (k)/OCC_INTERVAL * (OCC_INTERVAL/(sizeof(uint32_t)*8/2) + sizeof(bwtint_t)/4*4)
@@ -131,11 +124,6 @@ extern "C" {
 	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
 	// SMEM iterator interface
-
-	smem_i *smem_itr_init(const bwt_t *bwt);
-	void smem_itr_destroy(smem_i *itr);
-	void smem_set_query(smem_i *itr, int min_intv, int len, const uint8_t *query);
-	int smem_next(smem_i *itr);
 
 #ifdef __cplusplus
 }

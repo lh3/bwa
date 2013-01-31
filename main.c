@@ -20,6 +20,7 @@ static int usage()
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
 	fprintf(stderr, "         bwasw         BWA-SW for long queries\n");
 	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
+	fprintf(stderr, "         mem           BWA-MEM algorithm\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
@@ -59,6 +60,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "dbwtsw") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwasw") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "fastmap") == 0) ret = main_fastmap(argc-1, argv+1);
+	else if (strcmp(argv[1], "mem") == 0) ret = main_mem(argc-1, argv+1);
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;
