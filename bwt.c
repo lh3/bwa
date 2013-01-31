@@ -277,7 +277,7 @@ static void bwt_reverse_intvs(bwtintv_v *p)
 	}
 }
 
-int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem, bwtintv_v *tmpvec[2])
+int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2])
 {
 	int i, j, c, ret;
 	bwtintv_t ik, ok[4];
@@ -285,37 +285,38 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 
 	mem->n = 0;
 	if (q[x] > 3) return x + 1;
+	if (min_intv < 1) min_intv = 1; // the interval size should be at least 1
 	kv_init(a[0]); kv_init(a[1]);
-	prev = tmpvec[0]? tmpvec[0] : &a[0];
-	curr = tmpvec[1]? tmpvec[1] : &a[1];
-	bwt_set_intv(bwt, q[x], ik);
+	prev = tmpvec && tmpvec[0]? tmpvec[0] : &a[0]; // use the temporary vector if provided
+	curr = tmpvec && tmpvec[1]? tmpvec[1] : &a[1];
+	bwt_set_intv(bwt, q[x], ik); // the initial interval of a single base
 	ik.info = x + 1;
 
 	for (i = x + 1, curr->n = 0; i < len; ++i) { // forward search
-		if (q[i] < 4) {
-			c = 3 - q[i];
+		if (q[i] < 4) { // an A/C/G/T base
+			c = 3 - q[i]; // complement of q[i]
 			bwt_extend(bwt, &ik, ok, 0);
 			if (ok[c].x[2] != ik.x[2]) // change of the interval size
 				kv_push(bwtintv_t, *curr, ik);
-			if (ok[c].x[2] == 0) break; // cannot be extended
+			if (ok[c].x[2] < min_intv) break; // the interval size is too small to be extended further
 			ik = ok[c]; ik.info = i + 1;
 		} else { // an ambiguous base
 			kv_push(bwtintv_t, *curr, ik);
-			break; // cannot be extended; in this case, i<len always stands
+			break; // always terminate extension at an ambiguous base; in this case, i<len always stands
 		}
 	}
 	if (i == len) kv_push(bwtintv_t, *curr, ik); // push the last interval if we reach the end
-	bwt_reverse_intvs(curr); // s.t. smaller intervals visited first
+	bwt_reverse_intvs(curr); // s.t. smaller intervals (i.e. longer matches) visited first
 	ret = curr->a[0].info; // this will be the returned value
 	swap = curr; curr = prev; prev = swap;
 
 	for (i = x - 1; i >= -1; --i) { // backward search for MEMs
-		if (q[i] > 3) break;
+		if (i >= 0 && q[i] > 3) break; // always stop at an ambiguous base as the FM-index does not have any.
 		c = i < 0? 0 : q[i];
 		for (j = 0, curr->n = 0; j < prev->n; ++j) {
 			bwtintv_t *p = &prev->a[j];
 			bwt_extend(bwt, p, ok, 1);
-			if (ok[c].x[2] == 0 || i == -1) { // keep the hit if reaching the beginning or not extended further
+			if (ok[c].x[2] < min_intv || i == -1) { // keep the hit if reaching the beginning or not extended further
 				if (curr->n == 0) { // curr->n to make sure there is no longer matches
 					if (mem->n == 0 || i + 1 < mem->a[mem->n-1].info>>32) { // skip contained matches
 						ik = *p; ik.info |= (uint64_t)(i + 1)<<32;
@@ -333,7 +334,7 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	}
 	bwt_reverse_intvs(mem); // s.t. sorted by the start coordinate
 
-	if (tmpvec[0] == 0) free(a[0].a);
-	if (tmpvec[1] == 0) free(a[1].a);
+	if (tmpvec == 0 || tmpvec[0] == 0) free(a[0].a);
+	if (tmpvec == 0 || tmpvec[1] == 0) free(a[1].a);
 	return ret;
 }

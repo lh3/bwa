@@ -121,7 +121,7 @@ extern "C" {
 	 * Given a query _q_, collect potential SMEMs covering position _x_ and store them in _mem_.
 	 * Return the end of the longest exact match starting from _x_.
 	 */
-	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
+	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
 #ifdef __cplusplus
 }

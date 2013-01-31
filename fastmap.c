@@ -13,11 +13,11 @@ extern unsigned char nst_nt4_table[256];
 typedef struct {
 	const bwt_t *bwt;
 	const uint8_t *query;
-	int start, len;
+	int start, len, min_intv;
 	bwtintv_v *tmpvec[2], *matches;
 } smem_i;
 
-smem_i *smem_iter_init(const bwt_t *bwt)
+smem_i *smem_iter_init(const bwt_t *bwt, int min_intv)
 {
 	smem_i *iter;
 	iter = calloc(1, sizeof(smem_i));
@@ -25,6 +25,7 @@ smem_i *smem_iter_init(const bwt_t *bwt)
 	iter->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
 	iter->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
 	iter->matches   = calloc(1, sizeof(bwtintv_v));
+	iter->min_intv = min_intv > 0? min_intv : 1;
 	return iter;
 }
 
@@ -49,13 +50,13 @@ int smem_next(smem_i *iter)
 	if (iter->start >= iter->len || iter->start < 0) return -1;
 	while (iter->start < iter->len && iter->query[iter->start] > 3) ++iter->start; // skip ambiguous bases
 	if (iter->start == iter->len) return -1;
-	iter->start = bwt_smem1(iter->bwt, iter->len, iter->query, iter->start, iter->matches, iter->tmpvec);
+	iter->start = bwt_smem1(iter->bwt, iter->len, iter->query, iter->start, iter->min_intv, iter->matches, iter->tmpvec);
 	return iter->start;
 }
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, min_intv = 1;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -63,15 +64,16 @@ int main_fastmap(int argc, char *argv[])
 	bntseq_t *bns;
 	smem_i *iter;
 
-	while ((c = getopt(argc, argv, "w:l:s")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:sm:")) >= 0) {
 		switch (c) {
 			case 's': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
+			case 'm': min_intv = atoi(optarg); break;
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-s] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
+		fprintf(stderr, "Usage: bwa fastmap [-s] [-l minLen=%d] [-w maxSaSize=%d] [-m minIntv=%d] <idxbase> <in.fq>\n", min_len, min_iwidth, min_intv);
 		return 1;
 	}
 
@@ -86,7 +88,7 @@ int main_fastmap(int argc, char *argv[])
 		free(tmp);
 		bns = bns_restore(argv[optind]);
 	}
-	iter = smem_iter_init(bwt);
+	iter = smem_iter_init(bwt, min_intv);
 	while (kseq_read(seq) >= 0) {
 		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {
