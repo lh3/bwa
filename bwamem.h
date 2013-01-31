@@ -11,9 +11,24 @@ typedef struct {
 } smem_i;
 
 typedef struct {
+	int64_t qbeg, rbeg, len;
+} memseed_t;
+
+typedef struct {
 	int a, b, q, r, w;
-	int min_seed_len, max_occ;
+	int min_seed_len, max_occ, max_chain_gap;
 } memopt_t;
+
+typedef struct {
+	int n, m;
+	int64_t pos;
+	memseed_t *seeds;
+} memchain1_t;
+
+typedef struct {
+	int n, m;
+	memchain1_t *chains;
+} memchain_t;
 
 #ifdef __cplusplus
 extern "C" {
