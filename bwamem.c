@@ -57,8 +57,8 @@ int smem_next(smem_i *itr)
 
 #include "kbtree.h"
 
-#define chain_lt(a, b) ((a).pos < (b).pos)
-KBTREE_INIT(chn, memchain1_t, chain_lt)
+#define chain_cmp(a, b) ((a).pos - (b).pos)
+KBTREE_INIT(chn, memchain1_t, chain_cmp)
 
 static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *p)
 {
@@ -66,7 +66,7 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 	const memseed_t *last = &c->seeds[c->n-1];
 	qend = last->qbeg + last->len;
 	rend = last->rbeg + last->len;
-	if (p->qbeg > c->seeds[0].qbeg && p->qbeg + p->len < qend && p->rbeg > c->seeds[0].rbeg && p->rbeg + p->len < rend)
+	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
 		return 1; // contained seed; do nothing
 	x = p->qbeg - last->qbeg; // always positive
 	y = p->rbeg - last->rbeg;
