@@ -317,7 +317,7 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, 
 			bwtintv_t *p = &prev->a[j];
 			bwt_extend(bwt, p, ok, 1);
 			if (c < 0 || ok[c].x[2] < min_intv) { // keep the hit if reaching the beginning or an ambiguous base or the intv is small enough
-				if (curr->n == 0) { // test curr->n>0 to make sure there is no longer matches
+				if (curr->n == 0) { // test curr->n>0 to make sure there are no longer matches
 					if (mem->n == 0 || i + 1 < mem->a[mem->n-1].info>>32) { // skip contained matches
 						ik = *p; ik.info |= (uint64_t)(i + 1)<<32;
 						kv_push(bwtintv_t, *mem, ik);
