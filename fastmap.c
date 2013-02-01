@@ -69,7 +69,7 @@ int main_mem(int argc, char *argv[])
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, min_intv = 1;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, split_long = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -77,16 +77,16 @@ int main_fastmap(int argc, char *argv[])
 	bntseq_t *bns;
 	smem_i *itr;
 
-	while ((c = getopt(argc, argv, "w:l:sm:")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:ps")) >= 0) {
 		switch (c) {
-			case 's': print_seq = 1; break;
+			case 's': split_long = 1; break;
+			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
-			case 'm': min_intv = atoi(optarg); break;
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-s] [-l minLen=%d] [-w maxSaSize=%d] [-m minIntv=%d] <idxbase> <in.fq>\n", min_len, min_iwidth, min_intv);
+		fprintf(stderr, "Usage: bwa fastmap [-ps] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
 		return 1;
 	}
 
@@ -110,8 +110,8 @@ int main_fastmap(int argc, char *argv[])
 		} else putchar('\n');
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-		smem_set_query(itr, min_intv, seq->seq.l, (uint8_t*)seq->seq.s);
-		while (smem_next(itr) > 0) {
+		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
+		while (smem_next(itr, split_long? min_len<<1 : 0) > 0) {
 			for (i = 0; i < itr->matches->n; ++i) {
 				bwtintv_t *p = &itr->matches->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;

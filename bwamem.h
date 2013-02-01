@@ -6,8 +6,9 @@
 typedef struct {
 	const bwt_t *bwt;
 	const uint8_t *query;
-	int start, len, min_intv;
-	bwtintv_v *tmpvec[2], *matches;
+	int start, len;
+	bwtintv_v *matches; // matches
+	bwtintv_v *tmpvec[2], *sub; // these are temporary arrays
 } smem_i;
 
 typedef struct {
@@ -37,8 +38,8 @@ extern "C" {
 
 smem_i *smem_itr_init(const bwt_t *bwt);
 void smem_itr_destroy(smem_i *itr);
-void smem_set_query(smem_i *itr, int min_intv, int len, const uint8_t *query);
-int smem_next(smem_i *itr);
+void smem_set_query(smem_i *itr, int len, const uint8_t *query);
+int smem_next(smem_i *itr, int split_len);
 
 memopt_t *mem_opt_init(void);
 

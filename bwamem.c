@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "bwamem.h"
+#include "kvec.h"
 
 memopt_t *mem_opt_init()
 {
@@ -26,6 +27,7 @@ smem_i *smem_itr_init(const bwt_t *bwt)
 	itr->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
 	itr->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
 	itr->matches   = calloc(1, sizeof(bwtintv_v));
+	itr->sub       = calloc(1, sizeof(bwtintv_v));
 	return itr;
 }
 
@@ -34,24 +36,50 @@ void smem_itr_destroy(smem_i *itr)
 	free(itr->tmpvec[0]->a);
 	free(itr->tmpvec[1]->a);
 	free(itr->matches->a);
+	free(itr->sub->a);
 	free(itr);
 }
 
-void smem_set_query(smem_i *itr, int min_intv, int len, const uint8_t *query)
+void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 {
 	itr->query = query;
 	itr->start = 0;
 	itr->len = len;
-	itr->min_intv = min_intv;
 }
 
-int smem_next(smem_i *itr)
+int smem_next(smem_i *itr, int split_len)
 {
+	int i, max, max_i;
 	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = 0;
 	if (itr->start >= itr->len || itr->start < 0) return -1;
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return -1;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, itr->start, itr->min_intv, itr->matches, itr->tmpvec);
+	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, itr->start, 1, itr->matches, itr->tmpvec);
+	if (itr->matches->n == 0) return itr->start;
+	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) {
+		bwtintv_t *p = &itr->matches->a[i];
+		int len = (uint32_t)p->info - (p->info>>32);
+		if (max < len) max = len, max_i = i;
+	}
+	if (split_len > 0 && max >= split_len && itr->matches->a[max_i].x[2] == 1) {
+		int j;
+		bwtintv_v *a = itr->tmpvec[0];
+		bwtintv_t *p = &itr->matches->a[max_i];
+		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, 2, itr->sub, itr->tmpvec); // starting from the middle of the longest match
+		i = j = 0; a->n = 0;
+		while (i < itr->matches->n && j < itr->sub->n) { // ordered merge
+			if (itr->matches->a[i].info < itr->sub->a[j].info) {
+				kv_push(bwtintv_t, *a, itr->matches->a[i]);
+				++i;
+			} else {
+				kv_push(bwtintv_t, *a, itr->sub->a[j]);
+				++j;
+			}
+		}
+		for (; i < itr->matches->n; ++i) kv_push(bwtintv_t, *a, itr->matches->a[i]);
+		for (; j < itr->sub->n; ++j)     kv_push(bwtintv_t, *a, itr->sub->a[j]);
+		kv_copy(bwtintv_t, *itr->matches, *a);
+	}
 	return itr->start;
 }
 
@@ -83,7 +111,7 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 
 static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 {
-	while (smem_next(itr) > 0) {
+	while (smem_next(itr, opt->min_seed_len<<1) > 0) {
 		int i;
 		for (i = 0; i < itr->matches->n; ++i) {
 			bwtintv_t *p = &itr->matches->a[i];
@@ -122,7 +150,7 @@ memchain_t mem_chain(const memopt_t *opt, const bwt_t *bwt, int len, const uint8
 	if (len < opt->min_seed_len) return chain; // if the query is shorter than the seed length, no match
 	tree = kb_init(chn, KB_DEFAULT_SIZE);
 	itr = smem_itr_init(bwt);
-	smem_set_query(itr, 1, len, seq);
+	smem_set_query(itr, len, seq);
 	mem_insert_seed(opt, tree, itr);
 
 	chain.m = kb_size(tree); chain.n = 0;
