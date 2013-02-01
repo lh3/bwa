@@ -321,3 +321,30 @@ int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
 	}
 	return nn;
 }
+
+static inline void get_seq_core(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, uint8_t *seq)
+{
+	int64_t k, l = 0;
+	if (beg >= l_pac) { // reverse strand
+		int64_t beg_f = (l_pac<<1) - 1 - end;
+		int64_t end_f = (l_pac<<1) - 1 - beg;
+		for (k = end_f; k > beg_f; --k)
+			seq[l++] = 3 - _get_pac(pac, k);
+	} else { // forward strand
+		for (k = beg; k < end; ++k)
+			seq[l++] = _get_pac(pac, k);
+	}
+}
+
+uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
+{
+	uint8_t *seq;
+	if (end > l_pac<<1) end = l_pac<<1;
+	*len = end - beg;
+	seq = malloc(end - beg);
+	if (beg < l_pac && end > l_pac) {
+		get_seq_core(l_pac, pac, beg, l_pac, seq);
+		get_seq_core(l_pac, pac, l_pac, end, seq + (l_pac - beg));
+	} else get_seq_core(l_pac, pac, beg, end, seq);
+	return seq;
+}

@@ -13,12 +13,13 @@ extern unsigned char nst_nt4_table[256];
 
 int main_mem(int argc, char *argv[])
 {
-	memopt_t *opt;
+	mem_opt_t *opt;
 	bwt_t *bwt;
 	bntseq_t *bns;
 	int i, j, c;
 	gzFile *fp;
 	kseq_t *seq;
+	uint8_t *pac = 0;
 
 	opt = mem_opt_init();
 	while ((c = getopt(argc, argv, "")) >= 0) {
@@ -40,15 +41,18 @@ int main_mem(int argc, char *argv[])
 		bwt_restore_sa(tmp, bwt);
 		free(tmp);
 		bns = bns_restore(argv[optind]);
+		pac = calloc(bns->l_pac/4+1, 1);
+		fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 	}
 	while (kseq_read(seq) >= 0) {
-		memchain_t chain;
+		mem_chain_t chain;
 		printf(">%s\n", seq->name.s);
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		chain = mem_chain(opt, bwt, seq->seq.l, (uint8_t*)seq->seq.s);
 		for (i = 0; i < chain.n; ++i) {
-			memchain1_t *p = &chain.chains[i];
+			mem_chain1_t *p = &chain.chains[i];
+			mem_chain2aln(bns->l_pac, pac, seq->seq.l, (uint8_t*)seq->seq.s, p);
 			printf("%d\t%d", i, p->n);
 			for (j = 0; j < p->n; ++j) {
 				bwtint_t pos;

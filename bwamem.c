@@ -3,11 +3,12 @@
 #include <stdio.h>
 #include "bwamem.h"
 #include "kvec.h"
+#include "bntseq.h"
 
-memopt_t *mem_opt_init()
+mem_opt_t *mem_opt_init()
 {
-	memopt_t *o;
-	o = calloc(1, sizeof(memopt_t));
+	mem_opt_t *o;
+	o = calloc(1, sizeof(mem_opt_t));
 	o->a = 1; o->b = 9; o->q = 16; o->r = 1; o->w = 100;
 	o->min_seed_len = 17;
 	o->max_occ = 10;
@@ -95,12 +96,12 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 #include "kbtree.h"
 
 #define chain_cmp(a, b) ((a).pos - (b).pos)
-KBTREE_INIT(chn, memchain1_t, chain_cmp)
+KBTREE_INIT(chn, mem_chain1_t, chain_cmp)
 
-static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *p)
+static int test_and_merge(const mem_opt_t *opt, mem_chain1_t *c, const mem_seed_t *p)
 {
 	int64_t qend, rend, x, y;
-	const memseed_t *last = &c->seeds[c->n-1];
+	const mem_seed_t *last = &c->seeds[c->n-1];
 	qend = last->qbeg + last->len;
 	rend = last->rbeg + last->len;
 	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
@@ -110,7 +111,7 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 	if (y > 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
 		if (c->n == c->m) {
 			c->m <<= 1;
-			c->seeds = realloc(c->seeds, c->m * sizeof(memseed_t));
+			c->seeds = realloc(c->seeds, c->m * sizeof(mem_seed_t));
 		}
 		c->seeds[c->n++] = *p;
 		return 1;
@@ -118,7 +119,7 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 	return 0; // request to add a new chain
 }
 
-static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
+static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 {
 	const bwtintv_v *a;
 	while ((a = smem_next(itr, opt->min_seed_len<<1)) != 0) { // to find all SMEM and some internal MEM
@@ -129,8 +130,8 @@ static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *it
 			int64_t k;
 			if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue; // ignore if too short or too repetitive
 			for (k = 0; k < p->x[2]; ++k) {
-				memchain1_t tmp, *lower, *upper;
-				memseed_t s;
+				mem_chain1_t tmp, *lower, *upper;
+				mem_seed_t s;
 				int to_add = 0;
 				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 				s.qbeg = p->info>>32;
@@ -141,7 +142,7 @@ static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *it
 				} else to_add = 1;
 				if (to_add) { // add the seed as a new chain
 					tmp.n = 1; tmp.m = 4;
-					tmp.seeds = calloc(tmp.m, sizeof(memseed_t));
+					tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
 					tmp.seeds[0] = s;
 					kb_putp(chn, tree, &tmp);
 				}
@@ -150,13 +151,13 @@ static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *it
 	}
 }
 
-memchain_t mem_chain(const memopt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
+mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
 {
-	memchain_t chain;
+	mem_chain_t chain;
 	smem_i *itr;
 	kbtree_t(chn) *tree;
 
-	memset(&chain, 0, sizeof(memchain_t));
+	memset(&chain, 0, sizeof(mem_chain_t));
 	if (len < opt->min_seed_len) return chain; // if the query is shorter than the seed length, no match
 	tree = kb_init(chn, KB_DEFAULT_SIZE);
 	itr = smem_itr_init(bwt);
@@ -164,13 +165,28 @@ memchain_t mem_chain(const memopt_t *opt, const bwt_t *bwt, int len, const uint8
 	mem_insert_seed(opt, tree, itr);
 
 	chain.m = kb_size(tree); chain.n = 0;
-	chain.chains = malloc(chain.m * sizeof(memchain1_t));
+	chain.chains = malloc(chain.m * sizeof(mem_chain1_t));
 
 	#define traverse_func(p_) (chain.chains[chain.n++] = *(p_))
-	__kb_traverse(memchain1_t, tree, traverse_func);
+	__kb_traverse(mem_chain1_t, tree, traverse_func);
 	#undef traverse_func
 
 	smem_itr_destroy(itr);
 	kb_destroy(chn, tree);
 	return chain;
+}
+
+mem_aln_t mem_chain2aln(int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
+{
+	mem_aln_t a;
+	int i, j;
+	int64_t len;
+	for (i = 0; i < c->n; ++i) {
+		mem_seed_t *s = &c->seeds[i];
+		uint8_t *seq = bns_get_seq(l_pac, pac, s->rbeg, s->rbeg + s->len, &len);
+		for (j = 0; j < len; ++j) putchar("ACGTN"[seq[j]]); putchar('\n');
+		for (j = 0; j < s->len; ++j) putchar("ACGTN"[query[j+s->qbeg]]); putchar('\n');
+		free(seq);
+	}
+	return a;
 }
