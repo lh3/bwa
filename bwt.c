@@ -296,9 +296,10 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, 
 		if (q[i] < 4) { // an A/C/G/T base
 			c = 3 - q[i]; // complement of q[i]
 			bwt_extend(bwt, &ik, ok, 0);
-			if (ok[c].x[2] != ik.x[2]) // change of the interval size
+			if (ok[c].x[2] != ik.x[2]) { // change of the interval size
 				kv_push(bwtintv_t, *curr, ik);
-			if (ok[c].x[2] < min_intv) break; // the interval size is too small to be extended further
+				if (ok[c].x[2] < min_intv) break; // the interval size is too small to be extended further
+			}
 			ik = ok[c]; ik.info = i + 1;
 		} else { // an ambiguous base
 			kv_push(bwtintv_t, *curr, ik);
