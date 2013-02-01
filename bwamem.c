@@ -19,6 +19,15 @@ memopt_t *mem_opt_init()
  * SMEM iterator interface *
  ***************************/
 
+struct __smem_i {
+	const bwt_t *bwt;
+	const uint8_t *query;
+	int start, len;
+	bwtintv_v *matches; // matches; to be returned by smem_next()
+	bwtintv_v *sub;     // sub-matches inside the longest match; temporary
+	bwtintv_v *tmpvec[2]; // temporary arrays
+};
+
 smem_i *smem_itr_init(const bwt_t *bwt)
 {
 	smem_i *itr;
@@ -47,25 +56,25 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 	itr->len = len;
 }
 
-int smem_next(smem_i *itr, int split_len)
+const bwtintv_v *smem_next(smem_i *itr, int split_len)
 {
 	int i, max, max_i;
-	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = 0;
-	if (itr->start >= itr->len || itr->start < 0) return -1;
+	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = itr->sub->n = 0;
+	if (itr->start >= itr->len || itr->start < 0) return 0;
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
-	if (itr->start == itr->len) return -1;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, itr->start, 1, itr->matches, itr->tmpvec);
-	if (itr->matches->n == 0) return itr->start;
-	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) {
+	if (itr->start == itr->len) return 0;
+	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, itr->start, 1, itr->matches, itr->tmpvec); // search for SMEM
+	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
+	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
 		bwtintv_t *p = &itr->matches->a[i];
 		int len = (uint32_t)p->info - (p->info>>32);
 		if (max < len) max = len, max_i = i;
 	}
-	if (split_len > 0 && max >= split_len && itr->matches->a[max_i].x[2] == 1) {
+	if (split_len > 0 && max >= split_len && itr->matches->a[max_i].x[2] == 1) { // if the longest SMEM is unique and long
 		int j;
-		bwtintv_v *a = itr->tmpvec[0];
+		bwtintv_v *a = itr->tmpvec[0]; // reuse tmpvec[0] for merging
 		bwtintv_t *p = &itr->matches->a[max_i];
-		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, 2, itr->sub, itr->tmpvec); // starting from the middle of the longest match
+		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, 2, itr->sub, itr->tmpvec); // starting from the middle of the longest MEM
 		i = j = 0; a->n = 0;
 		while (i < itr->matches->n && j < itr->sub->n) { // ordered merge
 			if (itr->matches->a[i].info < itr->sub->a[j].info) {
@@ -80,7 +89,7 @@ int smem_next(smem_i *itr, int split_len)
 		for (; j < itr->sub->n; ++j)     kv_push(bwtintv_t, *a, itr->sub->a[j]);
 		kv_copy(bwtintv_t, *itr->matches, *a);
 	}
-	return itr->start;
+	return itr->matches;
 }
 
 #include "kbtree.h"
@@ -98,7 +107,7 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 		return 1; // contained seed; do nothing
 	x = p->qbeg - last->qbeg; // always positive
 	y = p->rbeg - last->rbeg;
-	if (y > 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) {
+	if (y > 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
 		if (c->n == c->m) {
 			c->m <<= 1;
 			c->seeds = realloc(c->seeds, c->m * sizeof(memseed_t));
@@ -106,30 +115,31 @@ static int test_and_merge(const memopt_t *opt, memchain1_t *c, const memseed_t *
 		c->seeds[c->n++] = *p;
 		return 1;
 	}
-	return 0;
+	return 0; // request to add a new chain
 }
 
 static void mem_insert_seed(const memopt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 {
-	while (smem_next(itr, opt->min_seed_len<<1) > 0) {
+	const bwtintv_v *a;
+	while ((a = smem_next(itr, opt->min_seed_len<<1)) != 0) { // to find all SMEM and some internal MEM
 		int i;
-		for (i = 0; i < itr->matches->n; ++i) {
-			bwtintv_t *p = &itr->matches->a[i];
+		for (i = 0; i < a->n; ++i) { // go through each SMEM/MEM up to itr->start
+			bwtintv_t *p = &a->a[i];
 			int slen = (uint32_t)p->info - (p->info>>32); // seed length
 			int64_t k;
-			if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue;
+			if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue; // ignore if too short or too repetitive
 			for (k = 0; k < p->x[2]; ++k) {
 				memchain1_t tmp, *lower, *upper;
 				memseed_t s;
 				int to_add = 0;
-				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k);
+				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 				s.qbeg = p->info>>32;
 				s.len  = slen;
 				if (kb_size(tree)) {
-					kb_intervalp(chn, tree, &tmp, &lower, &upper);
+					kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
 					if (!lower || !test_and_merge(opt, lower, &s)) to_add = 1;
 				} else to_add = 1;
-				if (to_add) {
+				if (to_add) { // add the seed as a new chain
 					tmp.n = 1; tmp.m = 4;
 					tmp.seeds = calloc(tmp.m, sizeof(memseed_t));
 					tmp.seeds[0] = s;

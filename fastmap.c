@@ -76,6 +76,7 @@ int main_fastmap(int argc, char *argv[])
 	bwt_t *bwt;
 	bntseq_t *bns;
 	smem_i *itr;
+	const bwtintv_v *a;
 
 	while ((c = getopt(argc, argv, "w:l:ps")) >= 0) {
 		switch (c) {
@@ -111,9 +112,9 @@ int main_fastmap(int argc, char *argv[])
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
-		while (smem_next(itr, split_long? min_len<<1 : 0) > 0) {
-			for (i = 0; i < itr->matches->n; ++i) {
-				bwtintv_t *p = &itr->matches->a[i];
+		while ((a = smem_next(itr, split_long? min_len<<1 : 0)) != 0) {
+			for (i = 0; i < a->n; ++i) {
+				bwtintv_t *p = &a->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;
 				printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
 				if (p->x[2] <= min_iwidth) {
