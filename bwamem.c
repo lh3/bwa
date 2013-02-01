@@ -42,10 +42,10 @@ smem_i *smem_itr_init(const bwt_t *bwt)
 
 void smem_itr_destroy(smem_i *itr)
 {
-	free(itr->tmpvec[0]->a);
-	free(itr->tmpvec[1]->a);
-	free(itr->matches->a);
-	free(itr->sub->a);
+	free(itr->tmpvec[0]->a); free(itr->tmpvec[0]);
+	free(itr->tmpvec[1]->a); free(itr->tmpvec[1]);
+	free(itr->matches->a);   free(itr->matches);
+	free(itr->sub->a);       free(itr->sub);
 	free(itr);
 }
 
