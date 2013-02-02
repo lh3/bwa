@@ -45,7 +45,7 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len);
 mem_opt_t *mem_opt_init(void);
 
 mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq);
-mem_aln_t mem_chain2aln(int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c);
+mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c);
 
 #ifdef __cplusplus
 }

@@ -176,10 +176,10 @@ mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uin
 	return chain;
 }
 
-mem_aln_t mem_chain2aln(int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
+mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
 {
 	mem_aln_t a;
-	int i, j;
+	int i, j, max, max_i;
 	int64_t len;
 	for (i = 0; i < c->n; ++i) {
 		mem_seed_t *s = &c->seeds[i];
@@ -188,5 +188,7 @@ mem_aln_t mem_chain2aln(int64_t l_pac, const uint8_t *pac, int l_query, const ui
 		for (j = 0; j < s->len; ++j) putchar("ACGTN"[query[j+s->qbeg]]); putchar('\n');
 		free(seq);
 	}
+	for (i = max = 0, max_i = -1; i < c->n; ++i) // find the longest seed
+		if (max < c->seeds[i].len) max = c->seeds[i].len, max_i = i;
 	return a;
 }
