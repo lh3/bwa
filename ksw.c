@@ -23,11 +23,12 @@
    SOFTWARE.
 */
 
-#ifndef _NO_SSE2
 #include <stdlib.h>
 #include <stdint.h>
-#include <emmintrin.h>
 #include "ksw.h"
+
+#ifndef _NO_SSE2
+#include <emmintrin.h>
 
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
@@ -36,6 +37,10 @@
 #define LIKELY(x) (x)
 #define UNLIKELY(x) (x)
 #endif
+
+/***************
+ *** SSE2 SW ***
+ ***************/
 
 struct _ksw_query_t {
 	int qlen, slen;
@@ -300,11 +305,82 @@ int ksw_sse2(ksw_query_t *q, int tlen, const uint8_t *target, ksw_aux_t *a)
 	else return ksw_sse2_8(q, tlen, target, a);
 }
 
+#endif // _NO_SSE2
+
+/********************
+ *** SW extension ***
+ ********************/
+
+typedef struct {
+	int32_t h, e;
+} eh_t;
+
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qpos, int *_tpos)
+{
+	eh_t *eh;
+	int8_t *qp;
+	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j;
+	// allocate memory
+	eh = calloc(qlen + 1, 8);
+	qp = malloc(qlen * m);
+	// generate the query profile
+	for (j = i = 0; j < qlen; ++j) {
+		const int8_t *p = &mat[query[j] * m];
+		for (k = 0; k < m; ++j) qp[i++] = p[k];
+	}
+	// DP loop
+	eh[0].h = h0; max = 0, max_i = max_j = -1;
+	beg = 0, end = 1;
+	for (i = 0; LIKELY(i < tlen); ++i) {
+		int f = 0, h1 = 0, m = 0, mj = -1, t;
+		// apply the band and the constraint (if provided)
+		t = (qw && qw[i] < w)? qw[i] : w; // this is the band width at $i
+		if (beg < i - t) beg = i - t;
+		if (end > i + t + 1) end = i + t + 1;
+		if (end > qlen) end = qlen;
+		for (j = beg; LIKELY(j < end); ++j) {
+			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
+			// Similar to SSE2-SW, cells are computed in the following order:
+			//   H(i,j)   = max{H(i-1,j-1)+S(i,j), E(i,j), F(i,j)}
+			//   E(i+1,j) = max{H(i,j)-gapo, E(i,j)} - gape
+			//   F(i,j+1) = max{H(i,j)-gapo, F(i,j)} - gape
+			eh_t *p = &eh[j];
+			int h = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
+			p->h = h1;          // set H(i,j-1) for the next row
+			h += qp[j];
+			h = h > e? h : e;
+			h = h > f? h : f;
+			h1 = h;             // save H(i,j) to h1 for the next column
+			mj = m > h? mj : j;
+			m = m > h? m : h;   // m is stored at eh[mj+1]
+			h -= gapoe;
+			h = h > 0? h : 0;
+			e -= gape;
+			e = e > h? e : h;   // computed E(i+1,j)
+			p->e = e;           // save E(i+1,j) for the next row
+			f -= gape;
+			f = f > h? f : h;   // computed F(i,j+1)
+		}
+		eh[end].h = h1; eh[end].e = 0;
+		if (m == 0) break;
+		if (m > max) max = m, max_i = i, max_j = mj;
+		// update beg and end for the next round
+		for (j = mj; j > beg && eh[j].h; --j);
+		beg = j + 1;
+		for (j = mj + 2; j <= end && eh[j].h; ++j);
+		end = j;
+	}
+	free(eh); free(qp);
+	if (_qpos) *_qpos = max_i;
+	if (_tpos) *_tpos = max_j;
+	return max;
+}
+
 /*******************************************
  * Main function (not compiled by default) *
  *******************************************/
 
-#ifdef _KSW_MAIN
+#if defined(_KSW_MAIN) && !defined(_NO_SSE2)
 
 #include <unistd.h>
 #include <stdio.h>
@@ -398,4 +474,3 @@ int main(int argc, char *argv[])
 	return 0;
 }
 #endif // _KSW_MAIN
-#endif // _NO_SSE2
