@@ -314,7 +314,7 @@ int ksw_sse2(ksw_query_t *q, int tlen, const uint8_t *target, ksw_aux_t *a)
 typedef struct {
 	int32_t h, e;
 } eh_t;
-
+#include <stdio.h>
 int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qpos, int *_tpos)
 {
 	eh_t *eh;
@@ -324,20 +324,24 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	eh = calloc(qlen + 1, 8);
 	qp = malloc(qlen * m);
 	// generate the query profile
-	for (j = i = 0; j < qlen; ++j) {
-		const int8_t *p = &mat[query[j] * m];
-		for (k = 0; k < m; ++j) qp[i++] = p[k];
+	for (k = i = 0; k < m; ++k) {
+		const int8_t *p = &mat[k * m];
+		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
 	}
+	// fill the first row
+	eh[0].h = h0;
 	// DP loop
-	eh[0].h = h0; max = 0, max_i = max_j = -1;
-	beg = 0, end = 1;
+	max = 0, max_i = max_j = -1;
+	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int f = 0, h1 = 0, m = 0, mj = -1, t;
+		int8_t *q = &qp[target[i] * qlen];
 		// apply the band and the constraint (if provided)
 		t = (qw && qw[i] < w)? qw[i] : w; // this is the band width at $i
 		if (beg < i - t) beg = i - t;
 		if (end > i + t + 1) end = i + t + 1;
 		if (end > qlen) end = qlen;
+		printf("[%d]\t%d,%d", i, beg, end);
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 			// Similar to SSE2-SW, cells are computed in the following order:
@@ -347,7 +351,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			eh_t *p = &eh[j];
 			int h = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
 			p->h = h1;          // set H(i,j-1) for the next row
-			h += qp[j];
+			h += q[j];
 			h = h > e? h : e;
 			h = h > f? h : f;
 			h1 = h;             // save H(i,j) to h1 for the next column
@@ -360,19 +364,22 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			p->e = e;           // save E(i+1,j) for the next row
 			f -= gape;
 			f = f > h? f : h;   // computed F(i,j+1)
+			printf("\t%d:%d", j, h1);
 		}
+		putchar('\n');
 		eh[end].h = h1; eh[end].e = 0;
 		if (m == 0) break;
 		if (m > max) max = m, max_i = i, max_j = mj;
 		// update beg and end for the next round
-		for (j = mj; j > beg && eh[j].h; --j);
+		for (j = mj; j >= beg && eh[j].h; --j);
 		beg = j + 1;
 		for (j = mj + 2; j <= end && eh[j].h; ++j);
 		end = j;
+		beg = 0; end = qlen; // uncomment this line for debugging
 	}
 	free(eh); free(qp);
-	if (_qpos) *_qpos = max_i;
-	if (_tpos) *_tpos = max_j;
+	if (_qpos) *_qpos = max_i + 1;
+	if (_tpos) *_tpos = max_j + 1;
 	return max;
 }
 

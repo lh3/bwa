@@ -1,6 +1,8 @@
 #ifndef __AC_KSW_H
 #define __AC_KSW_H
 
+#include <stdint.h>
+
 struct _ksw_query_t;
 typedef struct _ksw_query_t ksw_query_t;
 
@@ -46,6 +48,8 @@ extern "C" {
 
 	/** Unified interface for ksw_sse2_8() and ksw_sse2_16() */
 	int ksw_sse2(ksw_query_t *q, int tlen, const uint8_t *target, ksw_aux_t *a);
+
+	int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qpos, int *_tpos);
 
 #ifdef __cplusplus
 }
