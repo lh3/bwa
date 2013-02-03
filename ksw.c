@@ -314,7 +314,7 @@ int ksw_sse2(ksw_query_t *q, int tlen, const uint8_t *target, ksw_aux_t *a)
 typedef struct {
 	int32_t h, e;
 } eh_t;
-#include <stdio.h>
+
 int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qpos, int *_tpos)
 {
 	eh_t *eh;
