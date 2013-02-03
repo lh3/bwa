@@ -320,6 +320,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	eh_t *eh;
 	int8_t *qp;
 	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j;
+	if (h0 < 0) h0 = 0;
 	// allocate memory
 	eh = calloc(qlen + 1, 8);
 	qp = malloc(qlen * m);
@@ -329,19 +330,23 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
 	}
 	// fill the first row
-	eh[0].h = h0;
+	eh[0].h = h0; eh[1].h = h0 > gapoe? h0 - gapoe : 0;
+	for (j = 2; j <= qlen && eh[j-1].h > gape; ++j)
+		eh[j].h = eh[j-1].h - gape;
 	// DP loop
-	max = 0, max_i = max_j = -1;
+	max = h0, max_i = max_j = 0;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
-		int f = 0, h1 = 0, m = 0, mj = -1, t;
+		int f = 0, h1, m = 0, mj = -1, t;
 		int8_t *q = &qp[target[i] * qlen];
+		// compute the first column
+		h1 = h0 - (gapo + gape * (i + 1));
+		if (h1 < 0) h1 = 0;
 		// apply the band and the constraint (if provided)
 		t = (qw && qw[i] < w)? qw[i] : w; // this is the band width at $i
 		if (beg < i - t) beg = i - t;
 		if (end > i + t + 1) end = i + t + 1;
 		if (end > qlen) end = qlen;
-		printf("[%d]\t%d,%d", i, beg, end);
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 			// Similar to SSE2-SW, cells are computed in the following order:
@@ -364,9 +369,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			p->e = e;           // save E(i+1,j) for the next row
 			f -= gape;
 			f = f > h? f : h;   // computed F(i,j+1)
-			printf("\t%d:%d", j, h1);
 		}
-		putchar('\n');
 		eh[end].h = h1; eh[end].e = 0;
 		if (m == 0) break;
 		if (m > max) max = m, max_i = i, max_j = mj;
@@ -375,7 +378,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		beg = j + 1;
 		for (j = mj + 2; j <= end && eh[j].h; ++j);
 		end = j;
-		beg = 0; end = qlen; // uncomment this line for debugging
+		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
 	free(eh); free(qp);
 	if (_qpos) *_qpos = max_i + 1;
