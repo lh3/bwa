@@ -47,7 +47,7 @@ mem_opt_t *mem_opt_init(void);
 void mem_fill_scmat(int a, int b, int8_t mat[25]);
 
 mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq);
-mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c);
+void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_aln_t *a);
 
 #ifdef __cplusplus
 }

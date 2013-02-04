@@ -53,7 +53,8 @@ int main_mem(int argc, char *argv[])
 		chain = mem_chain(opt, bwt, seq->seq.l, (uint8_t*)seq->seq.s);
 		for (i = 0; i < chain.n; ++i) {
 			mem_chain1_t *p = &chain.chains[i];
-			mem_chain2aln(opt, bns->l_pac, pac, seq->seq.l, (uint8_t*)seq->seq.s, p);
+			mem_aln_t a;
+			mem_chain2aln(opt, bns->l_pac, pac, seq->seq.l, (uint8_t*)seq->seq.s, p, &a);
 			printf("%d\t%d", i, p->n);
 			for (j = 0; j < p->n; ++j) {
 				bwtint_t pos;

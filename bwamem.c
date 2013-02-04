@@ -6,6 +6,7 @@
 #include "kvec.h"
 #include "bntseq.h"
 #include "ksw.h"
+#include "ksort.h"
 
 void mem_fill_scmat(int a, int b, int8_t mat[25])
 {
@@ -109,6 +110,10 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 	return itr->matches;
 }
 
+/********************************
+ * Chaining while finding SMEMs *
+ ********************************/
+
 #include "kbtree.h"
 
 #define chain_cmp(a, b) ((a).pos - (b).pos)
@@ -196,6 +201,49 @@ mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uin
  * Filtering chains *
  ********************/
 
+typedef struct {
+	int beg, end, w;
+	void *p, *p2;
+} flt_aux_t;
+
+#define flt_lt(a, b) ((a).w > (b).w)
+KSORT_INIT(mem_flt, flt_aux_t, flt_lt)
+
+void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
+{
+	flt_aux_t *a;
+	int i, j, n;
+	if (chn->n <= 1) return; // no need to filter
+	a = malloc(sizeof(flt_aux_t) * chn->n);
+	for (i = 0; i < chn->n; ++i) {
+		mem_chain1_t *c = &chn->chains[i];
+		int w = 0;
+		for (j = 0; j < c->n; ++j) w += c->len;
+		a[i].beg = c->seeds[0].qbeg;
+		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
+		a[i].w = w;
+		a[i].p = c;
+		a[i].w2 = 0; a[i].p2 = 0;
+	}
+	ks_introsort(mem_flt, chn->n, a);
+	for (i = 1, n = 1; i < chn->n; ++i) {
+		for (j = 0; j < n; ++j) {
+			int b_max = a[j].beg > a[i].beg? a[j].beg : a[i].beg;
+			int e_min = e[j].end < a[i].end? a[j].end : a[i].end;
+			if (e_min > b_max) { // have overlap
+				int min_l = a[i].end - a[i].beg < a[j].end - a[j].beg? a[i].end - a[i].beg : a[j].end - a[j].beg;
+				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
+					if (a[j].p2 == 0) a[j].p2 = a[i].p;
+					if (a[i].w < a[j].w * opt->chain_drop_ratio)
+						break;
+				}
+			}
+		}
+		if (j == n) a[n++] = a[i]; // if have no significant overlap with better chains, keep it.
+	}
+	free(a);
+}
+
 /****************************************
  * Construct the alignment from a chain *
  ****************************************/
@@ -206,15 +254,14 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 	return l > 1? l : 1;
 }
 
-mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
+void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_aln_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	mem_aln_t a;
 	int i, j, qbeg;
 	int64_t rlen, rbeg, rmax[2], tmp;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
 
-	memset(&a, 0, sizeof(mem_aln_t));
+	memset(a, 0, sizeof(mem_aln_t));
 	// get the start and end of the seeded region
 	rbeg = c->seeds[0].rbeg; qbeg = c->seeds[0].qbeg;
 	// get the max possible span
@@ -238,18 +285,16 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 		tmp = rbeg - rmax[0];
 		rs = malloc(tmp);
 		for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-		a.score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[0].len * opt->a, 0, &qle, &tle);
-		a.qb = qbeg - qle; a.rb = rbeg - tle;
+		a->score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[0].len * opt->a, 0, &qle, &tle);
+		a->qb = qbeg - qle; a->rb = rbeg - tle;
 		free(qs); free(rs);
-	} else a.score = c->seeds[0].len * opt->a, a.qb = 0, a.rb = rbeg;
+	} else a->score = c->seeds[0].len * opt->a, a->qb = 0, a->rb = rbeg;
 
 	s = &c->seeds[0];
 	if (s->qbeg + s->len != l_query) { // right extension of the first seed
 		int qle, tle, qe, re;
 		int16_t *qw = 0;
 		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
-//		for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[j+qe]]); putchar('\n');
-//		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
 		if (c->n > 1) { // generate $qw
 			int l = rmax[1] - (s->rbeg + s->len);
 			qw = malloc(l * 2);
@@ -264,19 +309,18 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 				}
 			}
 		}
-		a.score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a.score, qw, &qle, &tle);
-		a.qe = qe + qle; a.re = rmax[0] + re + tle;
+		a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
+		a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		free(qw);
-	} else a.qe = l_query, a.re = s->rbeg + s->len;
+	} else a->qe = l_query, a->re = s->rbeg + s->len;
 
-	a.is_all = 1;
+	a->is_all = 1;
 	if (c->n > 1) { // check if all the seeds have been included
 		s = &c->seeds[c->n - 1];
-		if (s->qbeg + s->len > a.qe) a.is_all = 0;
+		if (s->qbeg + s->len > a->qe) a->is_all = 0;
 	}
 
-	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\n", c->n, a.score, a.qb, a.qe, a.rb, a.re, a.is_all);
+	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\n", c->n, a->score, a->qb, a->qe, a->rb, a->re, a->is_all);
 
 	free(rseq);
-	return a;
 }
