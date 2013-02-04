@@ -31,6 +31,7 @@ int main_mem(int argc, char *argv[])
 		free(opt);
 		return 1;
 	}
+	mem_fill_scmat(opt->a, opt->b, opt->mat);
 	fp = gzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
 	{ // load the packed sequences, BWT and SA

@@ -1,9 +1,22 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 #include "bwamem.h"
 #include "kvec.h"
 #include "bntseq.h"
+#include "ksw.h"
+
+void mem_fill_scmat(int a, int b, int8_t mat[25])
+{
+	int i, j, k;
+	for (i = k = 0; i < 5; ++i) {
+		for (j = 0; j < 4; ++j)
+			mat[k++] = i == j? a : -b;
+		mat[k++] = 0; // ambiguous base
+	}
+	for (j = 0; j < 5; ++j) mat[k++] = 0;
+}
 
 mem_opt_t *mem_opt_init()
 {
@@ -13,6 +26,7 @@ mem_opt_t *mem_opt_init()
 	o->min_seed_len = 17;
 	o->max_occ = 10;
 	o->max_chain_gap = 10000;
+	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
 
@@ -176,19 +190,52 @@ mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uin
 	return chain;
 }
 
+static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
+{
+	int l = (int)((double)(qlen * opt->a - opt->q) / opt->r + 1.);
+	return l > 1? l : 1;
+}
+
 mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
 {
 	mem_aln_t a;
-	int i, j, max, max_i;
-	int64_t len;
-	for (i = 0; i < c->n; ++i) {
-		mem_seed_t *s = &c->seeds[i];
-		uint8_t *seq = bns_get_seq(l_pac, pac, s->rbeg, s->rbeg + s->len, &len);
-		for (j = 0; j < len; ++j) putchar("ACGTN"[seq[j]]); putchar('\n');
-		for (j = 0; j < s->len; ++j) putchar("ACGTN"[query[j+s->qbeg]]); putchar('\n');
-		free(seq);
+	int i, j, qbeg, qend, score;
+	int64_t k, rlen, rbeg, rend, rmax[2], tmp;
+	mem_seed_t *s;
+	uint8_t *rseq = 0;
+	// get the start and end of the seeded region
+	rbeg = c->seeds[0].rbeg; qbeg = c->seeds[0].qbeg;
+	s = &c->seeds[c->n-1];
+	rend = s->rbeg + s->len; qend = s->qbeg + s->len;
+	// get the max possible span
+	rmax[0] = rbeg - (qbeg + cal_max_gap(opt, qbeg));
+	rmax[1] = rend + ((l_query - qend) + cal_max_gap(opt, l_query - qend));
+	if (rmax[0] < 0) rmax[0] = 0;
+	if (rmax[1] > l_pac<<1) rmax[1] = l_pac<<1;
+	// retrieve the reference sequence
+	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
+
+	if (qbeg) { // left extension of the first seed
+		uint8_t *rs, *qs;
+		int qle, tle;
+		qs = malloc(qbeg);
+		for (i = 0; i < qbeg; ++i) qs[i] = query[qbeg - 1 - i];
+		tmp = rbeg - rmax[0];
+		rs = malloc(tmp);
+		for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
+		score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[0].len * opt->a, 0, &qle, &tle);
+		free(qs); free(rs);
+	} else score = c->seeds[0].len * opt->a;
+
+	if (c->seeds[0].qbeg + c->seeds[0].len != l_query) { // right extension of the first seed
+		int qle, tle, qe, re;
+		s = &c->seeds[0];
+		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
+		for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[j+qe]]); putchar('\n');
+		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
+		score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, score, 0, &qle, &tle);
+		printf("[%d] score=%d\tqle=%d\trle=%d\n", c->n, score, qle, tle);
 	}
-	for (i = max = 0, max_i = -1; i < c->n; ++i) // find the longest seed
-		if (max < c->seeds[i].len) max = c->seeds[i].len, max_i = i;
+	free(rseq);
 	return a;
 }

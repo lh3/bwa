@@ -315,11 +315,11 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qpos, int *_tpos)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qle, int *_tle)
 {
 	eh_t *eh;
 	int8_t *qp;
-	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j;
+	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
 	eh = calloc(qlen + 1, 8);
@@ -333,8 +333,15 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	eh[0].h = h0; eh[1].h = h0 > gapoe? h0 - gapoe : 0;
 	for (j = 2; j <= qlen && eh[j-1].h > gape; ++j)
 		eh[j].h = eh[j-1].h - gape;
+	// adjust $w if it is too large
+	k = m * m;
+	for (i = 0, max = 0; i < k; ++i) // get the max score
+		max = max > mat[i]? max : mat[i];
+	max_gap = (int)((double)(qlen * max - gapo) / gape + 1.);
+	max_gap = max_gap > 1? max_gap : 1;
+	w = w < max_gap? w : max_gap;
 	// DP loop
-	max = h0, max_i = max_j = 0;
+	max = h0, max_i = max_j = -1;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int f = 0, h1, m = 0, mj = -1, t;
@@ -381,8 +388,8 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
 	free(eh); free(qp);
-	if (_qpos) *_qpos = max_i + 1;
-	if (_tpos) *_tpos = max_j + 1;
+	if (_qle) *_qle = max_i + 1;
+	if (_tle) *_tle = max_j + 1;
 	return max;
 }
 

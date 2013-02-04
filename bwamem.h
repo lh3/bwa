@@ -14,6 +14,7 @@ typedef struct {
 typedef struct {
 	int a, b, q, r, w;
 	int min_seed_len, max_occ, max_chain_gap;
+	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;
 
 typedef struct {
@@ -43,6 +44,7 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query);
 const bwtintv_v *smem_next(smem_i *itr, int split_len);
 
 mem_opt_t *mem_opt_init(void);
+void mem_fill_scmat(int a, int b, int8_t mat[25]);
 
 mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq);
 mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c);
