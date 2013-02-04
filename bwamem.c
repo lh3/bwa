@@ -240,7 +240,13 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 		a.qe = qe + qle; a.re = rmax[0] + re + tle;
 	} else a.qe = l_query, a.re = s->rbeg + s->len;
 
-	printf("[%d] score=%d\t[%d,%d)\t[%lld,%lld)\n", c->n, a.score, a.qb, a.qe, a.rb, a.re);
+	a.is_all = 1;
+	if (c->n > 1) { // check if all the seeds have been included
+		s = &c->seeds[c->n - 1];
+		if (s->qbeg + s->len > a.qe) a.is_all = 0;
+	}
+
+	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\n", c->n, a.score, a.qb, a.qe, a.rb, a.re, a.is_all);
 
 	free(rseq);
 	return a;

@@ -30,7 +30,7 @@ typedef struct {
 
 typedef struct {
 	int64_t pos, rb, re;
-	int n_cigar, len, score, qb, qe;
+	int n_cigar, len, score, qb, qe, is_all;
 	uint32_t *cigar;
 } mem_aln_t;
 
