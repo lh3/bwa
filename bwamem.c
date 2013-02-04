@@ -197,23 +197,26 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 }
 
 mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
-{
+{ // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds
 	mem_aln_t a;
-	int i, j, qbeg, qend;
-	int64_t rlen, rbeg, rend, rmax[2], tmp;
-	mem_seed_t *s;
+	int i, j, qbeg;
+	int64_t rlen, rbeg, rmax[2], tmp;
+	const mem_seed_t *s;
 	uint8_t *rseq = 0;
 
 	memset(&a, 0, sizeof(mem_aln_t));
 	// get the start and end of the seeded region
 	rbeg = c->seeds[0].rbeg; qbeg = c->seeds[0].qbeg;
-	s = &c->seeds[c->n-1];
-	rend = s->rbeg + s->len; qend = s->qbeg + s->len;
 	// get the max possible span
-	rmax[0] = rbeg - (qbeg + cal_max_gap(opt, qbeg));
-	rmax[1] = rend + ((l_query - qend) + cal_max_gap(opt, l_query - qend));
-	if (rmax[0] < 0) rmax[0] = 0;
-	if (rmax[1] > l_pac<<1) rmax[1] = l_pac<<1;
+	rmax[0] = l_pac<<1; rmax[1] = 0;
+	for (i = 0; i < c->n; ++i) {
+		int64_t b, e;
+		const mem_seed_t *t = &c->seeds[i];
+		b = t->rbeg - (t->qbeg + cal_max_gap(opt, t->qbeg));
+		e = t->rbeg + t->len + ((l_query - t->qbeg - t->len) + cal_max_gap(opt, l_query - t->qbeg - t->len));
+		rmax[0] = rmax[0] < b? rmax[0] : b;
+		rmax[1] = rmax[1] > e? rmax[1] : e;
+	}
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
 
@@ -239,14 +242,13 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
 		if (c->n > 1) { // generate $qw
 			int l = rmax[1] - (s->rbeg + s->len);
-			assert(l >= 0 && l < 1000);
 			qw = malloc(l * 2);
 			for (i = 0; i < l; ++i) qw[i] = -1; // no constraint by default
 			for (i = 1; i < c->n; ++i) {
 				const mem_seed_t *t = &c->seeds[i];
 				for (j = 0; j < t->len; ++j) {
 					int x = t->rbeg + j - (s->rbeg + s->len), y = t->qbeg + j - (s->qbeg + s->len);
-					assert(x < l);
+					if (x < 0) continue; // overlap with the first seed
 					if (qw[x] == -1) qw[x] = x > y? x - y : y - x;
 					else if (qw[x] >= 0) qw[x] = -2; // in a seed overlap, do not set any constraint
 				}
