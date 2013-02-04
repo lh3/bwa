@@ -22,7 +22,7 @@ mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
 	o = calloc(1, sizeof(mem_opt_t));
-	o->a = 1; o->b = 9; o->q = 16; o->r = 1; o->w = 100;
+	o->a = 1; o->b = 5; o->q = 8; o->r = 1; o->w = 100;
 	o->min_seed_len = 17;
 	o->max_occ = 10;
 	o->max_chain_gap = 10000;
