@@ -92,7 +92,9 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, 2, itr->sub, itr->tmpvec); // starting from the middle of the longest MEM
 		i = j = 0; a->n = 0;
 		while (i < itr->matches->n && j < itr->sub->n) { // ordered merge
-			if (itr->matches->a[i].info < itr->sub->a[j].info) {
+			int64_t xi = itr->matches->a[i].info>>32<<32 | (itr->len - (uint32_t)itr->matches->a[i].info);
+			int64_t xj = itr->matches->a[j].info>>32<<32 | (itr->len - (uint32_t)itr->matches->a[j].info);
+			if (xi < xj) {
 				kv_push(bwtintv_t, *a, itr->matches->a[i]);
 				++i;
 			} else {
@@ -120,9 +122,9 @@ static int test_and_merge(const mem_opt_t *opt, mem_chain1_t *c, const mem_seed_
 	rend = last->rbeg + last->len;
 	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
 		return 1; // contained seed; do nothing
-	x = p->qbeg - last->qbeg; // always positive
+	x = p->qbeg - last->qbeg; // always non-negtive
 	y = p->rbeg - last->rbeg;
-	if (y > 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
+	if (y >= 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
 		if (c->n == c->m) {
 			c->m <<= 1;
 			c->seeds = realloc(c->seeds, c->m * sizeof(mem_seed_t));
@@ -190,6 +192,14 @@ mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uin
 	return chain;
 }
 
+/********************
+ * Filtering chains *
+ ********************/
+
+/****************************************
+ * Construct the alignment from a chain *
+ ****************************************/
+
 static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 {
 	int l = (int)((double)(qlen * opt->a - opt->q) / opt->r + 1.);
@@ -197,7 +207,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 }
 
 mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
-{ // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds
+{ // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
 	mem_aln_t a;
 	int i, j, qbeg;
 	int64_t rlen, rbeg, rmax[2], tmp;
@@ -238,8 +248,8 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 		int qle, tle, qe, re;
 		int16_t *qw = 0;
 		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
-		for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[j+qe]]); putchar('\n');
-		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
+//		for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[j+qe]]); putchar('\n');
+//		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
 		if (c->n > 1) { // generate $qw
 			int l = rmax[1] - (s->rbeg + s->len);
 			qw = malloc(l * 2);
