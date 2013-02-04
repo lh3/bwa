@@ -29,8 +29,8 @@ typedef struct {
 } mem_chain_t;
 
 typedef struct {
-	int64_t pos;
-	int n_cigar, len, score;
+	int64_t pos, rb, re;
+	int n_cigar, len, score, qb, qe;
 	uint32_t *cigar;
 } mem_aln_t;
 

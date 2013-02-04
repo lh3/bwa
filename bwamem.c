@@ -199,10 +199,12 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c)
 {
 	mem_aln_t a;
-	int i, j, qbeg, qend, score;
-	int64_t k, rlen, rbeg, rend, rmax[2], tmp;
+	int i, j, qbeg, qend;
+	int64_t rlen, rbeg, rend, rmax[2], tmp;
 	mem_seed_t *s;
 	uint8_t *rseq = 0;
+
+	memset(&a, 0, sizeof(mem_aln_t));
 	// get the start and end of the seeded region
 	rbeg = c->seeds[0].rbeg; qbeg = c->seeds[0].qbeg;
 	s = &c->seeds[c->n-1];
@@ -223,19 +225,23 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 		tmp = rbeg - rmax[0];
 		rs = malloc(tmp);
 		for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-		score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[0].len * opt->a, 0, &qle, &tle);
+		a.score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[0].len * opt->a, 0, &qle, &tle);
+		a.qb = qbeg - qle; a.rb = rbeg - tle;
 		free(qs); free(rs);
-	} else score = c->seeds[0].len * opt->a;
+	} else a.score = c->seeds[0].len * opt->a, a.qb = 0, a.rb = rbeg;
 
-	if (c->seeds[0].qbeg + c->seeds[0].len != l_query) { // right extension of the first seed
+	s = &c->seeds[0];
+	if (s->qbeg + s->len != l_query) { // right extension of the first seed
 		int qle, tle, qe, re;
-		s = &c->seeds[0];
 		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
 		for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[j+qe]]); putchar('\n');
 		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
-		score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, score, 0, &qle, &tle);
-		printf("[%d] score=%d\tqle=%d\trle=%d\n", c->n, score, qle, tle);
-	}
+		a.score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a.score, 0, &qle, &tle);
+		a.qe = qe + qle; a.re = rmax[0] + re + tle;
+	} else a.qe = l_query, a.re = s->rbeg + s->len;
+
+	printf("[%d] score=%d\t[%d,%d)\t[%lld,%lld)\n", c->n, a.score, a.qb, a.qe, a.rb, a.re);
+
 	free(rseq);
 	return a;
 }
