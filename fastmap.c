@@ -17,7 +17,7 @@ int main_mem(int argc, char *argv[])
 	bwt_t *bwt;
 	bntseq_t *bns;
 	int i, j, c;
-	gzFile *fp;
+	gzFile fp;
 	kseq_t *seq;
 	uint8_t *pac = 0;
 
@@ -66,9 +66,15 @@ int main_mem(int argc, char *argv[])
 			putchar('\n');
 		}
 		puts("//");
+		for (i = 0; i < chain.n; ++i) free(chain.chains[i].seeds);
+		free(chain.chains);
 	}
 
-	free(opt);
+	free(pac); free(opt);
+	bns_destroy(bns);
+	bwt_destroy(bwt);
+	kseq_destroy(seq);
+	gzclose(fp);
 	return 0;
 }
 

@@ -10,7 +10,7 @@
 void mem_fill_scmat(int a, int b, int8_t mat[25])
 {
 	int i, j, k;
-	for (i = k = 0; i < 5; ++i) {
+	for (i = k = 0; i < 4; ++i) {
 		for (j = 0; j < 4; ++j)
 			mat[k++] = i == j? a : -b;
 		mat[k++] = 0; // ambiguous base
@@ -233,11 +233,28 @@ mem_aln_t mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 	s = &c->seeds[0];
 	if (s->qbeg + s->len != l_query) { // right extension of the first seed
 		int qle, tle, qe, re;
+		int16_t *qw = 0;
 		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
 		for (j = 0; j < l_query - qe; ++j) putchar("ACGTN"[(int)query[j+qe]]); putchar('\n');
 		for (j = 0; j < rmax[1] - rmax[0] - re; ++j) putchar("ACGTN"[(int)rseq[j+re]]); putchar('\n');
-		a.score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a.score, 0, &qle, &tle);
+		if (c->n > 1) { // generate $qw
+			int l = rmax[1] - (s->rbeg + s->len);
+			assert(l >= 0 && l < 1000);
+			qw = malloc(l * 2);
+			for (i = 0; i < l; ++i) qw[i] = -1; // no constraint by default
+			for (i = 1; i < c->n; ++i) {
+				const mem_seed_t *t = &c->seeds[i];
+				for (j = 0; j < t->len; ++j) {
+					int x = t->rbeg + j - (s->rbeg + s->len), y = t->qbeg + j - (s->qbeg + s->len);
+					assert(x < l);
+					if (qw[x] == -1) qw[x] = x > y? x - y : y - x;
+					else if (qw[x] >= 0) qw[x] = -2; // in a seed overlap, do not set any constraint
+				}
+			}
+		}
+		a.score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a.score, qw, &qle, &tle);
 		a.qe = qe + qle; a.re = rmax[0] + re + tle;
+		free(qw);
 	} else a.qe = l_query, a.re = s->rbeg + s->len;
 
 	a.is_all = 1;

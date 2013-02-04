@@ -315,7 +315,7 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int *qw, int *_qle, int *_tle)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int16_t *qw, int *_qle, int *_tle)
 {
 	eh_t *eh;
 	int8_t *qp;
@@ -350,7 +350,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		h1 = h0 - (gapo + gape * (i + 1));
 		if (h1 < 0) h1 = 0;
 		// apply the band and the constraint (if provided)
-		t = (qw && qw[i] < w)? qw[i] : w; // this is the band width at $i
+		t = (qw && qw[i] >= 0 && qw[i] < w)? qw[i] : w; // this is the band width at $i
 		if (beg < i - t) beg = i - t;
 		if (end > i + t + 1) end = i + t + 1;
 		if (end > qlen) end = qlen;
