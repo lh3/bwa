@@ -321,8 +321,8 @@ typedef struct {
 
 int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int16_t *qw, int *_qle, int *_tle)
 {
-	eh_t *eh;
-	int8_t *qp;
+	eh_t *eh; // score array
+	int8_t *qp; // query profile
 	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
@@ -418,11 +418,11 @@ static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, 
 int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, uint32_t **cigar_)
 {
 	eh_t *eh;
-	int8_t *qp;
+	int8_t *qp; // query profile
 	int i, j, k, gapoe = gapo + gape, score, n_col;
-	uint8_t *z;
+	uint8_t *z; // backtrack matrix; in each cell: f<<4|e<<2|h; in principle, we can halve the memory, but backtrack will be a little more complex
 	// allocate memory
-	n_col = qlen < 2*w+1? qlen : 2*w+1;
+	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
 	z = malloc(n_col * tlen);
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
@@ -435,17 +435,18 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	eh[0].h = 0; eh[0].e = MINUS_INF;
 	for (j = 1; j <= qlen && j <= w; ++j)
 		eh[j].h = -(gapo + gape * j), eh[j].e = MINUS_INF;
-	for (; j <= qlen; ++j) eh[j].h = eh[j].e = MINUS_INF;
+	for (; j <= qlen; ++j) eh[j].h = eh[j].e = MINUS_INF; // everything is -inf outside the band
 	// DP loop
-	for (i = 0; LIKELY(i < tlen); ++i) {
+	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
 		int32_t f = MINUS_INF, h1, beg, end;
 		int8_t *q = &qp[target[i] * qlen];
 		uint8_t *zi = &z[i * n_col];
 		beg = i > w? i - w : 0;
-		end = i + w + 1 < qlen? i + w + 1 : qlen;
+		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
 		h1 = beg == 0? -(gapo + gape * (i + 1)) : MINUS_INF;
-		printf("%d", i);
 		for (j = beg; LIKELY(j < end); ++j) {
+			// This loop is organized in a similar way to ksw_extend() and ksw_sse2(), except:
+			// 1) not checking h>0; 2) recording direction for backtracking
 			eh_t *p = &eh[j];
 			int32_t h = p->h, e = p->e;
 			uint8_t d; // direction
@@ -455,7 +456,6 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			h = h > e? h : e;
 			d = h > f? d : 2;
 			h = h > f? h : f;
-			printf("\t[%d],%d:%d:%d", j, h<-99?-99:h, e<-99?-99:e, f<-99?-99:f);
 			h1 = h;
 			h -= gapoe;
 			e -= gape;
@@ -463,12 +463,10 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			e = e > h? e : h;
 			p->e = e;
 			f -= gape;
-			d |= f > h? 2<<4 : 0;
+			d |= f > h? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
 			f = f > h? f : h;
-			zi[j - beg] = d;
-			printf(",%d:%d:%d", d>>0&3, d>>2&3, d>>4&3);
+			zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
 		}
-		putchar('\n');
 		eh[end].h = h1; eh[end].e = MINUS_INF;
 	}
 	score = eh[qlen].h;
@@ -478,7 +476,6 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
 		while (i >= 0 && k >= 0) {
 			which = z[i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
-			printf("(%d,%d)\t%d\n", i, k, which);
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
 			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
