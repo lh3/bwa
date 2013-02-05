@@ -393,6 +393,62 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	return max;
 }
 
+/********************
+ * Global alignment *
+ ********************/
+
+#define MINUS_INF -0x40000000
+
+int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *_n_cigar, uint32_t **_cigar)
+{
+	eh_t *eh;
+	int8_t *qp;
+	int i, j, k, gapoe = gapo + gape, score;
+	// allocate memory
+	eh = calloc(qlen + 1, 8);
+	qp = malloc(qlen * m);
+	// generate the query profile
+	for (k = i = 0; k < m; ++k) {
+		const int8_t *p = &mat[k * m];
+		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
+	}
+	// fill the first row
+	eh[0].h = 0; eh[0].e = MINUS_INF;
+	for (j = 1; j <= qlen && j <= w; ++j)
+		eh[j].h = -(gapo + gape * j), eh[j].e = MINUS_INF;
+	for (; j <= qlen; ++j) eh[j].h = eh[j].e = MINUS_INF;
+	// DP loop
+	for (i = 0; LIKELY(i < tlen); ++i) {
+		int32_t f = MINUS_INF, h1, beg, end;
+		int8_t *q = &qp[target[i] * qlen];
+		beg = i > w? i - w : 0;
+		end = i + w + 1 < qlen? i + w + 1 : qlen;
+		h1 = beg == 0? -(gapo + gape * (i + 1)) : MINUS_INF;
+		printf("%d\t%d", i, end);
+		for (j = beg; LIKELY(j < end); ++j) {
+			eh_t *p = &eh[j];
+			int32_t h = p->h, e = p->e;
+			p->h = h1;
+			h += q[j];
+			h = h > e? h : e;
+			h = h > f? h : f;
+			h1 = h;
+			printf("\t%d:%d", j, h);
+			h -= gapoe;
+			e -= gape;
+			e = e > h? e : h;
+			p->e = e;
+			f -= gape;
+			f = f > h? f : h;
+		}
+		putchar('\n');
+		eh[end].h = h1; eh[end].e = MINUS_INF;
+	}
+	score = eh[qlen].h;
+	free(eh); free(qp);
+	return score;
+}
+
 /*******************************************
  * Main function (not compiled by default) *
  *******************************************/
