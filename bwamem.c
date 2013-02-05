@@ -27,6 +27,8 @@ mem_opt_t *mem_opt_init()
 	o->min_seed_len = 17;
 	o->max_occ = 10;
 	o->max_chain_gap = 10000;
+	o->mask_level = 0.50;
+	o->chain_drop_ratio = 0.33;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -218,18 +220,18 @@ void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
 	for (i = 0; i < chn->n; ++i) {
 		mem_chain1_t *c = &chn->chains[i];
 		int w = 0;
-		for (j = 0; j < c->n; ++j) w += c->len;
+		for (j = 0; j < c->n; ++j) w += c->seeds[j].len;
 		a[i].beg = c->seeds[0].qbeg;
 		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
 		a[i].w = w;
 		a[i].p = c;
-		a[i].w2 = 0; a[i].p2 = 0;
+		a[i].p2 = 0;
 	}
 	ks_introsort(mem_flt, chn->n, a);
 	for (i = 1, n = 1; i < chn->n; ++i) {
 		for (j = 0; j < n; ++j) {
 			int b_max = a[j].beg > a[i].beg? a[j].beg : a[i].beg;
-			int e_min = e[j].end < a[i].end? a[j].end : a[i].end;
+			int e_min = a[j].end < a[i].end? a[j].end : a[i].end;
 			if (e_min > b_max) { // have overlap
 				int min_l = a[i].end - a[i].beg < a[j].end - a[j].beg? a[i].end - a[i].beg : a[j].end - a[j].beg;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
@@ -241,7 +243,27 @@ void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
 		}
 		if (j == n) a[n++] = a[i]; // if have no significant overlap with better chains, keep it.
 	}
+	for (i = 0; i < n; ++i) { // mark chains to be kept
+		mem_chain1_t *c = (mem_chain1_t*)a[i].p;
+		if (c->n > 0) c->n = -c->n;
+		c = (mem_chain1_t*)a[i].p2;
+		if (c && c->n > 0) c->n = -c->n;
+	}
 	free(a);
+	for (i = 0; i < chn->n; ++i) { // free discarded chains
+		mem_chain1_t *c = &chn->chains[i];
+		if (c->n >= 0) {
+			free(c->seeds);
+			c->n = c->m = 0;
+		} else c->n = -c->n;
+	}
+	for (i = n = 0; i < chn->n; ++i) { // squeeze out discarded chains
+		if (chn->chains[i].n > 0) {
+			if (n != i) chn->chains[n++] = chn->chains[i];
+			else ++n;
+		}
+	}
+	chn->n = n;
 }
 
 /****************************************
