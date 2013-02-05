@@ -28,7 +28,7 @@ mem_opt_t *mem_opt_init()
 	o->max_occ = 10;
 	o->max_chain_gap = 10000;
 	o->mask_level = 0.50;
-	o->chain_drop_ratio = 0.33;
+	o->chain_drop_ratio = 0.50;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -96,7 +96,7 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 		i = j = 0; a->n = 0;
 		while (i < itr->matches->n && j < itr->sub->n) { // ordered merge
 			int64_t xi = itr->matches->a[i].info>>32<<32 | (itr->len - (uint32_t)itr->matches->a[i].info);
-			int64_t xj = itr->matches->a[j].info>>32<<32 | (itr->len - (uint32_t)itr->matches->a[j].info);
+			int64_t xj = itr->sub->a[j].info>>32<<32 | (itr->len - (uint32_t)itr->sub->a[j].info);
 			if (xi < xj) {
 				kv_push(bwtintv_t, *a, itr->matches->a[i]);
 				++i;
