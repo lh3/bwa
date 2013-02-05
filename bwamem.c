@@ -331,6 +331,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				}
 			}
 		}
+		//printf("[Q] "); for (i = qe; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
+		//printf("[R] "); for (i = re; i < rmax[1] - rmax[0]; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 		a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
 		a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		free(qw);
@@ -347,8 +349,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	w += abs((a->re - a->rb) - (a->qe - a->qb));
 	nw_score = ksw_global(a->qe - a->qb, query + a->qb, a->re - a->rb, rseq + (a->rb - rmax[0]), 5, opt->mat, opt->q, opt->r, w, &a->n_cigar, &a->cigar);
 
-	printf("[%d] ", c->n); for (i = a->qb; i < a->qe; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
-	printf("[%d] ", c->n); for (i = a->rb; i < a->re; ++i) putchar("ACGTN"[(int)rseq[i - rmax[0]]]); putchar('\n');
+	//printf("[Q] "); for (i = a->qb; i < a->qe; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
+	//printf("[R] "); for (i = a->rb; i < a->re; ++i) putchar("ACGTN"[(int)rseq[i - rmax[0]]]); putchar('\n');
 	printf("[%d] score=%d,%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\t", c->n, a->score, nw_score, a->qb, a->qe, a->rb, a->re, a->is_all);
 	for (i = 0; i < a->n_cigar; ++i) printf("%d%c", a->cigar[i]>>4, "MIDS"[a->cigar[i]&0xf]);
 	putchar('\n');

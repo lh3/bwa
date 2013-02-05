@@ -392,8 +392,8 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
 	free(eh); free(qp);
-	if (_qle) *_qle = max_i + 1;
-	if (_tle) *_tle = max_j + 1;
+	if (_qle) *_qle = max_j + 1;
+	if (_tle) *_tle = max_i + 1;
 	return max;
 }
 
