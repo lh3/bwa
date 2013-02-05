@@ -27,6 +27,10 @@
 #include <stdint.h>
 #include "ksw.h"
 
+#ifndef kroundup32
+#define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
+#endif
+
 #ifndef _NO_SSE2
 #include <emmintrin.h>
 
@@ -322,8 +326,8 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
-	eh = calloc(qlen + 1, 8);
 	qp = malloc(qlen * m);
+	eh = calloc(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];
@@ -399,14 +403,35 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 
 #define MINUS_INF -0x40000000
 
-int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *_n_cigar, uint32_t **_cigar)
+typedef struct {
+	uint8_t h:2, e:1, f:1;
+} btmat_t;
+
+static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, int op, int len)
+{
+	if (*n_cigar == 0 || op != (cigar[(*n_cigar) - 1]&0xf)) {
+		if (*n_cigar == *m_cigar) {
+			*m_cigar = *m_cigar? (*m_cigar)<<1 : 4;
+			cigar = realloc(cigar, (*m_cigar) << 4);
+		}
+		cigar[(*n_cigar)++] = len<<4 | op;
+	} else cigar[(*n_cigar)-1] += len<<4;
+	return cigar;
+}
+
+#define cal_j_(i_, k_, w_) ((k_) - ((i_) > (w_)? (i_) - (w_) : 0))
+
+int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, uint32_t **cigar_)
 {
 	eh_t *eh;
 	int8_t *qp;
-	int i, j, k, gapoe = gapo + gape, score;
+	int i, j, k, gapoe = gapo + gape, score, n_col;
+	btmat_t *z;
 	// allocate memory
-	eh = calloc(qlen + 1, 8);
+	n_col = qlen < w? qlen : w;
+	z = malloc(n_col * tlen * sizeof(btmat_t));
 	qp = malloc(qlen * m);
+	eh = calloc(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];
@@ -421,31 +446,63 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int32_t f = MINUS_INF, h1, beg, end;
 		int8_t *q = &qp[target[i] * qlen];
+		btmat_t *zi = &z[i * n_col];
 		beg = i > w? i - w : 0;
 		end = i + w + 1 < qlen? i + w + 1 : qlen;
 		h1 = beg == 0? -(gapo + gape * (i + 1)) : MINUS_INF;
-		printf("%d\t%d", i, end);
+		printf("%d", i);
 		for (j = beg; LIKELY(j < end); ++j) {
 			eh_t *p = &eh[j];
+			btmat_t *zij = &zi[j - beg];
 			int32_t h = p->h, e = p->e;
 			p->h = h1;
 			h += q[j];
+			zij->h = h > e? 0 : 1;
 			h = h > e? h : e;
+			zij->h = h > f? zij->h : 2;
 			h = h > f? h : f;
+			printf("\t%d:%d:%d", h<-99?-99:h, e<-99?-99:e, f<-99?-99:f);
 			h1 = h;
-			printf("\t%d:%d", j, h);
 			h -= gapoe;
 			e -= gape;
+			zij->e = (e > h); // NB: zij->e keeps the direction for the NEXT row, not the current one
 			e = e > h? e : h;
 			p->e = e;
 			f -= gape;
+			zij->f = (f > h);
 			f = f > h? f : h;
+			printf(",%d:%d:%d", zij->h, zij->e, zij->f);
 		}
 		putchar('\n');
 		eh[end].h = h1; eh[end].e = MINUS_INF;
 	}
 	score = eh[qlen].h;
-	free(eh); free(qp);
+	if (n_cigar_ && cigar_) { // backtrack
+		int n_cigar = 0, m_cigar = 0, which;
+		uint32_t *cigar = 0, tmp;
+		i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
+		which = z[i * n_col + cal_j_(i, k, w)].h;
+		while (i >= 0 && k >= 0) {
+			printf("(%d,%d)\t%d\n", i, k, which);
+			if (which == 0) {
+				cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1); --i, --k;
+				if (i >= 0 && k >= 0) which = z[i * n_col + cal_j_(i, k, w)].h;
+			} else if (which == 1) {
+				cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1); --i;
+				if (i >= 0) which = z[i * n_col + cal_j_(i, k, w)].e? 1 : 0;
+			} else { // which == 2
+				cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1); --k;
+				if (k >= 0) which = z[i * n_col + cal_j_(i, k, w)].f? 2 : 0;
+			}
+		}
+		printf("(%d,%d)\t%d\n", i, k, which);
+		if (i > 0) push_cigar(&n_cigar, &m_cigar, cigar, 2, i);
+		if (k > 0) push_cigar(&n_cigar, &m_cigar, cigar, 1, k);
+		for (i = 0; i < n_cigar>>1; ++i) // reverse CIGAR
+			tmp = cigar[i], cigar[i] = cigar[n_cigar-1-i], cigar[n_cigar-1-i] = tmp;
+		*n_cigar_ = n_cigar, *cigar_ = cigar;
+	}
+	free(eh); free(qp); free(z);
 	return score;
 }
 
