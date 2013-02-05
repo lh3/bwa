@@ -278,7 +278,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_aln_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	int i, j, qbeg;
+	int i, j, qbeg, w, nw_score;
 	int64_t rlen, rbeg, rmax[2], tmp;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
@@ -342,7 +342,16 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		if (s->qbeg + s->len > a->qe) a->is_all = 0;
 	}
 
-	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\n", c->n, a->score, a->qb, a->qe, a->rb, a->re, a->is_all);
+	w = (int)((double)(l_query * opt->a - opt->q) / opt->r + 1.);
+	w = w < opt->w? w : opt->w;
+	w += abs((a->re - a->rb) - (a->qe - a->qb));
+	nw_score = ksw_global(a->qe - a->qb, query + a->qb, a->re - a->rb, rseq + (a->rb - rmax[0]), 5, opt->mat, opt->q, opt->r, w, &a->n_cigar, &a->cigar);
+
+	printf("[%d] ", c->n); for (i = a->qb; i < a->qe; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
+	printf("[%d] ", c->n); for (i = a->rb; i < a->re; ++i) putchar("ACGTN"[(int)rseq[i - rmax[0]]]); putchar('\n');
+	printf("[%d] score=%d,%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\t", c->n, a->score, nw_score, a->qb, a->qe, a->rb, a->re, a->is_all);
+	for (i = 0; i < a->n_cigar; ++i) printf("%d%c", a->cigar[i]>>4, "MIDS"[a->cigar[i]&0xf]);
+	putchar('\n');
 
 	free(rseq);
 }

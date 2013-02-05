@@ -421,6 +421,7 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	int8_t *qp; // query profile
 	int i, j, k, gapoe = gapo + gape, score, n_col;
 	uint8_t *z; // backtrack matrix; in each cell: f<<4|e<<2|h; in principle, we can halve the memory, but backtrack will be a little more complex
+	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
 	z = malloc(n_col * tlen);

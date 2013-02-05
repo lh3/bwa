@@ -66,6 +66,7 @@ int main_mem(int argc, char *argv[])
 				printf("\t%d,%d,%s:%c%ld", p->seeds[j].len, p->seeds[j].qbeg, bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
 			}
 			putchar('\n');
+			free(a.cigar);
 		}
 		puts("//");
 		for (i = 0; i < chain.n; ++i) free(chain.chains[i].seeds);
