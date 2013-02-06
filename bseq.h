@@ -2,14 +2,10 @@
 #define BATCHSEQ_H_
 
 typedef struct {
+	int l_seq;
 	char *name, *comment, *seq, *qual;
 } bseq1_t;
 
-typedef struct {
-	int n, m;
-	bseq1_t *seqs;
-} bseq_t;
-
-int bseq_read(int chunk_size, bseq_t *bs);
+bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_);
 
 #endif
