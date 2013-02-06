@@ -31,8 +31,7 @@ typedef struct {
 
 typedef struct {
 	int64_t pos, rb, re;
-	int n_cigar, len, score, qb, qe, is_all;
-	uint32_t *cigar;
+	int len, score, qb, qe, is_all;
 } mem_aln_t;
 
 #ifdef __cplusplus
