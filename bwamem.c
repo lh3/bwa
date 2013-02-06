@@ -220,7 +220,7 @@ void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
 	for (i = 0; i < chn->n; ++i) {
 		mem_chain1_t *c = &chn->chains[i];
 		int w = 0;
-		for (j = 0; j < c->n; ++j) w += c->seeds[j].len;
+		for (j = 0; j < c->n; ++j) w += c->seeds[j].len; // FIXME: take care of seed overlaps
 		a[i].beg = c->seeds[0].qbeg;
 		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
 		a[i].w = w;
@@ -228,6 +228,16 @@ void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
 		a[i].p2 = 0;
 	}
 	ks_introsort(mem_flt, chn->n, a);
+	{ // reorder chains such that the best chain appears first
+		mem_chain1_t *swap;
+		swap = malloc(sizeof(mem_chain1_t) * chn->n);
+		for (i = 0; i < chn->n; ++i) {
+			swap[i] = *((mem_chain1_t*)a[i].p);
+			a[i].p = &chn->chains[i]; // as we will memcpy() below, a[i].p is changed
+		}
+		memcpy(chn->chains, swap, sizeof(mem_chain1_t) * chn->n);
+		free(swap);
+	}
 	for (i = 1, n = 1; i < chn->n; ++i) {
 		for (j = 0; j < n; ++j) {
 			int b_max = a[j].beg > a[i].beg? a[j].beg : a[i].beg;
