@@ -51,10 +51,10 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		chain = mem_chain(opt, bwt, seq->seq.l, (uint8_t*)seq->seq.s);
-		mem_chain_flt(opt, &chain);
+		chain.n = mem_chain_flt(opt, chain.n, chain.chains);
 		for (i = 0; i < chain.n; ++i) {
 			mem_chain1_t *p = &chain.chains[i];
-			mem_aln_t a;
+			mem_alnreg_t a;
 			mem_chain2aln(opt, bns->l_pac, pac, seq->seq.l, (uint8_t*)seq->seq.s, p, &a);
 			printf("%d\t%d", i, p->n);
 			for (j = 0; j < p->n; ++j) {

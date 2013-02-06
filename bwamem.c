@@ -211,34 +211,32 @@ typedef struct {
 #define flt_lt(a, b) ((a).w > (b).w)
 KSORT_INIT(mem_flt, flt_aux_t, flt_lt)
 
-void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
+int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain1_t *chains)
 {
 	flt_aux_t *a;
 	int i, j, n;
-	if (chn->n <= 1) return; // no need to filter
-	a = malloc(sizeof(flt_aux_t) * chn->n);
-	for (i = 0; i < chn->n; ++i) {
-		mem_chain1_t *c = &chn->chains[i];
+	if (n_chn <= 1) return n_chn; // no need to filter
+	a = malloc(sizeof(flt_aux_t) * n_chn);
+	for (i = 0; i < n_chn; ++i) {
+		mem_chain1_t *c = &chains[i];
 		int w = 0;
 		for (j = 0; j < c->n; ++j) w += c->seeds[j].len; // FIXME: take care of seed overlaps
 		a[i].beg = c->seeds[0].qbeg;
 		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
-		a[i].w = w;
-		a[i].p = c;
-		a[i].p2 = 0;
+		a[i].w = w; a[i].p = c; a[i].p2 = 0;
 	}
-	ks_introsort(mem_flt, chn->n, a);
+	ks_introsort(mem_flt, n_chn, a);
 	{ // reorder chains such that the best chain appears first
 		mem_chain1_t *swap;
-		swap = malloc(sizeof(mem_chain1_t) * chn->n);
-		for (i = 0; i < chn->n; ++i) {
+		swap = malloc(sizeof(mem_chain1_t) * n_chn);
+		for (i = 0; i < n_chn; ++i) {
 			swap[i] = *((mem_chain1_t*)a[i].p);
-			a[i].p = &chn->chains[i]; // as we will memcpy() below, a[i].p is changed
+			a[i].p = &chains[i]; // as we will memcpy() below, a[i].p is changed
 		}
-		memcpy(chn->chains, swap, sizeof(mem_chain1_t) * chn->n);
+		memcpy(chains, swap, sizeof(mem_chain1_t) * n_chn);
 		free(swap);
 	}
-	for (i = 1, n = 1; i < chn->n; ++i) {
+	for (i = 1, n = 1; i < n_chn; ++i) {
 		for (j = 0; j < n; ++j) {
 			int b_max = a[j].beg > a[i].beg? a[j].beg : a[i].beg;
 			int e_min = a[j].end < a[i].end? a[j].end : a[i].end;
@@ -260,20 +258,20 @@ void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn)
 		if (c && c->n > 0) c->n = -c->n;
 	}
 	free(a);
-	for (i = 0; i < chn->n; ++i) { // free discarded chains
-		mem_chain1_t *c = &chn->chains[i];
+	for (i = 0; i < n_chn; ++i) { // free discarded chains
+		mem_chain1_t *c = &chains[i];
 		if (c->n >= 0) {
 			free(c->seeds);
 			c->n = c->m = 0;
 		} else c->n = -c->n;
 	}
-	for (i = n = 0; i < chn->n; ++i) { // squeeze out discarded chains
-		if (chn->chains[i].n > 0) {
-			if (n != i) chn->chains[n++] = chn->chains[i];
+	for (i = n = 0; i < n_chn; ++i) { // squeeze out discarded chains
+		if (chains[i].n > 0) {
+			if (n != i) chains[n++] = chains[i];
 			else ++n;
 		}
 	}
-	chn->n = n;
+	return n;
 }
 
 /****************************************
@@ -286,14 +284,14 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 	return l > 1? l : 1;
 }
 
-void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_aln_t *a)
+void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_alnreg_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
 	int i, j, qbeg;
 	int64_t rlen, rbeg, rmax[2], tmp;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
 
-	memset(a, 0, sizeof(mem_aln_t));
+	memset(a, 0, sizeof(mem_alnreg_t));
 	// get the start and end of the seeded region
 	rbeg = c->seeds[0].rbeg; qbeg = c->seeds[0].qbeg;
 	// get the max possible span
@@ -347,17 +345,14 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		free(qw);
 	} else a->qe = l_query, a->re = s->rbeg + s->len;
-
+	/*
 	a->is_all = 1;
 	if (c->n > 1) { // check if all the seeds have been included
 		s = &c->seeds[c->n - 1];
 		if (s->qbeg + s->len > a->qe) a->is_all = 0;
 	}
-
-	//printf("[Q] "); for (i = a->qb; i < a->qe; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
-	//printf("[R] "); for (i = a->rb; i < a->re; ++i) putchar("ACGTN"[(int)rseq[i - rmax[0]]]); putchar('\n');
-	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\tis_all=%d\t", c->n, a->score, a->qb, a->qe, a->rb, a->re, a->is_all);
-	putchar('\n');
+	*/
+	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\n", c->n, a->score, a->qb, a->qe, a->rb, a->re);
 
 	free(rseq);
 }

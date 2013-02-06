@@ -31,8 +31,8 @@ typedef struct {
 
 typedef struct {
 	int64_t rb, re;
-	int score, qb, qe, is_all;
-} mem_aln_t;
+	int score, qb, qe;
+} mem_alnreg_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -47,8 +47,9 @@ mem_opt_t *mem_opt_init(void);
 void mem_fill_scmat(int a, int b, int8_t mat[25]);
 
 mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq);
-void mem_chain_flt(const mem_opt_t *opt, mem_chain_t *chn);
-void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_aln_t *a);
+int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain1_t *chains);
+void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_alnreg_t *a);
+uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar);
 
 #ifdef __cplusplus
 }
