@@ -7,7 +7,7 @@
 #include "bwamem.h"
 #include "kvec.h"
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
 

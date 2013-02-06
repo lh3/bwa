@@ -274,6 +274,32 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain1_t *chains)
 	return n;
 }
 
+#define alnreg_lt(a, b) ((a).score > (b).score)
+KSORT_INIT(mem_ar, mem_alnreg_t, alnreg_lt)
+
+int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
+{ // similar to the loop in mem_chain_flt()
+	int i, j, m;
+	if (n <= 1) return n;
+	ks_introsort(mem_ar, n, a);
+	for (i = 0; i < n; ++i) a[i].sub = 0;
+	for (i = 1, m = 1; i < n; ++i) {
+		for (j = 0; j < m; ++j) {
+			int b_max = a[j].qb > a[i].qb? a[j].qb : a[i].qb;
+			int e_min = a[j].qe < a[i].qe? a[j].qe : a[i].qe;
+			if (e_min > b_max) { // have overlap
+				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
+				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
+					if (a[j].sub == 0) a[j].sub = a[i].score;
+					break;
+				}
+			}
+		}
+		if (j == m) a[m++] = a[i];
+	}
+	return m;
+}
+
 /****************************************
  * Construct the alignment from a chain *
  ****************************************/
@@ -388,3 +414,7 @@ ret_gen_cigar:
 	free(rseq);
 	return cigar;
 }
+
+/****************
+ * Sequence I/O *
+ ****************/

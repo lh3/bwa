@@ -31,7 +31,7 @@ typedef struct {
 
 typedef struct {
 	int64_t rb, re;
-	int score, qb, qe;
+	int score, qb, qe, sub;
 } mem_alnreg_t;
 
 #ifdef __cplusplus

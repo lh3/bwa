@@ -15,7 +15,7 @@
 #include "kstring.h"
 
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_DECLARE(gzFile)
 
 #include "ksort.h"
 #define __left_lt(a, b) ((a).end > (b).end)
