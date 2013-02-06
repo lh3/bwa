@@ -48,7 +48,7 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 	}
 	*n_ = n;
 	if (size < chunk_size) { // test if the 2nd file is finished
-		if (kseq_read(ks2) >= 0)
+		if (ks2 && kseq_read(ks2) >= 0)
 			fprintf(stderr, "[W::%s] the 1st file has fewer sequences.\n", __func__);
 	}
 	return seqs;
