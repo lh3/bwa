@@ -30,8 +30,8 @@ typedef struct {
 } mem_chain_t;
 
 typedef struct {
-	int64_t pos, rb, re;
-	int len, score, qb, qe, is_all;
+	int64_t rb, re;
+	int score, qb, qe, is_all;
 } mem_aln_t;
 
 #ifdef __cplusplus
