@@ -2,8 +2,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#ifdef HAVE_PTHREAD
+#include <pthread.h>
+#endif
 #include "bwamem.h"
-#include "kvec.h"
 #include "bntseq.h"
 #include "ksw.h"
 #include "ksort.h"
@@ -422,8 +424,48 @@ static void process_seq1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t 
 {
 }
 
+typedef struct {
+	int start, step, n;
+	const mem_opt_t *opt;
+	const bwt_t *bwt;
+	const bntseq_t *bns;
+	const uint8_t *pac;
+	bseq1_t *seqs;
+} worker1_t;
+
+static void *worker1(void *data)
+{
+	worker1_t *w = (worker1_t*)data;
+	int i;
+	for (i = w->start; i < w->n; i += w->step)
+		process_seq1(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
+	return 0;
+}
+
 int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs)
 {
 	int i;
+	worker1_t *w1;
+	w1 = calloc(opt->n_threads, sizeof(worker1_t));
+	for (i = 0; i < opt->n_threads; ++i) {
+		worker1_t *w = &w1[i];
+		w->start = i; w->step = opt->n_threads; w->n = n;
+		w->opt = opt; w->bwt = bwt; w->bns = bns; w->pac = pac;
+		w->seqs = seqs;
+	}
+#ifdef HAVE_PTHREAD
+	if (opt->n_threads == 1) {
+		worker1(w1);
+	} else {
+		pthread_t *tid;
+		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
+		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w1[i]);
+		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
+		free(tid);
+	}
+#else
+	worker1(w1);
+#endif
+	free(w1);
 	return 0;
 }

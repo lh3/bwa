@@ -34,7 +34,7 @@ typedef struct {
 	int score, qb, qe, sub;
 } mem_alnreg_t;
 
-typedef kvec_t(mem_chain_t) mem_chain_v;
+typedef kvec_t(mem_chain_t)  mem_chain_v;
 typedef kvec_t(mem_alnreg_t) mem_alnreg_v;
 
 #ifdef __cplusplus
