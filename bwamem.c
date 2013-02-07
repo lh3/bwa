@@ -181,6 +181,24 @@ static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *i
 	}
 }
 
+void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
+{
+	int i, j;
+	for (i = 0; i < chn->n; ++i) {
+		mem_chain_t *p = &chn->a[i];
+		printf("%d", p->n);
+		for (j = 0; j < p->n; ++j) {
+			bwtint_t pos;
+			int is_rev, ref_id;
+			pos = bns_depos(bns, p->seeds[j].rbeg, &is_rev);
+			if (is_rev) pos -= p->seeds[j].len - 1;
+			bns_cnt_ambi(bns, pos, p->seeds[j].len, &ref_id);
+			printf("\t%d,%d,%ld(%s:%c%ld)", p->seeds[j].len, p->seeds[j].qbeg, (long)p->seeds[j].rbeg, bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
+		}
+		putchar('\n');
+	}
+}
+
 mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
 {
 	mem_chain_v chain;
@@ -318,7 +336,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	int i, j, qbeg;
+	int i, qbeg;
 	int64_t rlen, rbeg, rmax[2], tmp;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
@@ -357,8 +375,9 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		int qle, tle, qe, re;
 		int16_t *qw = 0;
 		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
+#if 0
 		if (c->n > 1) { // generate $qw
-			int l = rmax[1] - (s->rbeg + s->len);
+			int j, l = rmax[1] - (s->rbeg + s->len);
 			qw = malloc(l * 2);
 			for (i = 0; i < l; ++i) qw[i] = -1; // no constraint by default
 			for (i = 1; i < c->n; ++i) {
@@ -371,6 +390,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				}
 			}
 		}
+#endif
 		a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
 		a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		free(qw);
@@ -447,9 +467,14 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
 		kputw(0, &str); kputc('\t', &str);
 		if (n_cigar) {
+			int clip5, clip3;
+			clip5 = is_rev? s->l_seq - p->qe : p->qb;
+			clip3 = is_rev? p->qb : s->l_seq - p->qe;
+			if (clip5) { kputw(clip5, &str); kputc('S', &str); }
 			for (i = 0; i < n_cigar; ++i) {
 				kputw(cigar[i]>>4, &str); kputc("MIDSH"[cigar[i]&0xf], &str);
 			}
+			if (clip3) { kputw(clip3, &str); kputc('S', &str); }
 		} else kputc('*', &str);
 		kputsn("\t*\t0\t0\t", 7, &str);
 		if (is_rev) for (i = s->l_seq - 1; i >= 0; --i) seq[i] = "TGCAN"[(int)s->seq[i]];
@@ -475,6 +500,7 @@ static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bn
 		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
 	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
+	//mem_print_chain(bns, &chn);
 	regs.n = regs.m = chn.n;
 	regs.a = malloc(regs.n * sizeof(mem_alnreg_t));
 	for (i = 0; i < chn.n; ++i) {

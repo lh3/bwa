@@ -24,7 +24,8 @@ int main_mem(int argc, char *argv[])
 	bseq1_t *seqs;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "")) >= 0) {
+	while ((c = getopt(argc, argv, "k:")) >= 0) {
+		if (c == 'k') opt->min_seed_len = atoi(optarg);
 	}
 	if (optind + 1 >= argc) {
 		fprintf(stderr, "\n");
@@ -57,34 +58,6 @@ int main_mem(int argc, char *argv[])
 		mem_process_seqs(opt, bwt, bns, pac, n, seqs);
 		free(seqs);
 	}
-	/*
-	while (kseq_read(seq) >= 0) {
-		mem_chain_t chain;
-		printf(">%s\n", seq->name.s);
-		for (i = 0; i < seq->seq.l; ++i)
-			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-		chain = mem_chain(opt, bwt, seq->seq.l, (uint8_t*)seq->seq.s);
-		chain.n = mem_chain_flt(opt, chain.n, chain.chains);
-		for (i = 0; i < chain.n; ++i) {
-			mem_chain1_t *p = &chain.chains[i];
-			mem_alnreg_t a;
-			mem_chain2aln(opt, bns->l_pac, pac, seq->seq.l, (uint8_t*)seq->seq.s, p, &a);
-			printf("%d\t%d", i, p->n);
-			for (j = 0; j < p->n; ++j) {
-				bwtint_t pos;
-				int is_rev, ref_id;
-				pos = bns_depos(bns, p->seeds[j].rbeg, &is_rev);
-				if (is_rev) pos -= p->seeds[j].len - 1;
-				bns_cnt_ambi(bns, pos, p->seeds[j].len, &ref_id);
-				printf("\t%d,%d,%s:%c%ld", p->seeds[j].len, p->seeds[j].qbeg, bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
-			}
-			putchar('\n');
-		}
-		puts("//");
-		for (i = 0; i < chain.n; ++i) free(chain.chains[i].seeds);
-		free(chain.chains);
-	}
-	*/
 
 	free(opt); free(pac);
 	bns_destroy(bns);
