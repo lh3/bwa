@@ -29,6 +29,10 @@ mem_opt_t *mem_opt_init()
 	o->max_chain_gap = 10000;
 	o->mask_level = 0.50;
 	o->chain_drop_ratio = 0.50;
+	o->chunk_size = 10000000;
+	o->n_threads = 1;
+	o->pe_dir = 0<<1|1;
+	o->is_pe = 0;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -119,9 +123,9 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 #include "kbtree.h"
 
 #define chain_cmp(a, b) ((a).pos - (b).pos)
-KBTREE_INIT(chn, mem_chain1_t, chain_cmp)
+KBTREE_INIT(chn, mem_chain_t, chain_cmp)
 
-static int test_and_merge(const mem_opt_t *opt, mem_chain1_t *c, const mem_seed_t *p)
+static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t *p)
 {
 	int64_t qend, rend, x, y;
 	const mem_seed_t *last = &c->seeds[c->n-1];
@@ -153,7 +157,7 @@ static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *i
 			int64_t k;
 			if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue; // ignore if too short or too repetitive
 			for (k = 0; k < p->x[2]; ++k) {
-				mem_chain1_t tmp, *lower, *upper;
+				mem_chain_t tmp, *lower, *upper;
 				mem_seed_t s;
 				int to_add = 0;
 				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
@@ -174,24 +178,23 @@ static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *i
 	}
 }
 
-mem_chain_t mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
+mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
 {
-	mem_chain_t chain;
+	mem_chain_v chain;
 	smem_i *itr;
 	kbtree_t(chn) *tree;
 
-	memset(&chain, 0, sizeof(mem_chain_t));
+	kv_init(chain);
 	if (len < opt->min_seed_len) return chain; // if the query is shorter than the seed length, no match
 	tree = kb_init(chn, KB_DEFAULT_SIZE);
 	itr = smem_itr_init(bwt);
 	smem_set_query(itr, len, seq);
 	mem_insert_seed(opt, tree, itr);
 
-	chain.m = kb_size(tree); chain.n = 0;
-	chain.chains = malloc(chain.m * sizeof(mem_chain1_t));
+	kv_resize(mem_chain_t, chain, kb_size(tree));
 
-	#define traverse_func(p_) (chain.chains[chain.n++] = *(p_))
-	__kb_traverse(mem_chain1_t, tree, traverse_func);
+	#define traverse_func(p_) (chain.a[chain.n++] = *(p_))
+	__kb_traverse(mem_chain_t, tree, traverse_func);
 	#undef traverse_func
 
 	smem_itr_destroy(itr);
@@ -211,14 +214,14 @@ typedef struct {
 #define flt_lt(a, b) ((a).w > (b).w)
 KSORT_INIT(mem_flt, flt_aux_t, flt_lt)
 
-int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain1_t *chains)
+int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 {
 	flt_aux_t *a;
 	int i, j, n;
 	if (n_chn <= 1) return n_chn; // no need to filter
 	a = malloc(sizeof(flt_aux_t) * n_chn);
 	for (i = 0; i < n_chn; ++i) {
-		mem_chain1_t *c = &chains[i];
+		mem_chain_t *c = &chains[i];
 		int w = 0;
 		for (j = 0; j < c->n; ++j) w += c->seeds[j].len; // FIXME: take care of seed overlaps
 		a[i].beg = c->seeds[0].qbeg;
@@ -227,13 +230,13 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain1_t *chains)
 	}
 	ks_introsort(mem_flt, n_chn, a);
 	{ // reorder chains such that the best chain appears first
-		mem_chain1_t *swap;
-		swap = malloc(sizeof(mem_chain1_t) * n_chn);
+		mem_chain_t *swap;
+		swap = malloc(sizeof(mem_chain_t) * n_chn);
 		for (i = 0; i < n_chn; ++i) {
-			swap[i] = *((mem_chain1_t*)a[i].p);
+			swap[i] = *((mem_chain_t*)a[i].p);
 			a[i].p = &chains[i]; // as we will memcpy() below, a[i].p is changed
 		}
-		memcpy(chains, swap, sizeof(mem_chain1_t) * n_chn);
+		memcpy(chains, swap, sizeof(mem_chain_t) * n_chn);
 		free(swap);
 	}
 	for (i = 1, n = 1; i < n_chn; ++i) {
@@ -252,14 +255,14 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain1_t *chains)
 		if (j == n) a[n++] = a[i]; // if have no significant overlap with better chains, keep it.
 	}
 	for (i = 0; i < n; ++i) { // mark chains to be kept
-		mem_chain1_t *c = (mem_chain1_t*)a[i].p;
+		mem_chain_t *c = (mem_chain_t*)a[i].p;
 		if (c->n > 0) c->n = -c->n;
-		c = (mem_chain1_t*)a[i].p2;
+		c = (mem_chain_t*)a[i].p2;
 		if (c && c->n > 0) c->n = -c->n;
 	}
 	free(a);
 	for (i = 0; i < n_chn; ++i) { // free discarded chains
-		mem_chain1_t *c = &chains[i];
+		mem_chain_t *c = &chains[i];
 		if (c->n >= 0) {
 			free(c->seeds);
 			c->n = c->m = 0;
@@ -310,7 +313,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 	return l > 1? l : 1;
 }
 
-void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain1_t *c, mem_alnreg_t *a)
+void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
 	int i, j, qbeg;
 	int64_t rlen, rbeg, rmax[2], tmp;
@@ -415,6 +418,12 @@ ret_gen_cigar:
 	return cigar;
 }
 
-/****************
- * Sequence I/O *
- ****************/
+static void process_seq1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s)
+{
+}
+
+int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs)
+{
+	int i;
+	return 0;
+}

@@ -6,6 +6,7 @@
 #include "bwt.h"
 #include "bwamem.h"
 #include "kvec.h"
+#include "bseq.h"
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
 
@@ -16,10 +17,11 @@ int main_mem(int argc, char *argv[])
 	mem_opt_t *opt;
 	bwt_t *bwt;
 	bntseq_t *bns;
-	int i, j, c;
-	gzFile fp;
-	kseq_t *seq;
+	int i, c, n;
+	gzFile fp, fp2 = 0;
+	kseq_t *ks, *ks2 = 0;
 	uint8_t *pac = 0;
+	bseq1_t *seqs;
 
 	opt = mem_opt_init();
 	while ((c = getopt(argc, argv, "")) >= 0) {
@@ -32,8 +34,6 @@ int main_mem(int argc, char *argv[])
 		return 1;
 	}
 	mem_fill_scmat(opt->a, opt->b, opt->mat);
-	fp = gzopen(argv[optind + 1], "r");
-	seq = kseq_init(fp);
 	{ // load the packed sequences, BWT and SA
 		char *tmp = calloc(strlen(argv[optind]) + 5, 1);
 		strcat(strcpy(tmp, argv[optind]), ".bwt");
@@ -45,6 +45,22 @@ int main_mem(int argc, char *argv[])
 		pac = calloc(bns->l_pac/4+1, 1);
 		fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 	}
+
+	fp = strcmp(argv[optind + 1], "-")? gzopen(argv[optind + 1], "r") : gzdopen(fileno(stdin), "r");
+	ks = kseq_init(fp);
+	if (optind + 2 < argc) {
+		fp2 = gzopen(argv[optind + 2], "r");
+		ks2 = kseq_init(fp);
+		opt->is_pe = 1;
+	}
+	while ((seqs = bseq_read(opt->n_threads * opt->chunk_size, &n, ks, ks2)) != 0) {
+		mem_process_seqs(opt, bwt, bns, pac, n, seqs);
+		for (i = 0; i < n; ++i) {
+			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual);
+		}
+		free(seqs);
+	}
+	/*
 	while (kseq_read(seq) >= 0) {
 		mem_chain_t chain;
 		printf(">%s\n", seq->name.s);
@@ -71,12 +87,17 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < chain.n; ++i) free(chain.chains[i].seeds);
 		free(chain.chains);
 	}
+	*/
 
-	free(pac); free(opt);
+	free(opt); free(pac);
 	bns_destroy(bns);
 	bwt_destroy(bwt);
-	kseq_destroy(seq);
+	kseq_destroy(ks);
 	gzclose(fp);
+	if (ks2) {
+		kseq_destroy(ks2);
+		gzclose(fp2);
+	}
 	return 0;
 }
 
