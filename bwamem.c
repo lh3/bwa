@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <math.h>
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
@@ -10,6 +11,8 @@
 #include "bntseq.h"
 #include "ksw.h"
 #include "ksort.h"
+
+#define MAPQ_COEF 40.
 
 void mem_fill_scmat(int a, int b, int8_t mat[25])
 {
@@ -336,14 +339,12 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	int i, qbeg;
+	int i, qbeg, max = 0, max_i = -1;
 	int64_t rlen, rbeg, rmax[2], tmp;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
 
 	memset(a, 0, sizeof(mem_alnreg_t));
-	// get the start and end of the seeded region
-	rbeg = c->seeds[0].rbeg; qbeg = c->seeds[0].qbeg;
 	// get the max possible span
 	rmax[0] = l_pac<<1; rmax[1] = 0;
 	for (i = 0; i < c->n; ++i) {
@@ -353,7 +354,10 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		e = t->rbeg + t->len + ((l_query - t->qbeg - t->len) + cal_max_gap(opt, l_query - t->qbeg - t->len));
 		rmax[0] = rmax[0] < b? rmax[0] : b;
 		rmax[1] = rmax[1] > e? rmax[1] : e;
+		if (max < t->len) max = t->len, max_i = i;
 	}
+	// get the start and end of the seeded region
+	rbeg = c->seeds[max_i].rbeg; qbeg = c->seeds[max_i].qbeg;
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
 
@@ -365,12 +369,12 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		tmp = rbeg - rmax[0];
 		rs = malloc(tmp);
 		for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-		a->score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[0].len * opt->a, 0, &qle, &tle);
+		a->score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[max_i].len * opt->a, 0, &qle, &tle);
 		a->qb = qbeg - qle; a->rb = rbeg - tle;
 		free(qs); free(rs);
-	} else a->score = c->seeds[0].len * opt->a, a->qb = 0, a->rb = rbeg;
+	} else a->score = c->seeds[max_i].len * opt->a, a->qb = 0, a->rb = rbeg;
 
-	s = &c->seeds[0];
+	s = &c->seeds[max_i];
 	if (s->qbeg + s->len != l_query) { // right extension of the first seed
 		int qle, tle, qe, re;
 		int16_t *qw = 0;
@@ -456,7 +460,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	seq = malloc(s->l_seq);
 	for (k = 0; k < m; ++k) {
 		uint32_t *cigar = 0;
-		int score, is_rev, nn, rid, i, flag = 0, n_cigar = 0;
+		int score, is_rev, nn, rid, i, flag = 0, n_cigar = 0, mapq = 0;
 		int64_t pos;
 		mem_alnreg_t *p = &a->a[k];
 		cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
@@ -466,7 +470,9 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		if (n_cigar == 0) flag |= 8;
 		kputs(s->name, &str); kputc('\t', &str); kputw(flag, &str); kputc('\t', &str);
 		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
-		kputw(0, &str); kputc('\t', &str);
+		mapq = p->score? (int)(MAPQ_COEF * (1. - (float)(p->sub? p->sub : opt->min_seed_len * opt->a) / p->score) * log(p->score / opt->a) + .499) : 0;
+		if (mapq > 60) mapq = 60;
+		kputw(mapq, &str); kputc('\t', &str);
 		if (n_cigar) {
 			int clip5, clip3;
 			clip5 = is_rev? s->l_seq - p->qe : p->qb;
