@@ -375,7 +375,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		int qle, tle, qe, re;
 		int16_t *qw = 0;
 		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
-#if 0
+#if 0 // FIXME: I am not sure if the following block works. Comment it out if SW extension gives unexpected result.
 		if (c->n > 1) { // generate $qw
 			int j, l = rmax[1] - (s->rbeg + s->len);
 			qw = malloc(l * 2);
@@ -385,10 +385,11 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				for (j = 0; j < t->len; ++j) {
 					int x = t->rbeg + j - (s->rbeg + s->len), y = t->qbeg + j - (s->qbeg + s->len);
 					if (x < 0) continue; // overlap with the first seed
-					if (qw[x] == -1) qw[x] = x > y? x - y : y - x;
+					if (qw[x] == -1) qw[x] = (x > y? x - y : y - x) + 1; // FIXME: in principle, we should not need +1
 					else if (qw[x] >= 0) qw[x] = -2; // in a seed overlap, do not set any constraint
 				}
 			}
+//			for (i = 0; i < l; ++i) printf("%d:%d\t", i, qw[i]); putchar('\n');
 		}
 #endif
 		a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
@@ -500,7 +501,7 @@ static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bn
 		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
 	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
-	//mem_print_chain(bns, &chn);
+//	mem_print_chain(bns, &chn);
 	regs.n = regs.m = chn.n;
 	regs.a = malloc(regs.n * sizeof(mem_alnreg_t));
 	for (i = 0; i < chn.n; ++i) {
