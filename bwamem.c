@@ -371,8 +371,6 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				}
 			}
 		}
-		//printf("[Q] "); for (i = qe; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
-		//printf("[R] "); for (i = re; i < rmax[1] - rmax[0]; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 		a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
 		a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		free(qw);
@@ -384,8 +382,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		if (s->qbeg + s->len > a->qe) a->is_all = 0;
 	}
 	*/
-	printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\n", c->n, a->score, a->qb, a->qe, a->rb, a->re);
-
+	//printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\n", c->n, a->score, a->qb, a->qe, a->rb, a->re);
 	free(rseq);
 }
 
@@ -403,8 +400,10 @@ uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 		for (i = 0; i < l_query>>1; ++i)
 			tmp = query[i], query[i] = query[l_query - 1 - i], query[l_query - 1 - i] = tmp;
 		for (i = 0; i < rlen>>1; ++i)
-			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], query[rlen - 1 - i] = tmp;
+			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
 	}
+	//printf("[Q] "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
+	//printf("[R] "); for (i = 0; i < re - rb; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 	// set the band-width
 	w = (int)((double)(l_query * opt->a - opt->q) / opt->r + 1.);
 	w = w < 1? w : 1;
@@ -429,18 +428,21 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 {
 	int k, m;
 	kstring_t str;
+	char *seq;
 
 	str.l = str.m = 0; str.s = 0;
 	m = mem_choose_alnreg_se(opt, a->n, a->a);
+	seq = malloc(s->l_seq);
 	for (k = 0; k < m; ++k) {
 		uint32_t *cigar = 0;
 		int score, is_rev, nn, rid, i, flag = 0, n_cigar = 0;
-		int64_t pos, end;
+		int64_t pos;
 		mem_alnreg_t *p = &a->a[k];
 		cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
 		nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
 		flag |= is_rev? 16 : 0;
+		if (n_cigar == 0) flag |= 8;
 		kputs(s->name, &str); kputc('\t', &str); kputw(flag, &str); kputc('\t', &str);
 		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
 		kputw(0, &str); kputc('\t', &str);
@@ -450,14 +452,17 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			}
 		} else kputc('*', &str);
 		kputsn("\t*\t0\t0\t", 7, &str);
-		for (i = 0; i < s->l_seq; ++i) s->seq[i] = "ACGTN"[(int)s->seq[i]];
-		kputsn(s->seq, s->l_seq, &str); kputc('\t', &str);
+		if (is_rev) for (i = s->l_seq - 1; i >= 0; --i) seq[i] = "TGCAN"[(int)s->seq[i]];
+		else for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
+		kputsn(seq, s->l_seq, &str); kputc('\t', &str);
 		if (s->qual) kputsn(s->qual, s->l_seq, &str);
-		kputsn("\tAS:i:", 6, &str); kputw(score, &str);
+		kputsn("\tAS:i:", 6, &str); kputw(p->score, &str);
 		kputsn("\tss:i:", 6, &str); kputw(p->sub, &str);
+		kputsn("\tnw:i:", 6, &str); kputw(score, &str);
 		kputc('\n', &str);
 		free(cigar);
 	}
+	free(seq);
 	s->sam = str.s;
 }
 
