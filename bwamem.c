@@ -427,25 +427,37 @@ ret_gen_cigar:
 
 void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
-	int k, n_cigar = 0, score, is_rev, nn, rid, i;
-	uint32_t *cigar = 0;
-	int64_t pos;
+	int k, m;
 	kstring_t str;
-	mem_alnreg_t *p;
 
 	str.l = str.m = 0; str.s = 0;
-	k = mem_choose_alnreg_se(opt, a->n, a->a);
-	p = &a->a[k];
-	cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
-	pos = bns_depos(bns, p->rb, &is_rev);
-	nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
-	kputs(s->name, &str); kputc('\t', &str); kputw(is_rev? 16 : 0, &str); kputc('\t', &str);
-	kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset, &str); kputc('\t', &str);
-	kputw(0, &str); kputc('\t', &str);
-	for (i = 0; i < s->l_seq; ++i) s->seq[i] = "ACGTN"[(int)s->seq[i]];
-	kputsn(s->seq, s->l_seq, &str); kputc('\t', &str);
-	if (s->qual) kputsn(s->qual, s->l_seq, &str);
-	free(cigar);
+	m = mem_choose_alnreg_se(opt, a->n, a->a);
+	for (k = 0; k < m; ++k) {
+		uint32_t *cigar = 0;
+		int score, is_rev, nn, rid, i, flag = 0, n_cigar = 0;
+		int64_t pos, end;
+		mem_alnreg_t *p = &a->a[k];
+		cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
+		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
+		nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
+		flag |= is_rev? 16 : 0;
+		kputs(s->name, &str); kputc('\t', &str); kputw(flag, &str); kputc('\t', &str);
+		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
+		kputw(0, &str); kputc('\t', &str);
+		if (n_cigar) {
+			for (i = 0; i < n_cigar; ++i) {
+				kputw(cigar[i]>>4, &str); kputc("MIDSH"[cigar[i]&0xf], &str);
+			}
+		} else kputc('*', &str);
+		kputsn("\t*\t0\t0\t", 7, &str);
+		for (i = 0; i < s->l_seq; ++i) s->seq[i] = "ACGTN"[(int)s->seq[i]];
+		kputsn(s->seq, s->l_seq, &str); kputc('\t', &str);
+		if (s->qual) kputsn(s->qual, s->l_seq, &str);
+		kputsn("\tAS:i:", 6, &str); kputw(score, &str);
+		kputsn("\tss:i:", 6, &str); kputw(p->sub, &str);
+		kputc('\n', &str);
+		free(cigar);
+	}
 	s->sam = str.s;
 }
 
@@ -508,12 +520,14 @@ int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 {
 	int i;
 	worker_t *w;
+	mem_alnreg_v *regs;
 	w = calloc(opt->n_threads, sizeof(worker_t));
+	regs = malloc(n * sizeof(mem_alnreg_v));
 	for (i = 0; i < opt->n_threads; ++i) {
-		worker_t *w = &w[i];
-		w->start = i; w->step = opt->n_threads; w->n = n;
-		w->opt = opt; w->bwt = bwt; w->bns = bns; w->pac = pac;
-		w->seqs = seqs;
+		worker_t *p = &w[i];
+		p->start = i; p->step = opt->n_threads; p->n = n;
+		p->opt = opt; p->bwt = bwt; p->bns = bns; p->pac = pac;
+		p->seqs = seqs; p->regs = regs;
 	}
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads == 1) {
@@ -531,9 +545,9 @@ int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 	worker1(w); worker2(w);
 #endif
 	for (i = 0; i < n; ++i) {
-		puts(seqs[i].sam);
+		fputs(seqs[i].sam, stdout);
 		free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 	}
-	free(w);
+	free(regs); free(w);
 	return 0;
 }
