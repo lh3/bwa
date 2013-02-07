@@ -3,7 +3,7 @@
 
 typedef struct {
 	int l_seq;
-	char *name, *comment, *seq, *qual;
+	char *name, *comment, *seq, *qual, *sam;
 } bseq1_t;
 
 bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_);

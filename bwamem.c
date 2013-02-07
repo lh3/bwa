@@ -5,6 +5,7 @@
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
+#include "kstring.h"
 #include "bwamem.h"
 #include "bntseq.h"
 #include "ksw.h"
@@ -420,8 +421,51 @@ ret_gen_cigar:
 	return cigar;
 }
 
-static void process_seq1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s)
+/************************
+ * Integrated interface *
+ ************************/
+
+void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
+	int k, n_cigar = 0, score, is_rev, nn, rid, i;
+	uint32_t *cigar = 0;
+	int64_t pos;
+	kstring_t str;
+	mem_alnreg_t *p;
+
+	str.l = str.m = 0; str.s = 0;
+	k = mem_choose_alnreg_se(opt, a->n, a->a);
+	p = &a->a[k];
+	cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
+	pos = bns_depos(bns, p->rb, &is_rev);
+	nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
+	kputs(s->name, &str); kputc('\t', &str); kputw(is_rev? 16 : 0, &str); kputc('\t', &str);
+	kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset, &str); kputc('\t', &str);
+	kputw(0, &str); kputc('\t', &str);
+	for (i = 0; i < s->l_seq; ++i) s->seq[i] = "ACGTN"[(int)s->seq[i]];
+	kputsn(s->seq, s->l_seq, &str); kputc('\t', &str);
+	if (s->qual) kputsn(s->qual, s->l_seq, &str);
+	free(cigar);
+	s->sam = str.s;
+}
+
+static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s)
+{
+	int i;
+	mem_chain_v chn;
+	mem_alnreg_v regs;
+	for (i = 0; i < s->l_seq; ++i)
+		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
+	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
+	chn.n = mem_chain_flt(opt, chn.n, chn.a);
+	regs.n = regs.m = chn.n;
+	regs.a = malloc(regs.n * sizeof(mem_alnreg_t));
+	for (i = 0; i < chn.n; ++i) {
+		mem_chain2aln(opt, bns->l_pac, pac, s->l_seq, (uint8_t*)s->seq, &chn.a[i], &regs.a[i]);
+		free(chn.a[i].seeds);
+	}
+	free(chn.a);
+	return regs;
 }
 
 typedef struct {
@@ -431,41 +475,65 @@ typedef struct {
 	const bntseq_t *bns;
 	const uint8_t *pac;
 	bseq1_t *seqs;
-} worker1_t;
+	mem_alnreg_v *regs;
+} worker_t;
 
 static void *worker1(void *data)
 {
-	worker1_t *w = (worker1_t*)data;
+	worker_t *w = (worker_t*)data;
 	int i;
 	for (i = w->start; i < w->n; i += w->step)
-		process_seq1(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
+		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
+	return 0;
+}
+
+static void *worker2(void *data)
+{
+	worker_t *w = (worker_t*)data;
+	int i;
+	if (!w->opt->is_pe) {
+		for (i = 0; i < w->n; i += w->step) {
+			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i]);
+			free(w->regs[i].a);
+		}
+	} else {
+		for (i = 0; i < w->n>>1; i += w->step) { // not implemented yet
+			free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
+		}
+	}
 	return 0;
 }
 
 int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs)
 {
 	int i;
-	worker1_t *w1;
-	w1 = calloc(opt->n_threads, sizeof(worker1_t));
+	worker_t *w;
+	w = calloc(opt->n_threads, sizeof(worker_t));
 	for (i = 0; i < opt->n_threads; ++i) {
-		worker1_t *w = &w1[i];
+		worker_t *w = &w[i];
 		w->start = i; w->step = opt->n_threads; w->n = n;
 		w->opt = opt; w->bwt = bwt; w->bns = bns; w->pac = pac;
 		w->seqs = seqs;
 	}
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads == 1) {
-		worker1(w1);
+		worker1(w); worker2(w);
 	} else {
 		pthread_t *tid;
 		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
-		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w1[i]);
+		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w[i]);
+		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
+		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker2, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		free(tid);
 	}
 #else
-	worker1(w1);
+	worker1(w); worker2(w);
 #endif
-	free(w1);
+	for (i = 0; i < n; ++i) {
+		puts(seqs[i].sam);
+		free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
+	}
+	free(w);
 	return 0;
 }

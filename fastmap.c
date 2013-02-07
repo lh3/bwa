@@ -17,7 +17,7 @@ int main_mem(int argc, char *argv[])
 	mem_opt_t *opt;
 	bwt_t *bwt;
 	bntseq_t *bns;
-	int i, c, n;
+	int c, n;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	uint8_t *pac = 0;
@@ -55,9 +55,6 @@ int main_mem(int argc, char *argv[])
 	}
 	while ((seqs = bseq_read(opt->n_threads * opt->chunk_size, &n, ks, ks2)) != 0) {
 		mem_process_seqs(opt, bwt, bns, pac, n, seqs);
-		for (i = 0; i < n; ++i) {
-			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual);
-		}
 		free(seqs);
 	}
 	/*
