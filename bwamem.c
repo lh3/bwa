@@ -344,12 +344,13 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	int i, qbeg, max = 0, max_i = -1;
-	int64_t rlen, rbeg, rmax[2], tmp;
+	int i, k;
+	int64_t rlen, rmax[2], tmp, max = 0, max_i = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
+	mem_alnreg_t best;
 
-	memset(a, 0, sizeof(mem_alnreg_t));
+	memset(&best, 0, sizeof(mem_alnreg_t));
 	// get the max possible span
 	rmax[0] = l_pac<<1; rmax[1] = 0;
 	for (i = 0; i < c->n; ++i) {
@@ -359,61 +360,64 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		e = t->rbeg + t->len + ((l_query - t->qbeg - t->len) + cal_max_gap(opt, l_query - t->qbeg - t->len));
 		rmax[0] = rmax[0] < b? rmax[0] : b;
 		rmax[1] = rmax[1] > e? rmax[1] : e;
-		if (max < t->len) max = t->len, max_i = i;
+		if (t->len > max) max = t->len, max_i = i;
 	}
-	// get the start and end of the seeded region
-	rbeg = c->seeds[max_i].rbeg; qbeg = c->seeds[max_i].qbeg;
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
 
-	if (qbeg) { // left extension of the first seed
-		uint8_t *rs, *qs;
-		int qle, tle;
-		qs = malloc(qbeg);
-		for (i = 0; i < qbeg; ++i) qs[i] = query[qbeg - 1 - i];
-		tmp = rbeg - rmax[0];
-		rs = malloc(tmp);
-		for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-		a->score = ksw_extend(qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, c->seeds[max_i].len * opt->a, 0, &qle, &tle);
-		a->qb = qbeg - qle; a->rb = rbeg - tle;
-		free(qs); free(rs);
-	} else a->score = c->seeds[max_i].len * opt->a, a->qb = 0, a->rb = rbeg;
+	for (k = 0; k < c->n;) {
+		s = &c->seeds[k];
+		memset(a, 0, sizeof(mem_alnreg_t));
+		if (s->qbeg) { // left extension
+			uint8_t *rs, *qs;
+			int qle, tle;
+			qs = malloc(s->qbeg);
+			for (i = 0; i < s->qbeg; ++i) qs[i] = query[s->qbeg - 1 - i];
+			tmp = s->rbeg - rmax[0];
+			rs = malloc(tmp);
+			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
+			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, 0, &qle, &tle);
+			a->qb = s->qbeg - qle; a->rb = s->rbeg - tle;
+			free(qs); free(rs);
+		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
-	s = &c->seeds[max_i];
-	if (s->qbeg + s->len != l_query) { // right extension of the first seed
-		int qle, tle, qe, re;
-		int16_t *qw = 0;
-		qe = s->qbeg + s->len; re = s->rbeg + s->len - rmax[0];
+		if (s->qbeg + s->len != l_query) { // right extension of the first seed
+			int qle, tle, qe, re;
+			int16_t *qw = 0;
+			qe = s->qbeg + s->len;
+			re = s->rbeg + s->len - rmax[0];
 #if 0 // FIXME: I am not sure if the following block works. Comment it out if SW extension gives unexpected result.
-		if (c->n > 1) { // generate $qw
-			int j, l = rmax[1] - (s->rbeg + s->len);
-			qw = malloc(l * 2);
-			for (i = 0; i < l; ++i) qw[i] = -1; // no constraint by default
-			for (i = 1; i < c->n; ++i) {
-				const mem_seed_t *t = &c->seeds[i];
-				for (j = 0; j < t->len; ++j) {
-					int x = t->rbeg + j - (s->rbeg + s->len), y = t->qbeg + j - (s->qbeg + s->len);
-					if (x < 0) continue; // overlap with the first seed
-					if (qw[x] == -1) qw[x] = (x > y? x - y : y - x) + 1; // FIXME: in principle, we should not need +1
-					else if (qw[x] >= 0) qw[x] = -2; // in a seed overlap, do not set any constraint
+			if (c->n > 1) { // generate $qw
+				int j, l = rmax[1] - (s->rbeg + s->len);
+				qw = malloc(l * 2);
+				for (i = 0; i < l; ++i) qw[i] = -1; // no constraint by default
+				for (i = 1; i < c->n; ++i) {
+					const mem_seed_t *t = &c->seeds[i];
+					for (j = 0; j < t->len; ++j) {
+						int x = t->rbeg + j - (s->rbeg + s->len), y = t->qbeg + j - (s->qbeg + s->len);
+						if (x < 0) continue; // overlap with the first seed
+						if (qw[x] == -1) qw[x] = (x > y? x - y : y - x) + 1; // FIXME: in principle, we should not need +1
+						else if (qw[x] >= 0) qw[x] = -2; // in a seed overlap, do not set any constraint
+					}
 				}
 			}
-//			for (i = 0; i < l; ++i) printf("%d:%d\t", i, qw[i]); putchar('\n');
-		}
 #endif
-		a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
-		a->qe = qe + qle; a->re = rmax[0] + re + tle;
-		free(qw);
-	} else a->qe = l_query, a->re = s->rbeg + s->len;
-	/*
-	a->is_all = 1;
-	if (c->n > 1) { // check if all the seeds have been included
-		s = &c->seeds[c->n - 1];
-		if (s->qbeg + s->len > a->qe) a->is_all = 0;
+			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
+			a->qe = qe + qle; a->re = rmax[0] + re + tle;
+			free(qw);
+		} else a->qe = l_query, a->re = s->rbeg + s->len;
+		if (mem_debug >= 2) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
+		// check how many seeds have been covered
+		for (i = k + 1; i < c->n; ++i) {
+			const mem_seed_t *t = &c->seeds[i];
+			if (t->rbeg + t->len > a->re || t->qbeg + t->len > a->qe)
+				break;
+		}
+		if (i >= c->n) break; // all seeds are included; no need to proceed
+		if (a->score > best.score) best = *a;
+		k = i;
 	}
-	*/
-	if (mem_debug >= 2)
-		printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\n", c->n, a->score, a->qb, a->qe, a->rb, a->re);
+	if (a->score < best.score) *a = best;
 	free(rseq);
 }
 
