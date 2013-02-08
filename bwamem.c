@@ -402,8 +402,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			if (t->rbeg + t->len > a->re || t->qbeg + t->len > a->qe)
 				break;
 		}
+		if (a->score >= best.score) csub = best.score, best = *a;
 		if (i >= c->n) break; // all seeds are included; no need to proceed
-		if (a->score > best.score) csub = best.score, best = *a;
 		k = i;
 	}
 	if (a->score < best.score) *a = best;
