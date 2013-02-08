@@ -346,6 +346,7 @@ int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
 				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].sub == 0) a[j].sub = a[i].score;
+					a[j].sub_n += (double)a[i].score / a[j].sub;
 					break;
 				}
 			}
@@ -483,7 +484,9 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	mapq = a->score? (int)(MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
 	mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+	if (a->sub) mapq -= (int)(4.343 * log(a->sub_n) + .499);
 	if (mapq > 60) mapq = 60;
+	if (mapq < 0) mapq = 0;
 	return mapq;
 }
 
