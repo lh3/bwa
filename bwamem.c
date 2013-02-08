@@ -457,16 +457,24 @@ ret_gen_cigar:
 
 void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
-	int k, m;
+	int i, k, m;
 	kstring_t str;
 	char *seq;
 
 	str.l = str.m = 0; str.s = 0;
 	m = mem_choose_alnreg_se(opt, a->n, a->a);
 	seq = malloc(s->l_seq);
+	if (m == 0) { // no seeds found
+		for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
+		kputs(s->name, &str); kputs("\t8\t*\t0\t0\t*\t*\t0\t0\t", &str);
+		kputsn(seq, s->l_seq, &str);
+		if (s->qual) kputsn(s->qual, s->l_seq, &str);
+		else kputc('*', &str);
+		kputc('\n', &str);
+	}
 	for (k = 0; k < m; ++k) {
 		uint32_t *cigar = 0;
-		int score, is_rev, nn, rid, i, flag = 0, n_cigar = 0, mapq = 0;
+		int score, is_rev, nn, rid, flag = 0, n_cigar = 0, mapq = 0;
 		int64_t pos;
 		mem_alnreg_t *p = &a->a[k];
 		cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
@@ -494,6 +502,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		else for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
 		kputsn(seq, s->l_seq, &str); kputc('\t', &str);
 		if (s->qual) kputsn(s->qual, s->l_seq, &str);
+		else kputc('*', &str);
 		kputsn("\tAS:i:", 6, &str); kputw(p->score, &str);
 		kputsn("\tss:i:", 6, &str); kputw(p->sub, &str);
 		kputsn("\tnw:i:", 6, &str); kputw(score, &str);
