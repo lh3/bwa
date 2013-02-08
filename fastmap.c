@@ -25,10 +25,11 @@ int main_mem(int argc, char *argv[])
 	bseq1_t *seqs;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "k:c:D:")) >= 0) {
+	while ((c = getopt(argc, argv, "k:c:D:s:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'D') mem_debug = atoi(optarg);
+		else if (c == 's') opt->split_width = atoi(optarg);
 	}
 	if (optind + 1 >= argc) {
 		fprintf(stderr, "\n");
@@ -76,7 +77,7 @@ int main_mem(int argc, char *argv[])
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, split_long = 0;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, split_width = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -85,16 +86,16 @@ int main_fastmap(int argc, char *argv[])
 	smem_i *itr;
 	const bwtintv_v *a;
 
-	while ((c = getopt(argc, argv, "w:l:ps")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:ps:")) >= 0) {
 		switch (c) {
-			case 's': split_long = 1; break;
+			case 's': split_width = atoi(optarg); break;
 			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-ps] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
+		fprintf(stderr, "Usage: bwa fastmap [-p] [-s splitWidth=%d] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", split_width, min_len, min_iwidth);
 		return 1;
 	}
 
@@ -119,7 +120,7 @@ int main_fastmap(int argc, char *argv[])
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
-		while ((a = smem_next(itr, split_long? min_len<<1 : 0)) != 0) {
+		while ((a = smem_next(itr, min_len<<1, split_width)) != 0) {
 			for (i = 0; i < a->n; ++i) {
 				bwtintv_t *p = &a->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;

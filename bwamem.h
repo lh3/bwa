@@ -16,6 +16,7 @@ typedef struct {
 
 typedef struct {
 	int a, b, q, r, w;
+	int split_width;
 	int min_seed_len, max_occ, max_chain_gap;
 	int n_threads, chunk_size;
 	int pe_dir, is_pe;
@@ -44,7 +45,7 @@ extern "C" {
 smem_i *smem_itr_init(const bwt_t *bwt);
 void smem_itr_destroy(smem_i *itr);
 void smem_set_query(smem_i *itr, int len, const uint8_t *query);
-const bwtintv_v *smem_next(smem_i *itr, int split_len);
+const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width);
 
 mem_opt_t *mem_opt_init(void);
 void mem_fill_scmat(int a, int b, int8_t mat[25]);

@@ -33,7 +33,8 @@ mem_opt_t *mem_opt_init()
 	o = calloc(1, sizeof(mem_opt_t));
 	o->a = 1; o->b = 5; o->q = 8; o->r = 1; o->w = 100;
 	o->min_seed_len = 19;
-	o->max_occ = 50;
+	o->split_width = 10;
+	o->max_occ = 10000;
 	o->max_chain_gap = 10000;
 	o->mask_level = 0.50;
 	o->chain_drop_ratio = 0.50;
@@ -87,25 +88,26 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 }
 
 
-const bwtintv_v *smem_next(smem_i *itr, int split_len)
+const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
 {
-	int i, max, max_i;
+	int i, max, max_i, ori_start;
 	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = itr->sub->n = 0;
 	if (itr->start >= itr->len || itr->start < 0) return 0;
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return 0;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, itr->start, 1, itr->matches, itr->tmpvec); // search for SMEM
+	ori_start = itr->start;
+	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, 1, itr->matches, itr->tmpvec); // search for SMEM
 	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
 	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
 		bwtintv_t *p = &itr->matches->a[i];
 		int len = (uint32_t)p->info - (p->info>>32);
 		if (max < len) max = len, max_i = i;
 	}
-	if (split_len > 0 && max >= split_len && itr->matches->a[max_i].x[2] == 1) { // if the longest SMEM is unique and long
+	if (split_len > 0 && max >= split_len && itr->matches->a[max_i].x[2] <= split_width) { // if the longest SMEM is unique and long
 		int j;
 		bwtintv_v *a = itr->tmpvec[0]; // reuse tmpvec[0] for merging
 		bwtintv_t *p = &itr->matches->a[max_i];
-		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, 2, itr->sub, itr->tmpvec); // starting from the middle of the longest MEM
+		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, itr->matches->a[max_i].x[2]+1, itr->sub, itr->tmpvec); // starting from the middle of the longest MEM
 		i = j = 0; a->n = 0;
 		while (i < itr->matches->n && j < itr->sub->n) { // ordered merge
 			int64_t xi = itr->matches->a[i].info>>32<<32 | (itr->len - (uint32_t)itr->matches->a[i].info);
@@ -113,14 +115,14 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 			if (xi < xj) {
 				kv_push(bwtintv_t, *a, itr->matches->a[i]);
 				++i;
-			} else if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1) {
+			} else if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1 && (uint32_t)itr->sub->a[j].info > ori_start) {
 				kv_push(bwtintv_t, *a, itr->sub->a[j]);
 				++j;
 			} else ++j;
 		}
 		for (; i < itr->matches->n; ++i) kv_push(bwtintv_t, *a, itr->matches->a[i]);
 		for (; j < itr->sub->n; ++j)
-			if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1)
+			if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1 && (uint32_t)itr->sub->a[j].info > ori_start)
 				kv_push(bwtintv_t, *a, itr->sub->a[j]);
 		kv_copy(bwtintv_t, *itr->matches, *a);
 	}
@@ -160,7 +162,7 @@ static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t
 static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 {
 	const bwtintv_v *a;
-	while ((a = smem_next(itr, opt->min_seed_len<<1)) != 0) { // to find all SMEM and some internal MEM
+	while ((a = smem_next(itr, opt->min_seed_len<<1, opt->split_width)) != 0) { // to find all SMEM and some internal MEM
 		int i;
 		for (i = 0; i < a->n; ++i) { // go through each SMEM/MEM up to itr->start
 			bwtintv_t *p = &a->a[i];
