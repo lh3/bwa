@@ -14,6 +14,8 @@
 
 #define MAPQ_COEF 40.
 
+int mem_debug = 0;
+
 void mem_fill_scmat(int a, int b, int8_t mat[25])
 {
 	int i, j, k;
@@ -30,8 +32,8 @@ mem_opt_t *mem_opt_init()
 	mem_opt_t *o;
 	o = calloc(1, sizeof(mem_opt_t));
 	o->a = 1; o->b = 5; o->q = 8; o->r = 1; o->w = 100;
-	o->min_seed_len = 17;
-	o->max_occ = 10;
+	o->min_seed_len = 19;
+	o->max_occ = 50;
 	o->max_chain_gap = 10000;
 	o->mask_level = 0.50;
 	o->chain_drop_ratio = 0.50;
@@ -84,6 +86,7 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 	itr->len = len;
 }
 
+
 const bwtintv_v *smem_next(smem_i *itr, int split_len)
 {
 	int i, max, max_i;
@@ -110,13 +113,15 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len)
 			if (xi < xj) {
 				kv_push(bwtintv_t, *a, itr->matches->a[i]);
 				++i;
-			} else {
+			} else if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1) {
 				kv_push(bwtintv_t, *a, itr->sub->a[j]);
 				++j;
-			}
+			} else ++j;
 		}
 		for (; i < itr->matches->n; ++i) kv_push(bwtintv_t, *a, itr->matches->a[i]);
-		for (; j < itr->sub->n; ++j)     kv_push(bwtintv_t, *a, itr->sub->a[j]);
+		for (; j < itr->sub->n; ++j)
+			if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1)
+				kv_push(bwtintv_t, *a, itr->sub->a[j]);
 		kv_copy(bwtintv_t, *itr->matches, *a);
 	}
 	return itr->matches;
@@ -407,7 +412,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		if (s->qbeg + s->len > a->qe) a->is_all = 0;
 	}
 	*/
-	//printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\n", c->n, a->score, a->qb, a->qe, a->rb, a->re);
+	if (mem_debug >= 2)
+		printf("[%d] score=%d\t[%d,%d) <=> [%lld,%lld)\n", c->n, a->score, a->qb, a->qe, a->rb, a->re);
 	free(rseq);
 }
 
@@ -507,7 +513,7 @@ static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bn
 		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
 	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
-//	mem_print_chain(bns, &chn);
+	if (mem_debug >= 1) mem_print_chain(bns, &chn);
 	regs.n = regs.m = chn.n;
 	regs.a = malloc(regs.n * sizeof(mem_alnreg_t));
 	for (i = 0; i < chn.n; ++i) {

@@ -11,6 +11,7 @@
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
+extern int mem_debug;
 
 int main_mem(int argc, char *argv[])
 {
@@ -24,8 +25,10 @@ int main_mem(int argc, char *argv[])
 	bseq1_t *seqs;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "k:")) >= 0) {
+	while ((c = getopt(argc, argv, "k:c:D:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
+		else if (c == 'c') opt->max_occ = atoi(optarg);
+		else if (c == 'D') mem_debug = atoi(optarg);
 	}
 	if (optind + 1 >= argc) {
 		fprintf(stderr, "\n");
