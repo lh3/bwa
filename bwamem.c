@@ -327,17 +327,18 @@ KSORT_INIT(mem_ar, mem_alnreg_t, alnreg_lt)
 
 int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
 { // similar to the loop in mem_chain_flt()
-	int i, j, m;
+	int i, j, m, tmp;
 	if (n <= 1) return n;
 	ks_introsort(mem_ar, n, a);
 	for (i = 1; i < n; ++i) { // mark identical hits
 		if (a[i].score == a[i-1].score && a[i].rb == a[i-1].rb && a[i].qb == a[i-1].qb)
-			a[i].score = 0;
+			a[i].qe = a[i].qb;
 	}
 	for (i = 1, m = 1; i < n; ++i) // exclude identical hits
-		if (a[i].score > 0) a[m++] = a[i];
+		if (a[i].qe > a[i].qb) a[m++] = a[i];
 	n = m;
 	for (i = 0; i < n; ++i) a[i].sub = 0;
+	tmp = opt->a + opt->b > opt->q + opt->r? opt->a + opt->b : opt->q + opt->r;
 	for (i = 1, m = 1; i < n; ++i) {
 		for (j = 0; j < m; ++j) {
 			int b_max = a[j].qb > a[i].qb? a[j].qb : a[i].qb;
@@ -346,7 +347,7 @@ int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
 				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].sub == 0) a[j].sub = a[i].score;
-					a[j].sub_n += (double)a[i].score / a[j].sub;
+					if (a[j].score - a[i].score <= tmp) ++a[j].sub_n;
 					break;
 				}
 			}
@@ -484,7 +485,7 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	mapq = a->score? (int)(MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
 	mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
-	if (a->sub) mapq -= (int)(4.343 * log(a->sub_n) + .499);
+	if (a->sub_n) mapq -= (int)(4.343 * log(a->sub_n) + .499);
 	if (mapq > 60) mapq = 60;
 	if (mapq < 0) mapq = 0;
 	return mapq;
