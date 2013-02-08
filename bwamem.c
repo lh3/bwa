@@ -351,7 +351,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_t *a)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	int i, k;
+	int i, k, csub = 0;
 	int64_t rlen, rmax[2], tmp, max = 0, max_i = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
@@ -403,10 +403,11 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				break;
 		}
 		if (i >= c->n) break; // all seeds are included; no need to proceed
-		if (a->score > best.score) best = *a;
+		if (a->score > best.score) csub = best.score, best = *a;
 		k = i;
 	}
 	if (a->score < best.score) *a = best;
+	a->csub = csub;
 	free(rseq);
 
 	// compute seedcov
@@ -461,6 +462,7 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 {
 	int mapq, l, sub = a->sub? a->sub : opt->min_seed_len * opt->a;
 	double identity;
+	sub = a->csub > sub? a->csub : sub;
 	l = a->qe - a->qb > a->re - a->rb? a->qe - a->qb : a->re - a->rb;
 	mapq = a->score? (int)(MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
