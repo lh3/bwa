@@ -251,8 +251,22 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	a = malloc(sizeof(flt_aux_t) * n_chn);
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &chains[i];
-		int w = 0;
-		for (j = 0; j < c->n; ++j) w += c->seeds[j].len; // FIXME: take care of seed overlaps
+		int64_t end;
+		int w = 0, tmp;
+		for (j = 0, end = 0; j < c->n; ++j) {
+			const mem_seed_t *s = &c->seeds[j];
+			if (s->qbeg >= end) w += s->len;
+			else if (s->qbeg + s->len > end) w += s->qbeg + s->len - end;
+			end = end > s->qbeg + s->len? end : s->qbeg + s->len;
+		}
+		tmp = w;
+		for (j = 0, end = 0; j < c->n; ++j) {
+			const mem_seed_t *s = &c->seeds[j];
+			if (s->rbeg >= end) w += s->len;
+			else if (s->rbeg + s->len > end) w += s->rbeg + s->len - end;
+			end = end > s->qbeg + s->len? end : s->qbeg + s->len;
+		}
+		w = w < tmp? w : tmp;
 		a[i].beg = c->seeds[0].qbeg;
 		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
 		a[i].w = w; a[i].p = c; a[i].p2 = 0;
