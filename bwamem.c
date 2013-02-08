@@ -306,7 +306,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	return n;
 }
 
-#define alnreg_lt(a, b) ((a).score > (b).score)
+#define alnreg_lt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
 KSORT_INIT(mem_ar, mem_alnreg_t, alnreg_lt)
 
 int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
@@ -314,6 +314,13 @@ int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
 	int i, j, m;
 	if (n <= 1) return n;
 	ks_introsort(mem_ar, n, a);
+	for (i = 1; i < n; ++i) { // mark identical hits
+		if (a[i].score == a[i-1].score && a[i].rb == a[i-1].rb && a[i].qb == a[i-1].qb)
+			a[i].score = 0;
+	}
+	for (i = 1, m = 1; i < n; ++i) // exclude identical hits
+		if (a[i].score > 0) a[m++] = a[i];
+	n = m;
 	for (i = 0; i < n; ++i) a[i].sub = 0;
 	for (i = 1, m = 1; i < n; ++i) {
 		for (j = 0; j < m; ++j) {
