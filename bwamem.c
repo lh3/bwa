@@ -457,6 +457,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		if (s->qual) kputsn(s->qual, s->l_seq, &str);
 		else kputc('*', &str);
 		kputc('\n', &str);
+		goto ret_sam_se;
 	}
 	for (k = 0; k < m; ++k) {
 		uint32_t *cigar = 0;
@@ -470,8 +471,14 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		if (n_cigar == 0) flag |= 8;
 		kputs(s->name, &str); kputc('\t', &str); kputw(flag, &str); kputc('\t', &str);
 		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
-		mapq = p->score? (int)(MAPQ_COEF * (1. - (float)(p->sub? p->sub : opt->min_seed_len * opt->a) / p->score) * log(p->score / opt->a) + .499) : 0;
-		if (mapq > 60) mapq = 60;
+		{ // approximate mapQ
+			int sub = p->sub? p->sub : opt->min_seed_len * opt->a;
+			double identity;
+			mapq = p->score? (int)(MAPQ_COEF * (1. - (float)sub / p->score) * log(p->score / opt->a) + .499) : 0;
+			identity = (double)p->score / opt->a / (p->qe - p->qb);
+			mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+			if (mapq > 60) mapq = 60;
+		}
 		kputw(mapq, &str); kputc('\t', &str);
 		if (n_cigar) {
 			int clip5, clip3;
@@ -495,6 +502,8 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		kputc('\n', &str);
 		free(cigar);
 	}
+
+ret_sam_se:
 	free(seq);
 	s->sam = str.s;
 }
