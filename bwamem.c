@@ -401,6 +401,15 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	}
 	if (a->score < best.score) *a = best;
 	free(rseq);
+
+	// compute seedcov
+	if (c->n > 1) {
+		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
+			s = &c->seeds[i];
+			if (s->qbeg >= a->qb && s->qbeg + s->len <= a->qe && s->rbeg >= a->rb && s->rbeg + s->len <= a->re) // seed fully contained
+				a->seedcov += s->len; // this is not very accurate, but for approx. mapQ, this is good enough
+		}
+	} else a->seedcov = c->seeds[0].len;
 }
 
 uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar)
@@ -441,6 +450,18 @@ ret_gen_cigar:
  * Integrated interface *
  ************************/
 
+static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
+{
+	int mapq, l, sub = a->sub? a->sub : opt->min_seed_len * opt->a;
+	double identity;
+	l = a->qe - a->qb > a->re - a->rb? a->qe - a->qb : a->re - a->rb;
+	mapq = a->score? (int)(MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
+	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
+	mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+	if (mapq > 60) mapq = 60;
+	return mapq;
+}
+
 void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
 	int i, k, m;
@@ -471,14 +492,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		if (n_cigar == 0) flag |= 8;
 		kputs(s->name, &str); kputc('\t', &str); kputw(flag, &str); kputc('\t', &str);
 		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
-		{ // approximate mapQ
-			int sub = p->sub? p->sub : opt->min_seed_len * opt->a;
-			double identity;
-			mapq = p->score? (int)(MAPQ_COEF * (1. - (float)sub / p->score) * log(p->score / opt->a) + .499) : 0;
-			identity = (double)p->score / opt->a / (p->qe - p->qb);
-			mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
-			if (mapq > 60) mapq = 60;
-		}
+		mapq = approx_mapq_se(opt, p);
 		kputw(mapq, &str); kputc('\t', &str);
 		if (n_cigar) {
 			int clip5, clip3;

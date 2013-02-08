@@ -31,7 +31,7 @@ typedef struct {
 
 typedef struct {
 	int64_t rb, re;
-	int score, qb, qe, sub;
+	int score, qb, qe, seedcov, sub; // sub: suboptimal score
 } mem_alnreg_t;
 
 typedef kvec_t(mem_chain_t)  mem_chain_v;
