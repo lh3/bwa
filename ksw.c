@@ -319,7 +319,7 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, const int16_t *qw, int *_qle, int *_tle)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
@@ -348,15 +348,14 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	max = h0, max_i = max_j = -1;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
-		int f = 0, h1, m = 0, mj = -1, t;
+		int f = 0, h1, m = 0, mj = -1;
 		int8_t *q = &qp[target[i] * qlen];
 		// compute the first column
 		h1 = h0 - (gapo + gape * (i + 1));
 		if (h1 < 0) h1 = 0;
 		// apply the band and the constraint (if provided)
-		t = (qw && qw[i] >= 0 && qw[i] < w)? qw[i] : w; // this is the band width at $i
-		if (beg < i - t) beg = i - t;
-		if (end > i + t + 1) end = i + t + 1;
+		if (beg < i - w) beg = i - w;
+		if (end > i + w + 1) end = i + w + 1;
 		if (end > qlen) end = qlen;
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)

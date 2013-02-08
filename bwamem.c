@@ -376,35 +376,17 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			tmp = s->rbeg - rmax[0];
 			rs = malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, 0, &qle, &tle);
+			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, &qle, &tle);
 			a->qb = s->qbeg - qle; a->rb = s->rbeg - tle;
 			free(qs); free(rs);
 		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension of the first seed
 			int qle, tle, qe, re;
-			int16_t *qw = 0;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
-#if 0 // FIXME: I am not sure if the following block works. Comment it out if SW extension gives unexpected result.
-			if (c->n > 1) { // generate $qw
-				int j, l = rmax[1] - (s->rbeg + s->len);
-				qw = malloc(l * 2);
-				for (i = 0; i < l; ++i) qw[i] = -1; // no constraint by default
-				for (i = 1; i < c->n; ++i) {
-					const mem_seed_t *t = &c->seeds[i];
-					for (j = 0; j < t->len; ++j) {
-						int x = t->rbeg + j - (s->rbeg + s->len), y = t->qbeg + j - (s->qbeg + s->len);
-						if (x < 0) continue; // overlap with the first seed
-						if (qw[x] == -1) qw[x] = (x > y? x - y : y - x) + 1; // FIXME: in principle, we should not need +1
-						else if (qw[x] >= 0) qw[x] = -2; // in a seed overlap, do not set any constraint
-					}
-				}
-			}
-#endif
-			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, qw, &qle, &tle);
+			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
 			a->qe = qe + qle; a->re = rmax[0] + re + tle;
-			free(qw);
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (mem_debug >= 2) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
 		// check how many seeds have been covered
