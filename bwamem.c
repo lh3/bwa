@@ -512,8 +512,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	char *seq;
 
 	str.l = str.m = 0; str.s = 0;
-	a->n = mem_sort_and_dedup(a->n, a->a);
-	a->n = mem_choose_alnreg_se(opt, a->n, a->a);
+	a->n = mem_choose_alnreg_se(opt, a->n, a->a); // NOTE: mem_sort_and_dedup() called in worker1()
 	seq = malloc(s->l_seq);
 	if (a->n == 0) { // no seeds found
 		for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
@@ -600,8 +599,10 @@ static void *worker1(void *data)
 {
 	worker_t *w = (worker_t*)data;
 	int i;
-	for (i = w->start; i < w->n; i += w->step)
+	for (i = w->start; i < w->n; i += w->step) {
 		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
+		mem_sort_and_dedup(w->regs[i].n, w->regs[i].a);
+	}
 	return 0;
 }
 
