@@ -322,21 +322,31 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	return n;
 }
 
-#define alnreg_lt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
-KSORT_INIT(mem_ar, mem_alnreg_t, alnreg_lt)
+/******************************
+ * De-overlap single-end hits *
+ ******************************/
 
-int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
-{ // similar to the loop in mem_chain_flt()
-	int i, j, m, tmp;
+#define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
+KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
+
+int mem_sort_and_dedup(int n, mem_alnreg_t *a)
+{
+	int m, i;
 	if (n <= 1) return n;
-	ks_introsort(mem_ar, n, a);
+	ks_introsort(mem_ars, n, a);
 	for (i = 1; i < n; ++i) { // mark identical hits
 		if (a[i].score == a[i-1].score && a[i].rb == a[i-1].rb && a[i].qb == a[i-1].qb)
 			a[i].qe = a[i].qb;
 	}
 	for (i = 1, m = 1; i < n; ++i) // exclude identical hits
 		if (a[i].qe > a[i].qb) a[m++] = a[i];
-	n = m;
+	return m;
+}
+
+int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
+{ // similar to the loop in mem_chain_flt()
+	int i, j, m, tmp;
+	if (n <= 1) return n;
 	for (i = 0; i < n; ++i) a[i].sub = 0;
 	tmp = opt->a + opt->b > opt->q + opt->r? opt->a + opt->b : opt->q + opt->r;
 	for (i = 1, m = 1; i < n; ++i) {
@@ -356,6 +366,10 @@ int mem_choose_alnreg_se(const mem_opt_t *opt, int n, mem_alnreg_t *a)
 	}
 	return m;
 }
+
+/************************
+ * Pick paired-end hits *
+ ************************/
 
 /****************************************
  * Construct the alignment from a chain *
@@ -493,14 +507,15 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 
 void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
-	int i, k, m;
+	int i, k;
 	kstring_t str;
 	char *seq;
 
 	str.l = str.m = 0; str.s = 0;
-	m = mem_choose_alnreg_se(opt, a->n, a->a);
+	a->n = mem_sort_and_dedup(a->n, a->a);
+	a->n = mem_choose_alnreg_se(opt, a->n, a->a);
 	seq = malloc(s->l_seq);
-	if (m == 0) { // no seeds found
+	if (a->n == 0) { // no seeds found
 		for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
 		kputs(s->name, &str); kputs("\t8\t*\t0\t0\t*\t*\t0\t0\t", &str);
 		kputsn(seq, s->l_seq, &str);
@@ -509,7 +524,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		kputc('\n', &str);
 		goto ret_sam_se;
 	}
-	for (k = 0; k < m; ++k) {
+	for (k = 0; k < a->n; ++k) {
 		uint32_t *cigar = 0;
 		int score, is_rev, nn, rid, flag = 0, n_cigar = 0, mapq = 0;
 		int64_t pos;
