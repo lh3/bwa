@@ -6,7 +6,7 @@
 
 #define MIN_RATIO     0.8
 #define MIN_DIR_CNT   10
-#define MIN_DIR_RATIO 0.1
+#define MIN_DIR_RATIO 0.05
 #define OUTLIER_BOUND 2.0
 #define MAPPING_BOUND 3.0
 #define MAX_STDDEV    4.0
@@ -31,7 +31,7 @@ typedef kvec_t(uint64_t) vec64_t;
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
 {
 	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
-	int i, d;
+	int i, d, max;
 	vec64_t isize[4];
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
 	memset(isize, 0, sizeof(kvec_t(int)) * 4);
@@ -51,11 +51,11 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		is = abs(pos[0] - pos[1]);
 		if (is <= opt->max_ins) kv_push(uint64_t, isize[dir], is);
 	}
-	if (mem_verbose >= 3) fprintf(stderr, "[M::%s] # candidates unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
+	if (mem_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
 	for (d = 0; d < 4; ++d) { // TODO: this block is nearly identical to the one in bwtsw2_pair.c. It would be better to merge these two.
 		mem_pestat_t *r = &pes[d];
 		vec64_t *q = &isize[d];
-		int p25, p50, p75, tmp, x;
+		int p25, p50, p75, x;
 		if (q->n < MIN_DIR_CNT) {
 			fprintf(stderr, "[M::%s] skip orientation %c%c as there are not enough pairs\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 			r->failed = 1;
@@ -85,5 +85,13 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		if (r->high < r->avg - MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
 		if (r->low < 1) r->low = 1;
 		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
+		free(q->a);
 	}
+	for (d = 0, max = 0; d < 4; ++d)
+		max = max > isize[d].n? max : isize[d].n;
+	for (d = 0; d < 4; ++d)
+		if (pes[d].failed == 0 && isize[d].n < max * MIN_DIR_RATIO) {
+			pes[d].failed = 1;
+			fprintf(stderr, "[M::%s] skip orientation %c%c\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+		}
 }
