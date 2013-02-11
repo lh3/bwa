@@ -27,6 +27,7 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 }
 
 typedef kvec_t(uint64_t) vec64_t;
+extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
 {
@@ -94,4 +95,27 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 			pes[d].failed = 1;
 			fprintf(stderr, "[M::%s] skip orientation %c%c\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 		}
+}
+
+void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
+{
+	vec64_t v;
+	int r, i;
+	kv_init(v);
+	for (r = 0; r < 2; ++r) {
+		for (i = 0; i < a[r].n; ++i) {
+			int64_t pos;
+			mem_alnreg_t *e = &a[r].a[i];
+			pos = (e->rb < bns->l_pac? e->rb<<1 : ((bns->l_pac<<1) - 1 - e->rb)<<1 | 1)<<1 | r;
+			kv_push(uint64_t, v, pos);
+		}
+	}
+	ks_introsort_uint64_t(v.n, v.a);
+	free(v.a);
+}
+
+void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2])
+{
+	bwahit_t h[2];
+	mem_pair(opt, bns, pac, pes, s, a, h);
 }

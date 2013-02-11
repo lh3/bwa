@@ -453,7 +453,11 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	} else a->seedcov = c->seeds[0].len;
 }
 
-uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar)
+/*****************************
+ * Basic hit->SAM conversion *
+ *****************************/
+
+uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar)
 {
 	uint32_t *cigar = 0;
 	uint8_t tmp, *rseq;
@@ -472,12 +476,12 @@ uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 	//printf("[Q] "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
 	//printf("[R] "); for (i = 0; i < re - rb; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 	// set the band-width
-	w = (int)((double)(l_query * opt->a - opt->q) / opt->r + 1.);
+	w = (int)((double)(l_query * mat[0] - q) / r + 1.);
 	w = w < 1? w : 1;
-	w = w < opt->w? w : opt->w;
+	w = w < w_? w : w_;
 	w += abs(rlen - l_query);
 	// NW alignment
-	*score = ksw_global(l_query, query, rlen, rseq, 5, opt->mat, opt->q, opt->r, w, n_cigar, &cigar);
+	*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
 	if (rb >= l_pac) // reverse back query
 		for (i = 0; i < l_query>>1; ++i)
 			tmp = query[i], query[i] = query[l_query - 1 - i], query[l_query - 1 - i] = tmp;
@@ -485,6 +489,82 @@ uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 ret_gen_cigar:
 	free(rseq);
 	return cigar;
+}
+
+void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard)
+{
+	int score, n_cigar, is_rev, nn, rid, mid, is_unmapped = 0;
+	uint32_t *cigar = 0;
+	int64_t pos;
+
+	kputs(s->name, str);
+	if (p && p->rb >= 0 && p->re < bns->l_pac<<1) {
+		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
+		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
+		nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
+		p->flag |= is_rev? 16 : 0; // reverse
+		p->flag |= p->mb >= 0? 1 : 0; // paired in sequencing
+		p->flag |= n_cigar == 0? 8 : 0; // FIXME: check why this may happen (this has already happened)
+		kputc('\t', str); kputw(p->flag, str); kputc('\t', str);
+		kputs(bns->anns[rid].name, str); kputc('\t', str); kputuw(pos - bns->anns[rid].offset + 1, str); kputc('\t', str);
+		kputw(p->qual, str); kputc('\t', str);
+		if (n_cigar) {
+			int i, clip5, clip3;
+			clip5 = is_rev? s->l_seq - p->qe : p->qb;
+			clip3 = is_rev? p->qb : s->l_seq - p->qe;
+			if (clip5) { kputw(clip5, str); kputc("SH"[(is_hard!=0)], str); }
+			for (i = 0; i < n_cigar; ++i) {
+				kputw(cigar[i]>>4, str); kputc("MIDSH"[cigar[i]&0xf], str);
+			}
+			if (clip3) { kputw(clip3, str); kputc("SH"[(is_hard!=0)], str); }
+		} else kputc('*', str);
+		if (p->mb >= 0 && p->mb < bns->l_pac<<1) { // then print mate pos and isize
+			pos = bns_depos(bns, p->mb < bns->l_pac? p->mb : p->me - 1, &is_rev);
+			nn = bns_cnt_ambi(bns, pos, p->me - p->mb, &mid);
+			kputc('\t', str);
+			if (mid == rid) kputc('=', str);
+			else kputs(bns->anns[mid].name, str);
+			kputc('\t', str); kputuw(pos - bns->anns[mid].offset + 1, str);
+			kputc('\t', str);
+			if (mid != rid) {
+				int64_t p0 = p->rb < bns->l_pac? p->rb : (bns->l_pac<<1) - 1 - p->rb;
+				int64_t p1 = p->mb < bns->l_pac? p->mb : (bns->l_pac<<1) - 1 - p->mb;
+				kputw(abs(p0 - p1), str);
+			}
+			kputc('\t', str);
+		} else kputsn("\t*\t0\t0\t", 7, str);
+	} else { // unaligned
+		is_unmapped = 1;
+		kputw(p? p->flag : 0, str);
+		kputs("\t*\t0\t0\t*\t*\t0\t0\t", str);
+	}
+	if (!is_rev) { // print SEQ and QUAL, the forward strand
+		int i, qb = 0, qe = s->l_seq;
+		if (!is_unmapped && is_hard) qb = p->qb, qe = p->qe;
+		ks_resize(str, str->l + (qe - qb) + 1);
+		for (i = qb; i < qe; ++i) str->s[str->l++] = "ACGTN"[(int)s->seq[i]];
+		kputc('\t', str);
+		if (s->qual) { // printf qual
+			ks_resize(str, str->l + (qe - qb) + 1);
+			for (i = qb; i < qe; ++i) str->s[str->l++] = s->qual[i];
+			str->s[str->l] = 0;
+		} else kputc('*', str);
+	} else { // the reverse strand
+		int i, qb = 0, qe = s->l_seq;
+		if (!is_unmapped && is_hard) qb = p->qb, qe = p->qe;
+		ks_resize(str, str->l + (qe - qb) + 1);
+		for (i = qe-1; i >= qb; --i) str->s[str->l++] = "TGCAN"[(int)s->seq[i]];
+		kputc('\t', str);
+		if (s->qual) { // printf qual
+			ks_resize(str, str->l + (qe - qb) + 1);
+			for (i = qe-1; i >= qb; --i) str->s[str->l++] = s->qual[i];
+			str->s[str->l] = 0;
+		} else kputc('*', str);
+	}
+	if (!is_unmapped && p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
+	if (!is_unmapped && p->sub >= 0) { kputsn("\tss:i:", 6, str); kputw(p->sub, str); }
+	kputc('\n', str);
+	free(cigar);
 }
 
 /************************
@@ -508,61 +588,23 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 
 void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
-	int i, k;
+	int k;
 	kstring_t str;
-	char *seq;
-
 	str.l = str.m = 0; str.s = 0;
 	a->n = mem_choose_alnreg_se(opt, a->n, a->a); // NOTE: mem_sort_and_dedup() called in worker1()
-	seq = malloc(s->l_seq);
-	if (a->n == 0) { // no seeds found
-		for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
-		kputs(s->name, &str); kputs("\t8\t*\t0\t0\t*\t*\t0\t0\t", &str);
-		kputsn(seq, s->l_seq, &str);
-		if (s->qual) kputsn(s->qual, s->l_seq, &str);
-		else kputc('*', &str);
-		kputc('\n', &str);
-		goto ret_sam_se;
-	}
-	for (k = 0; k < a->n; ++k) {
-		uint32_t *cigar = 0;
-		int score, is_rev, nn, rid, flag = 0, n_cigar = 0, mapq = 0;
-		int64_t pos;
-		mem_alnreg_t *p = &a->a[k];
-		cigar = mem_gen_cigar(opt, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
-		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
-		nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
-		flag |= is_rev? 16 : 0;
-		if (n_cigar == 0) flag |= 8;
-		kputs(s->name, &str); kputc('\t', &str); kputw(flag, &str); kputc('\t', &str);
-		kputs(bns->anns[rid].name, &str); kputc('\t', &str); kputuw(pos - bns->anns[rid].offset + 1, &str); kputc('\t', &str);
-		mapq = approx_mapq_se(opt, p);
-		kputw(mapq, &str); kputc('\t', &str);
-		if (n_cigar) {
-			int clip5, clip3;
-			clip5 = is_rev? s->l_seq - p->qe : p->qb;
-			clip3 = is_rev? p->qb : s->l_seq - p->qe;
-			if (clip5) { kputw(clip5, &str); kputc('S', &str); }
-			for (i = 0; i < n_cigar; ++i) {
-				kputw(cigar[i]>>4, &str); kputc("MIDSH"[cigar[i]&0xf], &str);
-			}
-			if (clip3) { kputw(clip3, &str); kputc('S', &str); }
-		} else kputc('*', &str);
-		kputsn("\t*\t0\t0\t", 7, &str);
-		if (is_rev) for (i = s->l_seq - 1; i >= 0; --i) seq[i] = "TGCAN"[(int)s->seq[i]];
-		else for (i = 0; i < s->l_seq; ++i) seq[i] = "ACGTN"[(int)s->seq[i]];
-		kputsn(seq, s->l_seq, &str); kputc('\t', &str);
-		if (s->qual) kputsn(s->qual, s->l_seq, &str);
-		else kputc('*', &str);
-		kputsn("\tAS:i:", 6, &str); kputw(p->score, &str);
-		kputsn("\tss:i:", 6, &str); kputw(p->sub, &str);
-		kputsn("\tnw:i:", 6, &str); kputw(score, &str);
-		kputc('\n', &str);
-		free(cigar);
-	}
-
-ret_sam_se:
-	free(seq);
+	if (a->n > 0) {
+		for (k = 0; k < a->n; ++k) {
+			bwahit_t h;
+			mem_alnreg_t *p = &a->a[k];
+			h.rb = p->rb; h.re = p->re;
+			h.qb = p->qb; h.qe = p->qe;
+			h.score = p->score; h.sub = p->sub;
+			h.flag = 0;
+			h.qual = approx_mapq_se(opt, p);
+			h.mb = h.me = -2;
+			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->is_hard);
+		}
+	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->is_hard);
 	s->sam = str.s;
 }
 
@@ -592,9 +634,9 @@ typedef struct {
 	const bwt_t *bwt;
 	const bntseq_t *bns;
 	const uint8_t *pac;
+	const mem_pestat_t *pes;
 	bseq1_t *seqs;
 	mem_alnreg_v *regs;
-	mem_pestat_t *pes;
 } worker_t;
 
 static void *worker1(void *data)
@@ -603,7 +645,7 @@ static void *worker1(void *data)
 	int i;
 	for (i = w->start; i < w->n; i += w->step) {
 		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
-		mem_sort_and_dedup(w->regs[i].n, w->regs[i].a);
+		w->regs[i].n = mem_sort_and_dedup(w->regs[i].n, w->regs[i].a);
 	}
 	return 0;
 }

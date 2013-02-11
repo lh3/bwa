@@ -20,6 +20,7 @@ typedef struct {
 	int min_seed_len, max_occ, max_chain_gap;
 	int n_threads, chunk_size;
 	int pe_dir, is_pe;
+	int is_hard; // if to use hard clip
 	float mask_level, chain_drop_ratio;
 	int max_ins; // maximum insert size
 	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset
@@ -41,6 +42,14 @@ typedef struct {
 	int low, high, failed;
 	double avg, std;
 } mem_pestat_t;
+
+typedef struct {
+	int64_t rb, re;
+	int qb, qe, flag, qual;
+	// optional info
+	int score, sub;
+	int64_t mb, me; // mb: mate start; -1 if single-end; -2 if mate unmapped
+} bwahit_t;
 
 typedef kvec_t(mem_chain_t)  mem_chain_v;
 typedef kvec_t(mem_alnreg_t) mem_alnreg_v;

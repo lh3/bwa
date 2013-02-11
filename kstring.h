@@ -16,6 +16,15 @@ typedef struct __kstring_t {
 } kstring_t;
 #endif
 
+static inline void ks_resize(kstring_t *s, size_t size)
+{
+	if (s->m < size) {
+		s->m = size;
+		kroundup32(s->m);
+		s->s = (char*)realloc(s->s, s->m);
+	}
+}
+
 static inline int kputsn(const char *p, int l, kstring_t *s)
 {
 	if (s->l + l + 1 >= s->m) {
