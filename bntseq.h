@@ -29,6 +29,7 @@
 #define BWT_BNTSEQ_H
 
 #include <stdint.h>
+#include <stdio.h>
 #include <zlib.h>
 
 #ifndef BWA_UBYTE

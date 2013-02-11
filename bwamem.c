@@ -14,7 +14,7 @@
 
 #define MAPQ_COEF 40.
 
-int mem_debug = 0;
+int mem_verbose = 3; // 1: error only; 2: error+warning; 3: message+error+warning; >=4: debugging
 
 void mem_fill_scmat(int a, int b, int8_t mat[25])
 {
@@ -36,6 +36,7 @@ mem_opt_t *mem_opt_init()
 	o->split_width = 10;
 	o->max_occ = 10000;
 	o->max_chain_gap = 10000;
+	o->max_ins = 10000;
 	o->mask_level = 0.50;
 	o->chain_drop_ratio = 0.50;
 	o->chunk_size = 10000000;
@@ -427,7 +428,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
 			a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
-		if (mem_debug >= 2) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
+		if (mem_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
 		// check how many seeds have been covered
 		for (i = k + 1; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
@@ -574,7 +575,7 @@ static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bn
 		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
 	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
-	if (mem_debug >= 1) mem_print_chain(bns, &chn);
+	if (mem_verbose >= 4) mem_print_chain(bns, &chn);
 	regs.n = regs.m = chn.n;
 	regs.a = malloc(regs.n * sizeof(mem_alnreg_t));
 	for (i = 0; i < chn.n; ++i) {
@@ -593,6 +594,7 @@ typedef struct {
 	const uint8_t *pac;
 	bseq1_t *seqs;
 	mem_alnreg_v *regs;
+	mem_pestat_t *pes;
 } worker_t;
 
 static void *worker1(void *data)
@@ -628,6 +630,8 @@ int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 	int i;
 	worker_t *w;
 	mem_alnreg_v *regs;
+	mem_pestat_t pes[4];
+
 	w = calloc(opt->n_threads, sizeof(worker_t));
 	regs = malloc(n * sizeof(mem_alnreg_v));
 	for (i = 0; i < opt->n_threads; ++i) {
@@ -635,21 +639,27 @@ int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 		p->start = i; p->step = opt->n_threads; p->n = n;
 		p->opt = opt; p->bwt = bwt; p->bns = bns; p->pac = pac;
 		p->seqs = seqs; p->regs = regs;
+		p->pes = &pes[0];
 	}
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads == 1) {
-		worker1(w); worker2(w);
+		worker1(w);
+		mem_pestat(opt, bns->l_pac, n, regs, pes);
+		worker2(w);
 	} else {
 		pthread_t *tid;
 		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
+		mem_pestat(opt, bns->l_pac, n, regs, pes);
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker2, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		free(tid);
 	}
 #else
-	worker1(w); worker2(w);
+	worker1(w);
+	mem_pestat(opt, bns->l_pac, n, regs, pes);
+	worker2(w);
 #endif
 	for (i = 0; i < n; ++i) {
 		fputs(seqs[i].sam, stdout);

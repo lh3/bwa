@@ -11,7 +11,6 @@
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
-extern int mem_debug;
 
 int main_mem(int argc, char *argv[])
 {
@@ -25,10 +24,10 @@ int main_mem(int argc, char *argv[])
 	bseq1_t *seqs;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "k:c:D:s:")) >= 0) {
+	while ((c = getopt(argc, argv, "k:c:v:s:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'c') opt->max_occ = atoi(optarg);
-		else if (c == 'D') mem_debug = atoi(optarg);
+		else if (c == 'v') mem_verbose = atoi(optarg);
 		else if (c == 's') opt->split_width = atoi(optarg);
 	}
 	if (optind + 1 >= argc) {
@@ -37,6 +36,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "Options: -k INT     minimum seed length [%d]\n", opt->min_seed_len);
 		fprintf(stderr, "         -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "         -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
+		fprintf(stderr, "         -v INT     verbose level [%d]\n", mem_verbose);
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;

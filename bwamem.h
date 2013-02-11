@@ -21,6 +21,7 @@ typedef struct {
 	int n_threads, chunk_size;
 	int pe_dir, is_pe;
 	float mask_level, chain_drop_ratio;
+	int max_ins; // maximum insert size
 	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;
 
@@ -36,8 +37,15 @@ typedef struct {
 	int sub_n;
 } mem_alnreg_t;
 
+typedef struct {
+	int low, high, failed;
+	double avg, std;
+} mem_pestat_t;
+
 typedef kvec_t(mem_chain_t)  mem_chain_v;
 typedef kvec_t(mem_alnreg_t) mem_alnreg_v;
+
+extern int mem_verbose;
 
 #ifdef __cplusplus
 extern "C" {
@@ -57,6 +65,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 uint32_t *mem_gen_cigar(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar);
 
 int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs);
+
+void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4]);
 
 #ifdef __cplusplus
 }
