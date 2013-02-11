@@ -41,15 +41,15 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 		size += seqs[n++].l_seq;
 		if (ks2) {
 			trim_readno(&ks2->name);
-			kseq2bseq1(ks2, &seqs[n++]);
+			kseq2bseq1(ks2, &seqs[n]);
 			size += seqs[n++].l_seq;
 		}
 		if (size >= chunk_size) break;
 	}
-	*n_ = n;
-	if (size < chunk_size) { // test if the 2nd file is finished
+	if (size == 0) { // test if the 2nd file is finished
 		if (ks2 && kseq_read(ks2) >= 0)
 			fprintf(stderr, "[W::%s] the 1st file has fewer sequences.\n", __func__);
 	}
+	*n_ = n;
 	return seqs;
 }

@@ -58,7 +58,7 @@ int main_mem(int argc, char *argv[])
 	ks = kseq_init(fp);
 	if (optind + 2 < argc) {
 		fp2 = gzopen(argv[optind + 2], "r");
-		ks2 = kseq_init(fp);
+		ks2 = kseq_init(fp2);
 		opt->is_pe = 1;
 	}
 	while ((seqs = bseq_read(opt->n_threads * opt->chunk_size, &n, ks, ks2)) != 0) {
