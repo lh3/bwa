@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #include <math.h>
 #include "kstring.h"
 #include "bwamem.h"
@@ -11,6 +12,11 @@
 #define MAPPING_BOUND 3.0
 #define MAX_STDDEV    4.0
 #define EXT_STDDEV    4.0
+
+typedef kvec_t(uint64_t) vec64_t;
+
+extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
+void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard);
 
 static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 {
@@ -25,9 +31,6 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 	}
 	return j < r->n? r->a[j].score : opt->min_seed_len * opt->a;
 }
-
-typedef kvec_t(uint64_t) vec64_t;
-extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
 {
@@ -116,6 +119,12 @@ void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, con
 
 void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2])
 {
+	kstring_t str;
 	bwahit_t h[2];
+	str.l = str.m = 0; str.s = 0;
 	mem_pair(opt, bns, pac, pes, s, a, h);
+	bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
+	s[0].sam = strdup(str.s); str.l = 0;
+	bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->is_hard);
+	s[1].sam = str.s;
 }
