@@ -128,17 +128,23 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	}
 #ifndef _NO_SSE2
 	{ // FIXME!!! The following block has not been tested since the update of the ksw library
-		int flag = KSW_XSUBO | KSW_XSTOP | KSW_XSTART | (l_mseq * g_mat[0] < 250? KSW_XBYTE : 0);
+		int flag = KSW_XSUBO | KSW_XSTART | (l_mseq * g_mat[0] < 250? KSW_XBYTE : 0) | opt->t;
 		kswr_t aln;
 		aln = ksw_align(l_mseq, seq, end - beg, ref, 5, g_mat, opt->q, opt->r, flag, 0);
 		a->G = aln.score;
 		a->G2 = aln.score2;
+		if (a->G < opt->t) a->G = 0;
 		if (a->G2 < opt->t) a->G2 = 0;
 		if (a->G2) a->flag |= BSW2_FLAG_TANDEM;
 		a->k = beg + aln.tb;
-		a->len = aln.te - aln.tb;
+		a->len = aln.te - aln.tb + 1;
 		a->beg = aln.qb;
-		a->end = aln.qe;
+		a->end = aln.qe + 1;
+		/*
+		printf("[Q] "); for (i = 0; i < l_mseq; ++i) putchar("ACGTN"[(int)seq[i]]); putchar('\n');
+		printf("[R] "); for (i = 0; i < end - beg; ++i) putchar("ACGTN"[(int)ref[i]]); putchar('\n');
+		printf("G=%d,G2=%d,beg=%d,end=%d,k=%lld,len=%d\n", a->G, a->G2, a->beg, a->end, a->k, a->len);
+		*/
 	}
 #else
 	{
