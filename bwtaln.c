@@ -252,7 +252,7 @@ int bwa_aln(int argc, char *argv[])
 	char *prefix;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:LR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -272,7 +272,6 @@ int bwa_aln(int argc, char *argv[])
 		case 'L': opt->mode |= BWA_MODE_LOGGAP; break;
 		case 'R': opt->max_top2 = atoi(optarg); break;
 		case 'q': opt->trim_qual = atoi(optarg); break;
-		case 'c': opt->mode &= ~BWA_MODE_COMPREAD; break;
 		case 'N': opt->mode |= BWA_MODE_NONSTOP; opt->max_top2 = 0x7fffffff; break;
 		case 'f': xreopen(optarg, "wb", stdout); break;
 		case 'b': opt->mode |= BWA_MODE_BAM; break;
@@ -310,7 +309,6 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
         fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
 		fprintf(stderr, "         -B INT    length of barcode\n");
-//		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
 		fprintf(stderr, "         -N        non-iterative mode: search for all n-difference hits (slooow)\n");
 		fprintf(stderr, "         -I        the input is in the Illumina 1.3+ FASTQ-like format\n");

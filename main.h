@@ -17,8 +17,6 @@ extern "C" {
 	int bwa_sai2sam_se(int argc, char *argv[]);
 	int bwa_sai2sam_pe(int argc, char *argv[]);
 
-	int bwa_stdsw(int argc, char *argv[]);
-
 	int bwa_bwtsw2(int argc, char *argv[]);
 
 	int main_fastmap(int argc, char *argv[]);

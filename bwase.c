@@ -296,17 +296,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 	s->len = s->full_len;
 }
 
-void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, bntseq_t *ntbns)
+void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq)
 {
-	ubyte_t *pacseq, *ntpac = 0;
+	ubyte_t *pacseq;
 	int i, j;
 	kstring_t *str;
-
-	if (ntbns) { // in color space
-		ntpac = (ubyte_t*)calloc(ntbns->l_pac/4+1, 1);
-		rewind(ntbns->fp_pac);
-		fread(ntpac, 1, ntbns->l_pac/4 + 1, ntbns->fp_pac);
-	}
 
 	if (!_pacseq) {
 		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
@@ -328,28 +322,6 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos,
 									  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 1);
 	}
-#if 0
-	if (ntbns) { // in color space
-		for (i = 0; i < n_seqs; ++i) {
-			bwa_seq_t *s = seqs + i;
-			bwa_cs2nt_core(s, bns->l_pac, ntpac);
-			for (j = 0; j < s->n_multi; ++j) {
-				bwt_multi1_t *q = s->multi + j;
-				int n_cigar;
-				if (q->gap == 0) continue;
-				free(q->cigar);
-				q->cigar = bwa_refine_gapped_core(bns->l_pac, ntpac, s->len, q->strand? s->rseq : s->seq, &q->pos,
-											  (q->strand? 1 : -1) * q->gap, &n_cigar, 0);
-				q->n_cigar = n_cigar;
-			}
-			if (s->type != BWA_TYPE_NO_MATCH && s->cigar) { // update cigar again
-				free(s->cigar);
-				s->cigar = bwa_refine_gapped_core(bns->l_pac, ntpac, s->len, s->strand? s->rseq : s->seq, &s->pos,
-											  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 0);
-			}
-		}
-	}
-#endif
 	// generate MD tag
 	str = (kstring_t*)calloc(1, sizeof(kstring_t));
 	for (i = 0; i != n_seqs; ++i) {
@@ -357,18 +329,16 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		if (s->type != BWA_TYPE_NO_MATCH) {
 			int nm;
 			s->md = bwa_cal_md1(s->n_cigar, s->cigar, s->len, s->pos, s->strand? s->rseq : s->seq,
-								bns->l_pac, ntbns? ntpac : pacseq, str, &nm);
+								bns->l_pac, pacseq, str, &nm);
 			s->nm = nm;
 		}
 	}
 	free(str->s); free(str);
 
 	// correct for trimmed reads
-	if (!ntbns) // trimming is only enabled for Illumina reads
-		for (i = 0; i < n_seqs; ++i) bwa_correct_trimmed(seqs + i);
+	for (i = 0; i < n_seqs; ++i) bwa_correct_trimmed(seqs + i);
 
 	if (!_pacseq) free(pacseq);
-	free(ntpac);
 }
 
 int64_t pos_end(const bwa_seq_t *p)
@@ -587,7 +557,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
 	clock_t t;
-	bntseq_t *bns, *ntbns = 0;
+	bntseq_t *bns;
 	FILE *fp_sa;
 	gap_opt_t opt;
 
@@ -599,8 +569,6 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 	m_aln = 0;
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa);
-	if (!(opt.mode & BWA_MODE_COMPREAD)) // in color space; initialize ntpac
-		ntbns = bwa_open_nt(prefix);
 	bwa_print_sam_SQ(bns);
 	//bwa_print_sam_PG();
 	// set ks
@@ -628,7 +596,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		fprintf(stderr, "[bwa_aln_core] refine gapped alignments... ");
-		bwa_refine_gapped(bns, n_seqs, seqs, 0, ntbns);
+		bwa_refine_gapped(bns, n_seqs, seqs, 0);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		fprintf(stderr, "[bwa_aln_core] print alignments... ");
@@ -642,7 +610,6 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 	// destroy
 	bwa_seq_close(ks);
-	if (ntbns) bns_destroy(ntbns);
 	bns_destroy(bns);
 	fclose(fp_sa);
 	free(aln);

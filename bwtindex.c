@@ -42,11 +42,11 @@ void bwa_pac_rev_core(const char *fn, const char *fn_rev);
 int bwa_index(int argc, char *argv[])
 {
 	char *prefix = 0, *str, *str2, *str3;
-	int c, algo_type = 0, is_color = 0, is_64 = 0;
+	int c, algo_type = 0, is_64 = 0;
 	clock_t t;
 	int64_t l_pac;
 
-	while ((c = getopt(argc, argv, "6ca:p:")) >= 0) {
+	while ((c = getopt(argc, argv, "6a:p:")) >= 0) {
 		switch (c) {
 		case 'a': // if -a is not set, algo_type will be determined later
 			if (strcmp(optarg, "div") == 0) algo_type = 1;
@@ -55,7 +55,6 @@ int bwa_index(int argc, char *argv[])
 			else err_fatal(__func__, "unknown algorithm: '%s'.", optarg);
 			break;
 		case 'p': prefix = strdup(optarg); break;
-		case 'c': is_color = 1; break;
 		case '6': is_64 = 1; break;
 		default: return 1;
 		}
@@ -67,7 +66,6 @@ int bwa_index(int argc, char *argv[])
 		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [auto]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
-//		fprintf(stderr, "         -c        build color-space index\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
 		fprintf(stderr, "         `-a div' do not work not for long genomes. Please choose `-a'\n");
@@ -83,29 +81,13 @@ int bwa_index(int argc, char *argv[])
 	str2 = (char*)calloc(strlen(prefix) + 10, 1);
 	str3 = (char*)calloc(strlen(prefix) + 10, 1);
 
-	if (is_color == 0) { // nucleotide indexing
+	{ // nucleotide indexing
 		gzFile fp = xzopen(argv[optind], "r");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Pack FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 0);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		gzclose(fp);
-	} else { // color indexing
-		gzFile fp = xzopen(argv[optind], "r");
-		strcat(strcpy(str, prefix), ".nt");
-		t = clock();
-		fprintf(stderr, "[bwa_index] Pack nucleotide FASTA... ");
-		l_pac = bns_fasta2bntseq(fp, str, 0);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		gzclose(fp);
-		{
-			char *tmp_argv[3];
-			tmp_argv[0] = argv[0]; tmp_argv[1] = str; tmp_argv[2] = prefix;
-			t = clock();
-			fprintf(stderr, "[bwa_index] Convert nucleotide PAC to color PAC... ");
-			bwa_pac2cspac(3, tmp_argv);
-			fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		}
 	}
 	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
 	{

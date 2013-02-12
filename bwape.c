@@ -212,19 +212,6 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 				last_pos[x.y&1][1] = x;
 			}
 		}
-	} else if (opt->type == BWA_PET_SOLID) {
-		for (i = 0; i < d->arr.n; ++i) {
-			pair64_t x = d->arr.a[i];
-			int strand = x.y>>1&1;
-			if ((strand^x.y)&1) { // push
-				int y = 1 - (x.y&1);
-				__pairing_aux(last_pos[y][1], x);
-				__pairing_aux(last_pos[y][0], x);
-			} else { // check
-				last_pos[x.y&1][0] = last_pos[x.y&1][1];
-				last_pos[x.y&1][1] = x;
-			}
-		}
 	} else {
 		fprintf(stderr, "[paring] not implemented yet!\n");
 		exit(1);
@@ -567,11 +554,11 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 			++n_tot[is_singleton];
 			cigar[0] = cigar[1] = 0;
 			n_cigar[0] = n_cigar[1] = 0;
-			if (popt->type != BWA_PET_STD && popt->type != BWA_PET_SOLID) continue; // other types of pairing is not considered
+			if (popt->type != BWA_PET_STD) continue; // other types of pairing is not considered
 			for (k = 0; k < 2; ++k) { // p[1-k] is the reference read and p[k] is the read considered to be modified
 				ubyte_t *seq;
 				if (p[1-k]->type == BWA_TYPE_NO_MATCH) continue; // if p[1-k] is unmapped, skip
-				if (popt->type == BWA_PET_STD) {
+				{ // note that popt->type == BWA_PET_STD always true; in older versions, there was a branch for color-space FF/RR reads
 					if (p[1-k]->strand == 0) { // then the mate is on the reverse strand and has larger coordinate
 						__set_rght_coor(beg[k], end[k], p[1-k], p[k]);
 						seq = p[k]->rseq;
@@ -579,17 +566,6 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 						__set_left_coor(beg[k], end[k], p[1-k], p[k]);
 						seq = p[k]->seq;
 						seq_reverse(p[k]->len, seq, 0); // because ->seq is reversed; this will reversed back shortly
-					}
-				} else { // BWA_PET_SOLID
-					if (p[1-k]->strand == 0) { // R3-F3 pairing
-						if (k == 0) __set_left_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is R3
-						else __set_rght_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is F3
-						seq = p[k]->rseq;
-						seq_reverse(p[k]->len, seq, 0); // because ->seq is reversed
-					} else { // F3-R3 pairing
-						if (k == 0) __set_rght_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is R3
-						else __set_left_coor(beg[k], end[k], p[1-k], p[k]); // p[k] is F3
-						seq = p[k]->seq;
 					}
 				}
 				// perform SW alignment
@@ -654,7 +630,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	bwa_seq_t *seqs[2];
 	bwa_seqio_t *ks[2];
 	clock_t t;
-	bntseq_t *bns, *ntbns = 0;
+	bntseq_t *bns;
 	FILE *fp_sa[2];
 	gap_opt_t opt, opt0;
 	khint_t iter;
@@ -679,10 +655,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	opt0 = opt;
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[1]); // overwritten!
 	ks[1] = bwa_open_reads(opt.mode, fn_fa[1]);
-	if (!(opt.mode & BWA_MODE_COMPREAD)) {
-		popt->type = BWA_PET_SOLID;
-		ntbns = bwa_open_nt(prefix);
-	} else { // for Illumina alignment only
+	{ // for Illumina alignment only
 		if (popt->is_preload) {
 			strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
 			strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
@@ -715,7 +688,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 		fprintf(stderr, "[bwa_sai2sam_pe_core] refine gapped alignments... ");
 		for (j = 0; j < 2; ++j)
-			bwa_refine_gapped(bns, n_seqs, seqs[j], pacseq, ntbns);
+			bwa_refine_gapped(bns, n_seqs, seqs[j], pacseq);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 		if (pac == 0) free(pacseq);
 
@@ -740,7 +713,6 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 	// destroy
 	bns_destroy(bns);
-	if (ntbns) bns_destroy(ntbns);
 	for (i = 0; i < 2; ++i) {
 		bwa_seq_close(ks[i]);
 		fclose(fp_sa[i]);
