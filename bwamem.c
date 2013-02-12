@@ -608,7 +608,6 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	kstring_t str;
 	str.l = str.m = 0; str.s = 0;
 	if (a->n > 0) {
-		mem_mark_primary_se(opt, a->n, a->a); // NOTE: mem_sort_and_dedup() called in worker1()
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
 			if (a->a[k].secondary >= 0) continue;
@@ -658,6 +657,7 @@ static void *worker1(void *data)
 	for (i = w->start; i < w->n; i += w->step) {
 		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
 		w->regs[i].n = mem_sort_and_dedup(w->regs[i].n, w->regs[i].a);
+		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
 	}
 	return 0;
 }
