@@ -10,6 +10,7 @@
 #include "bwamem.h"
 #include "bntseq.h"
 #include "ksw.h"
+#include "kvec.h"
 #include "ksort.h"
 
 #define MAPQ_COEF 40.

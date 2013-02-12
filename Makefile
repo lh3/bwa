@@ -4,7 +4,7 @@ CXXFLAGS=	$(CFLAGS)
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
 LOBJS=		bamlite.o utils.o bwt.o bwtio.o bwtaln.o bwtgap.o bntseq.o bwamem.o bwamem_pair.o stdaln.o \
-			bseq.o bwaseqio.o bwase.o kstring.o
+			bwaseqio.o bwase.o kstring.o
 AOBJS=		QSufSort.o bwt_gen.o \
 			is.o bwtmisc.o bwtindex.o ksw.o bwape.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \

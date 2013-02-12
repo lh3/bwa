@@ -3,8 +3,7 @@
 
 #include "bwt.h"
 #include "bntseq.h"
-#include "bseq.h"
-#include "kvec.h"
+#include "utils.h"
 
 struct __smem_i;
 typedef struct __smem_i smem_i;
@@ -51,8 +50,8 @@ typedef struct {
 	int64_t mb, me; // mb: mate start; -1 if single-end; -2 if mate unmapped
 } bwahit_t;
 
-typedef kvec_t(mem_chain_t)  mem_chain_v;
-typedef kvec_t(mem_alnreg_t) mem_alnreg_v;
+typedef struct { size_t n, m; mem_chain_t *a;  } mem_chain_v;
+typedef struct { size_t n, m; mem_alnreg_t *a; } mem_alnreg_v;
 
 extern int mem_verbose;
 

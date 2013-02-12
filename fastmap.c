@@ -6,7 +6,7 @@
 #include "bwt.h"
 #include "bwamem.h"
 #include "kvec.h"
-#include "bseq.h"
+#include "utils.h"
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
 
