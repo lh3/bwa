@@ -4,6 +4,7 @@
 #include "kstring.h"
 #include "bwamem.h"
 #include "kvec.h"
+#include "utils.h"
 
 #define MIN_RATIO     0.8
 #define MIN_DIR_CNT   10
@@ -13,9 +14,6 @@
 #define MAX_STDDEV    4.0
 #define EXT_STDDEV    4.0
 
-typedef kvec_t(uint64_t) vec64_t;
-
-extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard);
 
 static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
@@ -34,9 +32,8 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
 {
-	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 	int i, d, max;
-	vec64_t isize[4];
+	uint64_v isize[4];
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
 	memset(isize, 0, sizeof(kvec_t(int)) * 4);
 	for (i = 0; i < n>>1; ++i) {
@@ -58,14 +55,14 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 	if (mem_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
 	for (d = 0; d < 4; ++d) { // TODO: this block is nearly identical to the one in bwtsw2_pair.c. It would be better to merge these two.
 		mem_pestat_t *r = &pes[d];
-		vec64_t *q = &isize[d];
+		uint64_v *q = &isize[d];
 		int p25, p50, p75, x;
 		if (q->n < MIN_DIR_CNT) {
 			fprintf(stderr, "[M::%s] skip orientation %c%c as there are not enough pairs\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 			r->failed = 1;
 			continue;
 		} else fprintf(stderr, "[M::%s] analyzing insert size distribution for orientation %c%c...\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
-		ks_introsort_uint64_t(q->n, q->a);
+		ks_introsort_64(q->n, q->a);
 		p25 = q->a[(int)(.25 * q->n + .499)];
 		p50 = q->a[(int)(.50 * q->n + .499)];
 		p75 = q->a[(int)(.75 * q->n + .499)];
@@ -102,7 +99,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 
 void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
 {
-	vec64_t v;
+	uint64_v v;
 	int r, i, y[4]; // y[] keeps the last hit
 	kv_init(v);
 	for (r = 0; r < 2; ++r) {
@@ -113,7 +110,7 @@ void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, con
 			kv_push(uint64_t, v, key);
 		}
 	}
-	ks_introsort_uint64_t(v.n, v.a);
+	ks_introsort_64(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
 	printf("**** %ld\n", v.n);
 	for (i = 0; i < v.n; ++i) {

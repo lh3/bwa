@@ -6,6 +6,7 @@
 #include "bntseq.h"
 #include "bwtsw2.h"
 #include "kstring.h"
+#include "utils.h"
 #ifndef _NO_SSE2
 #include "ksw.h"
 #else
@@ -24,7 +25,6 @@ typedef struct {
 
 bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 {
-	extern void ks_introsort_uint64_t(size_t n, uint64_t *a);
 	int i, k, x, p25, p50, p75, tmp, max_len = 0;
 	uint64_t *isize;
 	bsw2pestat_t r;
@@ -44,7 +44,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 		max_len = max_len > t[1]->end - t[1]->beg? max_len : t[1]->end - t[1]->beg;
 		isize[k++] = l;
 	}
-	ks_introsort_uint64_t(k, isize);
+	ks_introsort_64(k, isize);
 	p25 = isize[(int)(.25 * k + .499)];
 	p50 = isize[(int)(.50 * k + .499)];
 	p75 = isize[(int)(.75 * k + .499)];

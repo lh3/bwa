@@ -21,24 +21,15 @@ typedef struct {
 	bwtint_t low, high, high_bayesian;
 } isize_info_t;
 
-typedef struct {
-	uint64_t x, y;
-} b128_t;
-
-#define b128_lt(a, b) ((a).x < (b).x)
 #define b128_eq(a, b) ((a).x == (b).x && (a).y == (b).y)
 #define b128_hash(a) ((uint32_t)(a).x)
 
 #include "khash.h"
-KHASH_INIT(b128, b128_t, poslist_t, 1, b128_hash, b128_eq)
-
-#include "ksort.h"
-KSORT_INIT(b128, b128_t, b128_lt)
-KSORT_INIT_GENERIC(uint64_t)
+KHASH_INIT(b128, pair64_t, poslist_t, 1, b128_hash, b128_eq)
 
 typedef struct {
-	kvec_t(b128_t) arr;
-	kvec_t(b128_t) pos[2];
+	pair64_v arr;
+	pair64_v pos[2];
 	kvec_t(bwt_aln1_t) aln[2];
 } pe_data_t;
 
@@ -120,7 +111,7 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 		free(isizes);
 		return -1;
 	}
-	ks_introsort(uint64_t, tot, isizes);
+	ks_introsort_64(tot, isizes);
 	p25 = isizes[(int)(tot*0.25 + 0.5)];
 	p50 = isizes[(int)(tot*0.50 + 0.5)];
 	p75 = isizes[(int)(tot*0.75 + 0.5)];
@@ -170,7 +161,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 {
 	int i, j, o_n, subo_n, cnt_chg = 0, low_bound = ii->low, max_len;
 	uint64_t o_score, subo_score;
-	b128_t last_pos[2][2], o_pos[2];
+	pair64_t last_pos[2][2], o_pos[2];
 	max_len = p[0]->full_len;
 	if (max_len < p[1]->full_len) max_len = p[1]->full_len;
 	if (low_bound < max_len) low_bound = max_len;
@@ -206,11 +197,11 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 
 	o_score = subo_score = (uint64_t)-1;
 	o_n = subo_n = 0;
-	ks_introsort(b128, d->arr.n, d->arr.a);
+	ks_introsort_128(d->arr.n, d->arr.a);
 	for (j = 0; j < 2; ++j) last_pos[j][0].x = last_pos[j][0].y = last_pos[j][1].x = last_pos[j][1].y = (uint64_t)-1;
 	if (opt->type == BWA_PET_STD) {
 		for (i = 0; i < d->arr.n; ++i) {
-			b128_t x = d->arr.a[i];
+			pair64_t x = d->arr.a[i];
 			int strand = x.y>>1&1;
 			if (strand == 1) { // reverse strand, then check
 				int y = 1 - (x.y&1);
@@ -223,7 +214,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 		}
 	} else if (opt->type == BWA_PET_SOLID) {
 		for (i = 0; i < d->arr.n; ++i) {
-			b128_t x = d->arr.a[i];
+			pair64_t x = d->arr.a[i];
 			int strand = x.y>>1&1;
 			if ((strand^x.y)&1) { // push
 				int y = 1 - (x.y&1);
@@ -345,7 +336,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 		if ((p[0]->type == BWA_TYPE_UNIQUE || p[0]->type == BWA_TYPE_REPEAT)
 			&& (p[1]->type == BWA_TYPE_UNIQUE || p[1]->type == BWA_TYPE_REPEAT))
 		{ // only when both ends mapped
-			b128_t x;
+			pair64_t x;
 			int j, k;
 			long long n_occ[2];
 			for (j = 0; j < 2; ++j) {
@@ -360,7 +351,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 					bwt_aln1_t *r = d->aln[j].a + k;
 					bwtint_t l;
 					if (0 && r->l - r->k + 1 >= MIN_HASH_WIDTH) { // then check hash table
-						b128_t key;
+						pair64_t key;
 						int ret;
 						key.x = r->k; key.y = r->l;
 						khint_t iter = kh_put(b128, g_hash, key, &ret);
@@ -377,14 +368,14 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 						for (l = 0; l < kh_val(g_hash, iter).n; ++l) {
 							x.x = kh_val(g_hash, iter).a[l]>>1;
 							x.y = k<<2 | (kh_val(g_hash, iter).a[l]&1)<<1 | j;
-							kv_push(b128_t, d->arr, x);
+							kv_push(pair64_t, d->arr, x);
 						}
 					} else { // then calculate on the fly
 						for (l = r->k; l <= r->l; ++l) {
 							int strand;
 							x.x = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
 							x.y = k<<2 | strand<<1 | j;
-							kv_push(b128_t, d->arr, x);
+							kv_push(pair64_t, d->arr, x);
 						}
 					}
 				}
