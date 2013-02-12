@@ -24,7 +24,7 @@ SUBDIRS=	.
 all:$(PROG)
 
 bwa:libbwa.a $(AOBJS) main.o
-		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
+		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ $(LIBS) -L. -lbwa
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)

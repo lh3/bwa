@@ -99,40 +99,48 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 
 void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
 {
-	uint64_v v;
+	pair64_v v;
+	pair64_t o, subo; // score<<32 | raw_score<<8 | hash
 	int r, i, y[4]; // y[] keeps the last hit
 	kv_init(v);
-	for (r = 0; r < 2; ++r) {
+	for (r = 0; r < 2; ++r) { // loop through read number
 		for (i = 0; i < a[r].n; ++i) {
-			uint64_t key;
+			pair64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
-			key = ((e->rb < bns->l_pac? e->rb<<1 : ((bns->l_pac<<1) - 1 - e->rb)<<1 | 1)<<1 | r) << 30 | e->score;
-			kv_push(uint64_t, v, key);
+			key.x = e->rb < bns->l_pac? e->rb : (bns->l_pac<<1) - 1 - e->rb; // forward position
+			key.y = (uint64_t)e->score << 32 | i << 2 | (e->rb >= bns->l_pac)<<1 | r;
+			kv_push(pair64_t, v, key);
 		}
 	}
-	ks_introsort_64(v.n, v.a);
+	ks_introsort_128(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
-	printf("**** %ld\n", v.n);
+	o.x = o.y = subo.x = subo.y = 0;
 	for (i = 0; i < v.n; ++i) {
-		printf("%lld\t%c\t%lld\t%lld\n", v.a[i]>>32, "+-"[v.a[i]>>31&1], v.a[i]>>30&1, v.a[i]<<34>>34);
-		for (r = 0; r < 2; ++r) {
-			int dir = r<<1 | (v.a[i]>>31&1), which, k;
+		for (r = 0; r < 2; ++r) { // loop through direction
+			int dir = r<<1 | (v.a[i].y>>1&1), which, k;
 			if (pes[dir].failed) continue; // invalid orientation
-			which = r<<1 | ((v.a[i]>>30&1)^1);
+			which = r<<1 | ((v.a[i].y&1)^1);
 			if (y[which] < 0) continue; // no previous hits
 			for (k = y[which]; k >= 0; --k) { // TODO: this is a O(n^2) solution in the worst case; remember to check if this loop takes a lot of time (I doubt)
-				int dist;
+				int64_t dist;
+				int raw_score, score;
 				double ns;
-				if ((v.a[k]>>30&3) != which) continue;
-				dist = (v.a[i]>>32) - (v.a[k]>>32);
-				printf("%d\t%d\t%d\n", r, which, dist);
+				uint64_t x, pair;
+				if ((v.a[k].y&3) != which) continue;
+				dist = (int64_t)v.a[i].x - v.a[k].x;
 				if (dist > pes[dir].high) break;
 				if (dist < pes[dir].low)  continue;
+				raw_score = (v.a[i].y>>32) + (v.a[i].y>>32);
+				if (raw_score + 20 * opt->a < (subo.x>>8&0xffffff)) continue; // skip the following if the score is too small
 				ns = (dist - pes[dir].avg) / pes[dir].std;
-				printf("%f\n", ns);
+				score = (int)(23. * raw_score / (opt->a + opt->b) - 4.343 * log(.5 * erfc(fabs(ns) * M_SQRT1_2)) + .499);
+				pair = (uint64_t)k<<32 | i;
+				x = (uint64_t)score<<32 | (int64_t)raw_score<<8 | (hash_64(pair)&0xff);
+				if (x > o.x) subo = o, o.x = x, o.y = pair;
+				else if (x > subo.x) subo.x = x, subo.y = pair;
 			}
 		}
-		y[v.a[i]>>30&3] = i;
+		y[v.a[i].y&3] = i;
 	}
 	free(v.a);
 }

@@ -587,6 +587,15 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	return mapq;
 }
 
+void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h)
+{
+	h->rb = a->rb; h->re = a->re; h->qb = a->qb; h->qe = a->qe;
+	h->score = a->score;
+	h->sub = a->sub > a->csub? a->sub : a->csub;
+	h->qual = h->flag = 0; // these are unset
+	h->mb = h->me = -2; // mate positions are unset
+}
+
 void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
 {
 	int k;
@@ -596,13 +605,8 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	if (a->n > 0) {
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
-			mem_alnreg_t *p = &a->a[k];
-			h.rb = p->rb; h.re = p->re;
-			h.qb = p->qb; h.qe = p->qe;
-			h.score = p->score; h.sub = p->sub;
-			h.flag = 0;
-			h.qual = approx_mapq_se(opt, p);
-			h.mb = h.me = -2;
+			mem_alnreg2hit(&a->a[k], &h);
+			h.qual = approx_mapq_se(opt, &a->a[k]);
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->is_hard);
 		}
 	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->is_hard);
