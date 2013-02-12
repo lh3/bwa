@@ -34,7 +34,7 @@ typedef struct {
 typedef struct {
 	int64_t rb, re;
 	int score, qb, qe, seedcov, sub, csub; // sub: suboptimal score; csub: suboptimal inside the chain
-	int sub_n;
+	int sub_n, is_primary;
 } mem_alnreg_t;
 
 typedef struct {
