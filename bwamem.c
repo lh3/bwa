@@ -351,7 +351,7 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORT
 	kvec_t(int) z;
 	if (n == 0) return;
 	kv_init(z);
-	for (i = 0; i < n; ++i) a[i].sub = a[i].is_primary = 0;
+	for (i = 0; i < n; ++i) a[i].sub = 0, a[i].secondary = -1;
 	tmp = opt->a + opt->b > opt->q + opt->r? opt->a + opt->b : opt->q + opt->r;
 	kv_push(int, z, 0);
 	for (i = 1; i < n; ++i) {
@@ -369,8 +369,8 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORT
 			}
 		}
 		if (k == z.n) kv_push(int, z, i);
+		else a[i].secondary = z.a[k];
 	}
-	for (k = 0; k < z.n; ++k) a[z.a[k]].is_primary = 1;
 	free(z.a);
 }
 
@@ -597,7 +597,8 @@ void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h)
 	h->rb = a->rb; h->re = a->re; h->qb = a->qb; h->qe = a->qe;
 	h->score = a->score;
 	h->sub = a->sub > a->csub? a->sub : a->csub;
-	h->qual = h->flag = 0; // these are unset
+	h->qual = 0; // quality unset
+	h->flag = a->secondary? 0x100 : 0; // only the "secondary" bit is set
 	h->mb = h->me = -2; // mate positions are unset
 }
 
@@ -610,7 +611,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		mem_mark_primary_se(opt, a->n, a->a); // NOTE: mem_sort_and_dedup() called in worker1()
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
-			if (!a->a[k].is_primary) continue;
+			if (a->a[k].secondary >= 0) continue;
 			mem_alnreg2hit(&a->a[k], &h);
 			h.qual = approx_mapq_se(opt, &a->a[k]);
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->is_hard);

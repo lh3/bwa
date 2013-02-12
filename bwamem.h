@@ -34,7 +34,8 @@ typedef struct {
 typedef struct {
 	int64_t rb, re;
 	int score, qb, qe, seedcov, sub, csub; // sub: suboptimal score; csub: suboptimal inside the chain
-	int sub_n, is_primary;
+	int sub_n; // approximate number of suboptimal hits
+	int secondary; // non-negative if the hit is secondary
 } mem_alnreg_t;
 
 typedef struct {
