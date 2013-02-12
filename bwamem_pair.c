@@ -103,17 +103,40 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
 {
 	vec64_t v;
-	int r, i;
+	int r, i, y[4]; // y[] keeps the last hit
 	kv_init(v);
 	for (r = 0; r < 2; ++r) {
 		for (i = 0; i < a[r].n; ++i) {
-			int64_t pos;
+			uint64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
-			pos = (e->rb < bns->l_pac? e->rb<<1 : ((bns->l_pac<<1) - 1 - e->rb)<<1 | 1)<<1 | r;
-			kv_push(uint64_t, v, pos);
+			key = ((e->rb < bns->l_pac? e->rb<<1 : ((bns->l_pac<<1) - 1 - e->rb)<<1 | 1)<<1 | r) << 30 | e->score;
+			kv_push(uint64_t, v, key);
 		}
 	}
 	ks_introsort_uint64_t(v.n, v.a);
+	y[0] = y[1] = y[2] = y[3] = -1;
+	printf("**** %ld\n", v.n);
+	for (i = 0; i < v.n; ++i) {
+		printf("%lld\t%c\t%lld\t%lld\n", v.a[i]>>32, "+-"[v.a[i]>>31&1], v.a[i]>>30&1, v.a[i]<<34>>34);
+		for (r = 0; r < 2; ++r) {
+			int dir = r<<1 | (v.a[i]>>31&1), which, k;
+			if (pes[dir].failed) continue; // invalid orientation
+			which = r<<1 | ((v.a[i]>>30&1)^1);
+			if (y[which] < 0) continue; // no previous hits
+			for (k = y[which]; k >= 0; --k) { // TODO: this is a O(n^2) solution in the worst case; remember to check if this loop takes a lot of time (I doubt)
+				int dist;
+				double ns;
+				if ((v.a[k]>>30&3) != which) continue;
+				dist = (v.a[i]>>32) - (v.a[k]>>32);
+				printf("%d\t%d\t%d\n", r, which, dist);
+				if (dist > pes[dir].high) break;
+				if (dist < pes[dir].low)  continue;
+				ns = (dist - pes[dir].avg) / pes[dir].std;
+				printf("%f\n", ns);
+			}
+		}
+		y[v.a[i]>>30&3] = i;
+	}
 	free(v.a);
 }
 
@@ -123,8 +146,10 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 	bwahit_t h[2];
 	str.l = str.m = 0; str.s = 0;
 	mem_pair(opt, bns, pac, pes, s, a, h);
+	/*
 	bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
 	s[0].sam = strdup(str.s); str.l = 0;
 	bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->is_hard);
 	s[1].sam = str.s;
+	*/
 }

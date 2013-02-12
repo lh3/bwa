@@ -493,7 +493,7 @@ ret_gen_cigar:
 
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard)
 {
-	int score, n_cigar, is_rev, nn, rid, mid, is_unmapped = 0;
+	int score, n_cigar, is_rev = 0, nn, rid, mid, is_unmapped = 0;
 	uint32_t *cigar = 0;
 	int64_t pos;
 
@@ -652,6 +652,7 @@ static void *worker1(void *data)
 
 static void *worker2(void *data)
 {
+	extern void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2]);
 	worker_t *w = (worker_t*)data;
 	int i;
 	if (!w->opt->is_pe) {
@@ -661,6 +662,7 @@ static void *worker2(void *data)
 		}
 	} else {
 		for (i = 0; i < w->n>>1; i += w->step) { // not implemented yet
+			mem_sam_pe(w->opt, w->bns, w->pac, w->pes, &w->seqs[i<<1], &w->regs[i<<1]);
 			free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 		}
 	}
