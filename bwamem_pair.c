@@ -97,11 +97,12 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		}
 }
 
-void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
+int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
 {
+	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
 	pair64_v v;
 	pair64_t o, subo; // score<<32 | raw_score<<8 | hash
-	int r, i, y[4]; // y[] keeps the last hit
+	int r, i, k, y[4]; // y[] keeps the last hit
 	kv_init(v);
 	for (r = 0; r < 2; ++r) { // loop through read number
 		for (i = 0; i < a[r].n; ++i) {
@@ -117,7 +118,7 @@ void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, con
 	o.x = o.y = subo.x = subo.y = 0;
 	for (i = 0; i < v.n; ++i) {
 		for (r = 0; r < 2; ++r) { // loop through direction
-			int dir = r<<1 | (v.a[i].y>>1&1), which, k;
+			int dir = r<<1 | (v.a[i].y>>1&1), which;
 			if (pes[dir].failed) continue; // invalid orientation
 			which = r<<1 | ((v.a[i].y&1)^1);
 			if (y[which] < 0) continue; // no previous hits
@@ -133,7 +134,7 @@ void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, con
 				raw_score = (v.a[i].y>>32) + (v.a[i].y>>32);
 				if (raw_score + 20 * opt->a < (subo.x>>8&0xffffff)) continue; // skip the following if the score is too small
 				ns = (dist - pes[dir].avg) / pes[dir].std;
-				score = (int)(23. * raw_score / (opt->a + opt->b) - 4.343 * log(.5 * erfc(fabs(ns) * M_SQRT1_2)) + .499);
+				score = (int)(raw_score - 4.343 / 23. * (opt->a + opt->b) * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
 				pair = (uint64_t)k<<32 | i;
 				x = (uint64_t)score<<32 | (int64_t)raw_score<<8 | (hash_64(pair)&0xff);
 				if (x > o.x) subo = o, o.x = x, o.y = pair;
@@ -142,7 +143,13 @@ void mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, con
 		}
 		y[v.a[i].y&3] = i;
 	}
+	if (o.x > 0) {
+		i = o.y >> 32; k = o.y << 32 >> 32;
+		mem_alnreg2hit(&a[v.a[i].y&1].a[v.a[i].y<<32>>34], &h[v.a[i].y&1]);
+		mem_alnreg2hit(&a[v.a[k].y&1].a[v.a[k].y<<32>>34], &h[v.a[k].y&1]);
+	}
 	free(v.a);
+	return o.x == 0? -1 : 0;
 }
 
 void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2])
@@ -150,11 +157,11 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 	kstring_t str;
 	bwahit_t h[2];
 	str.l = str.m = 0; str.s = 0;
-	mem_pair(opt, bns, pac, pes, s, a, h);
-	/*
-	bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
-	s[0].sam = strdup(str.s); str.l = 0;
-	bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->is_hard);
-	s[1].sam = str.s;
-	*/
+	if (mem_pair(opt, bns, pac, pes, s, a, h) == 0) { // successful
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
+		s[0].sam = strdup(str.s); str.l = 0;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->is_hard);
+		s[1].sam = str.s;
+	} else {
+	}
 }

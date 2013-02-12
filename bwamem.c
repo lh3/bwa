@@ -13,8 +13,6 @@
 #include "kvec.h"
 #include "ksort.h"
 
-#define MAPQ_COEF 40.
-
 int mem_verbose = 3; // 1: error only; 2: error+warning; 3: message+error+warning; >=4: debugging
 
 void mem_fill_scmat(int a, int b, int8_t mat[25])
@@ -583,7 +581,7 @@ static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	double identity;
 	sub = a->csub > sub? a->csub : sub;
 	l = a->qe - a->qb > a->re - a->rb? a->qe - a->qb : a->re - a->rb;
-	mapq = a->score? (int)(MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
+	mapq = a->score? (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
 	mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
 	if (a->sub_n) mapq -= (int)(4.343 * log(a->sub_n) + .499);
