@@ -127,35 +127,18 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 			seq[i] = nst_nt4_table[(int)mseq[i]];
 	}
 #ifndef _NO_SSE2
-	{
-		ksw_query_t *q;
-		ksw_aux_t aux[2];
-		// forward Smith-Waterman
-		aux[0].T = opt->t; aux[0].gapo = opt->q; aux[0].gape = opt->r; aux[1] = aux[0];
-		q = ksw_qinit(l_mseq * g_mat[0] < 250? 1 : 2, l_mseq, seq, 5, g_mat);
-		ksw_sse2(q, end - beg, ref, &aux[0]);
-		free(q);
-		if (aux[0].score < opt->t) {
-			free(seq);
-			return;
-		}
-		++aux[0].qe; ++aux[0].te;
-		// reverse Smith-Waterman
-		seq_reverse(aux[0].qe, seq, 0);
-		seq_reverse(aux[0].te, ref, 0);
-		q = ksw_qinit(aux[0].qe * g_mat[0] < 250? 1 : 2, aux[0].qe, seq, 5, g_mat);
-		ksw_sse2(q, aux[0].te, ref, &aux[1]);
-		free(q);
-		++aux[1].qe; ++aux[1].te;
-		// write output
-		a->G = aux[0].score;
-		a->G2 = aux[0].score2 > aux[1].score2? aux[0].score2 : aux[1].score2;
+	{ // FIXME!!! The following block has not been tested since the update of the ksw library
+		int flag = KSW_XSUBO | KSW_XSTOP | KSW_XSTART | (l_mseq * g_mat[0] < 250? KSW_XBYTE : 0);
+		kswr_t aln;
+		aln = ksw_align(l_mseq, seq, end - beg, ref, 5, g_mat, opt->q, opt->r, flag, 0);
+		a->G = aln.score;
+		a->G2 = aln.score2;
 		if (a->G2 < opt->t) a->G2 = 0;
 		if (a->G2) a->flag |= BSW2_FLAG_TANDEM;
-		a->k = beg + (aux[0].te - aux[1].te);
-		a->len = aux[1].te;
-		a->beg = aux[0].qe - aux[1].qe;
-		a->end = aux[0].qe;
+		a->k = beg + aln.tb;
+		a->len = aln.te - aln.tb;
+		a->beg = aln.qb;
+		a->end = aln.qe;
 	}
 #else
 	{
@@ -168,6 +151,7 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 		a->G = aln_local_core(ref, end - beg, seq, l_mseq, &ap, path, 0, opt->t, &a->G2);
 		if (a->G < opt->t) a->G = 0;
 		if (a->G2 < opt->t) a->G2 = 0;
+		if (a->G2) a->flag |= BSW2_FLAG_TANDEM;
 		a->k = beg + path[0].i - 1;
 		a->len = path[1].i - path[0].i + 1;
 		a->beg = path[0].j - 1;
