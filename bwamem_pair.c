@@ -97,9 +97,16 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		}
 }
 
-void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
+void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], int rn, const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
-	int is_rev = a->rb >= l_pac? 1 : 0;
+	int r;
+	rn = !!rn; // either 0 or 1
+	for (r = 0; r < 4; ++r) {
+		int is_rev, is_larger;
+		if (pes[r].failed) continue;
+		is_rev = r>>1 == (r&1)? 0 : 1; // whether to reverse complement the mate
+		is_larger = r>>(!rn)&1; // whether the mate has larger coordinate
+	}
 }
 
 int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
