@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <math.h>
 #include "kstring.h"
 #include "bwamem.h"
@@ -38,19 +39,15 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 	memset(isize, 0, sizeof(kvec_t(int)) * 4);
 	for (i = 0; i < n>>1; ++i) {
 		int dir;
-		int64_t is, pos[2];
+		int64_t is;
 		mem_alnreg_v *r[2];
 		r[0] = (mem_alnreg_v*)&regs[i<<1|0];
 		r[1] = (mem_alnreg_v*)&regs[i<<1|1];
 		if (r[0]->n == 0 || r[1]->n == 0) continue;
 		if (cal_sub(opt, r[0]) > MIN_RATIO * r[0]->a[0].score) continue;
 		if (cal_sub(opt, r[1]) > MIN_RATIO * r[1]->a[0].score) continue;
-		pos[0] = r[0]->a[0].rb < l_pac? r[0]->a[0].rb : (l_pac<<1) - 1 - r[0]->a[0].rb; // forward coordinate
-		pos[1] = r[1]->a[0].rb < l_pac? r[1]->a[0].rb : (l_pac<<1) - 1 - r[1]->a[0].rb;
-		if (pos[0] < pos[1]) dir = (r[0]->a[0].rb >= l_pac)<<1 | (r[1]->a[0].rb >= l_pac);
-		else dir = (r[1]->a[0].rb >= l_pac)<<1 | (r[0]->a[0].rb >= l_pac);
-		is = abs(pos[0] - pos[1]);
-		if (is <= opt->max_ins) kv_push(uint64_t, isize[dir], is);
+		dir = mem_infer_dir(l_pac, r[0]->a[0].rb, r[1]->a[0].rb, &is);
+		if (is && is <= opt->max_ins) kv_push(uint64_t, isize[dir], is);
 	}
 	if (mem_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
 	for (d = 0; d < 4; ++d) { // TODO: this block is nearly identical to the one in bwtsw2_pair.c. It would be better to merge these two.
@@ -99,8 +96,17 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 
 void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], int rn, const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
-	int r;
+	int i, r, skip[4];
 	rn = !!rn; // either 0 or 1
+	for (r = 0; r < 4; ++r)
+		skip[r] = pes[r].failed? 1 : 0;
+	for (i = 0; i < ma->n; ++i) { // check which orinentation has been found
+		int64_t dist;
+		r = mem_infer_dir(l_pac, a->rb, ma->a[i].rb, &dist);
+		if (dist >= pes[r].low && dist <= pes[r].high)
+			skip[r] = 1;
+	}
+	if (skip[0] + skip[1] + skip[2] + skip[3] == 4) return; // consistent pair exist; no need to perform SW
 	for (r = 0; r < 4; ++r) {
 		int is_rev, is_larger;
 		if (pes[r].failed) continue;

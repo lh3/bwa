@@ -44,6 +44,7 @@ bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
 bwtsw2_main.o:bwtsw2.h
 
 bwamem.o:bwamem.h
+bwamem_pair.o:bwamem.h
 fastmap.o:bwt.h bwamem.h
 
 clean:

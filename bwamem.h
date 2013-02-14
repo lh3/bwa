@@ -83,4 +83,13 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 }
 #endif
 
+static inline int mem_infer_dir(int64_t l_pac, int64_t b1, int64_t b2, int64_t *dist)
+{
+	int64_t p2;
+	int r1 = (b1 >= l_pac), r2 = (b2 >= l_pac);
+	p2 = r1 == r2? b2 : (l_pac<<1) - 1 - b2; // p2 is the coordinate of read 2 on the read 1 strand
+	*dist = p2 > b1? p2 - b1 : b1 - p2;
+	return (r1 == r2? 0 : 1) ^ (p2 > b1? 0 : 3);
+}
+
 #endif
