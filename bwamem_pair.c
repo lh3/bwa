@@ -97,7 +97,12 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		}
 }
 
-int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
+void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
+{
+	int is_rev = a->rb >= l_pac? 1 : 0;
+}
+
+int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
 {
 	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
 	pair64_v v;
@@ -108,8 +113,8 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 		for (i = 0; i < a[r].n; ++i) {
 			pair64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
-			key.x = e->rb < bns->l_pac? e->rb : (bns->l_pac<<1) - 1 - e->rb; // forward position
-			key.y = (uint64_t)e->score << 32 | i << 2 | (e->rb >= bns->l_pac)<<1 | r;
+			key.x = e->rb < l_pac? e->rb : (l_pac<<1) - 1 - e->rb; // forward position
+			key.y = (uint64_t)e->score << 32 | i << 2 | (e->rb >= l_pac)<<1 | r;
 			kv_push(pair64_t, v, key);
 		}
 	}
@@ -157,7 +162,7 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 	kstring_t str;
 	bwahit_t h[2];
 	str.l = str.m = 0; str.s = 0;
-	if (mem_pair(opt, bns, pac, pes, s, a, h) == 0) { // successful
+	if (mem_pair(opt, bns->l_pac, pac, pes, s, a, h) == 0) { // successful
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
 		s[0].sam = strdup(str.s); str.l = 0;
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->is_hard);
