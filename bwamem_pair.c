@@ -95,20 +95,18 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		}
 }
 
-void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
+int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
-	int i, r, skip[4];
+	int i, r, skip[4], n = 0;
 	for (r = 0; r < 4; ++r)
 		skip[r] = pes[r].failed? 1 : 0;
-#if 0
 	for (i = 0; i < ma->n; ++i) { // check which orinentation has been found
 		int64_t dist;
 		r = mem_infer_dir(l_pac, a->rb, ma->a[i].rb, &dist);
 		if (dist >= pes[r].low && dist <= pes[r].high)
 			skip[r] = 1;
 	}
-#endif
-	if (skip[0] + skip[1] + skip[2] + skip[3] == 4) return; // consistent pair exist; no need to perform SW
+	if (skip[0] + skip[1] + skip[2] + skip[3] == 4) return 0; // consistent pair exist; no need to perform SW
 	for (r = 0; r < 4; ++r) {
 		int is_rev, is_larger;
 		uint8_t *seq, *rev = 0, *ref;
@@ -138,17 +136,12 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 			aln = ksw_align(l_ms, seq, len, ref, 5, opt->mat, opt->q, opt->r, xtra, 0);
 			memset(&b, 0, sizeof(mem_alnreg_t));
 			b.qb = aln.qb; b.qe = aln.qe + 1;
-			if (is_rev) {
-				b.rb = (l_pac<<1) - (rb + aln.te + 1);
-				b.re = (l_pac<<1) - (rb + aln.tb);
-			} else {
-				b.rb = rb + aln.tb;
-				b.re = rb + aln.te + 1;
-			}
+			b.rb = is_rev? (l_pac<<1) - (rb + aln.te + 1) : rb + aln.tb;
+			b.re = is_rev? (l_pac<<1) - (rb + aln.tb) : rb + aln.te + 1;
 			b.score = aln.score;
 			b.csub = aln.score2;
 			b.secondary = -1;
-			printf("*** %d, [%lld,%lld], %d:%d, (%lld,%lld), (%lld,%lld) == (%lld,%lld)\n", aln.score, rb, re, is_rev, is_larger, a->rb, a->re, ma->a[0].rb, ma->a[0].re, b.rb, b.re);
+//			printf("*** %d, [%lld,%lld], %d:%d, (%lld,%lld), (%lld,%lld) == (%lld,%lld)\n", aln.score, rb, re, is_rev, is_larger, a->rb, a->re, ma->a[0].rb, ma->a[0].re, b.rb, b.re);
 			kv_push(mem_alnreg_t, *ma, b); // make room for a new element
 			// move b s.t. ma is sorted
 			for (i = 0; i < ma->n - 1; ++i) // find the insertion point
@@ -156,10 +149,12 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 			tmp = i;
 			for (i = ma->n - 1; i > tmp; --i) ma->a[i] = ma->a[i-1];
 			ma->a[i] = b;
+			++n;
 		}
 		if (rev == 0) free(rev);
 		free(ref);
 	}
+	return n;
 }
 
 int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], bwahit_t h[2])
@@ -217,8 +212,9 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 	return o.x == 0? -1 : 0;
 }
 
-void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2])
+int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2])
 {
+	int n = 0;
 	kstring_t str;
 	bwahit_t h[2];
 	mem_alnreg_t a0[2];
@@ -227,8 +223,8 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 	a0[0].score = a0[1].score = -1;
 	if (a[0].n) a0[0] = a[0].a[0];
 	if (a[1].n) a0[1] = a[1].a[0];
-	if (a0[0].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, &a0[0], s[1].l_seq, (uint8_t*)s[1].seq, &a[1]);
-	if (a0[1].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, &a0[1], s[0].l_seq, (uint8_t*)s[0].seq, &a[0]);
+	if (a0[0].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &a0[0], s[1].l_seq, (uint8_t*)s[1].seq, &a[1]);
+	if (a0[1].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &a0[1], s[0].l_seq, (uint8_t*)s[0].seq, &a[0]);
 	// pairing single-end hits
 	if (mem_pair(opt, bns->l_pac, pac, pes, s, a, h) == 0) { // successful pairing
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
@@ -237,4 +233,5 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 		s[1].sam = str.s;
 	} else {
 	}
+	return n;
 }

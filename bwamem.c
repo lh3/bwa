@@ -664,7 +664,7 @@ static void *worker1(void *data)
 
 static void *worker2(void *data)
 {
-	extern void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2]);
+	extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2]);
 	worker_t *w = (worker_t*)data;
 	int i;
 	if (!w->opt->is_pe) {
@@ -673,10 +673,12 @@ static void *worker2(void *data)
 			free(w->regs[i].a);
 		}
 	} else {
+		int n = 0;
 		for (i = 0; i < w->n>>1; i += w->step) { // not implemented yet
-			mem_sam_pe(w->opt, w->bns, w->pac, w->pes, &w->seqs[i<<1], &w->regs[i<<1]);
+			n += mem_sam_pe(w->opt, w->bns, w->pac, w->pes, &w->seqs[i<<1], &w->regs[i<<1]);
 			free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 		}
+		fprintf(stderr, "[M::%s@%d] performed mate-SW for %d reads\n", __func__, w->start, n);
 	}
 	return 0;
 }
