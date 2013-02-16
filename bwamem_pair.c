@@ -97,7 +97,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], int rn, const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
 	int i, r, skip[4];
-	rn = !!rn; // either 0 or 1
+	rn = !!rn; // either 0 or 1; $rn is the read number of $a
 	for (r = 0; r < 4; ++r)
 		skip[r] = pes[r].failed? 1 : 0;
 	for (i = 0; i < ma->n; ++i) { // check which orinentation has been found
@@ -109,9 +109,28 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 	if (skip[0] + skip[1] + skip[2] + skip[3] == 4) return; // consistent pair exist; no need to perform SW
 	for (r = 0; r < 4; ++r) {
 		int is_rev, is_larger;
-		if (pes[r].failed) continue;
-		is_rev = r>>1 == (r&1)? 0 : 1; // whether to reverse complement the mate
-		is_larger = r>>(!rn)&1; // whether the mate has larger coordinate
+		uint8_t *seq, *rev = 0, *ref;
+		int64_t rb, re, len;
+		if (skip[r]) continue;
+		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
+		is_larger = r>>rn&1; // whether the mate has larger coordinate
+		if (is_rev) {
+			rev = malloc(l_ms); // this is the reverse complement of $ms
+			for (i = 0; i < l_ms; ++i) rev[l_ms - 1 - i] = ms[i] < 4? ms[i] : 4;
+			seq = rev;
+		} else seq = (uint8_t*)ms;
+		if (!is_rev) {
+			rb = is_larger? a->rb + pes[r].low : a->rb - pes[r].high;
+			re = (is_larger? a->rb + pes[r].high: a->rb - pes[r].low) + l_ms; // if on the same strand, end position should be larger to make room for the seq length
+		} else {
+			rb = (is_larger? a->rb + pes[r].low : a->rb - pes[r].high) - l_ms; // similarly on opposite strands
+			re = is_larger? a->rb + pes[r].high: a->rb - pes[r].low;
+		}
+		ref = bns_get_seq(l_pac, pac, rb, re, &len);
+		if (len == re - rb) {
+		}
+		if (rev == 0) free(rev);
+		free(ref);
 	}
 }
 
@@ -174,8 +193,16 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 {
 	kstring_t str;
 	bwahit_t h[2];
+	mem_alnreg_t a0[2];
 	str.l = str.m = 0; str.s = 0;
-	if (mem_pair(opt, bns->l_pac, pac, pes, s, a, h) == 0) { // successful
+	// perform SW for the best alignment
+	a0[0].score = a0[1].score = -1;
+	if (a[0].n) a0[0] = a[0].a[0];
+	if (a[1].n) a0[1] = a[1].a[0];
+	if (a0[0].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, 0, &a0[0], s[1].l_seq, (uint8_t*)s[1].seq, &a[1]);
+	if (a0[1].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, 1, &a0[1], s[0].l_seq, (uint8_t*)s[0].seq, &a[0]);
+	// pairing single-end hits
+	if (mem_pair(opt, bns->l_pac, pac, pes, s, a, h) == 0) { // successful pairing
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
 		s[0].sam = strdup(str.s); str.l = 0;
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->is_hard);

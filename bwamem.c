@@ -395,6 +395,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	mem_alnreg_t best;
 
 	memset(&best, 0, sizeof(mem_alnreg_t));
+	memset(a, 0, sizeof(mem_alnreg_t));
 	// get the max possible span
 	rmax[0] = l_pac<<1; rmax[1] = 0;
 	for (i = 0; i < c->n; ++i) {
@@ -408,6 +409,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	}
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
+	if (rlen != rmax[1] - rmax[0]) return;
 
 	for (k = 0; k < c->n;) {
 		s = &c->seeds[k];
