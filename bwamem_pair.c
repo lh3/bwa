@@ -95,18 +95,19 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		}
 }
 
-void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], int rn, const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
+void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
 	int i, r, skip[4];
-	rn = !!rn; // either 0 or 1; $rn is the read number of $a
 	for (r = 0; r < 4; ++r)
 		skip[r] = pes[r].failed? 1 : 0;
+#if 0
 	for (i = 0; i < ma->n; ++i) { // check which orinentation has been found
 		int64_t dist;
 		r = mem_infer_dir(l_pac, a->rb, ma->a[i].rb, &dist);
 		if (dist >= pes[r].low && dist <= pes[r].high)
 			skip[r] = 1;
 	}
+#endif
 	if (skip[0] + skip[1] + skip[2] + skip[3] == 4) return; // consistent pair exist; no need to perform SW
 	for (r = 0; r < 4; ++r) {
 		int is_rev, is_larger;
@@ -114,10 +115,10 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 		int64_t rb, re, len;
 		if (skip[r]) continue;
 		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
-		is_larger = r>>rn&1; // whether the mate has larger coordinate
+		is_larger = !(r>>1); // whether the mate has larger coordinate
 		if (is_rev) {
 			rev = malloc(l_ms); // this is the reverse complement of $ms
-			for (i = 0; i < l_ms; ++i) rev[l_ms - 1 - i] = ms[i] < 4? ms[i] : 4;
+			for (i = 0; i < l_ms; ++i) rev[l_ms - 1 - i] = ms[i] < 4? 3 - ms[i] : 4;
 			seq = rev;
 		} else seq = (uint8_t*)ms;
 		if (!is_rev) {
@@ -128,7 +129,7 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 			re = is_larger? a->rb + pes[r].high: a->rb - pes[r].low;
 		}
 		if (rb < 0) rb = 0;
-		if (re > l_pac) re = l_pac;
+		if (re > l_pac<<1) re = l_pac<<1;
 		ref = bns_get_seq(l_pac, pac, rb, re, &len);
 		if (len == re - rb) { // no funny things happening
 			kswr_t aln;
@@ -137,11 +138,17 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 			aln = ksw_align(l_ms, seq, len, ref, 5, opt->mat, opt->q, opt->r, xtra, 0);
 			memset(&b, 0, sizeof(mem_alnreg_t));
 			b.qb = aln.qb; b.qe = aln.qe + 1;
-			b.rb = rb + aln.tb;
-			b.re = rb + aln.te + 1;
+			if (is_rev) {
+				b.rb = (l_pac<<1) - (rb + aln.te + 1);
+				b.re = (l_pac<<1) - (rb + aln.tb);
+			} else {
+				b.rb = rb + aln.tb;
+				b.re = rb + aln.te + 1;
+			}
 			b.score = aln.score;
 			b.csub = aln.score2;
 			b.secondary = -1;
+			printf("*** %d, [%lld,%lld], %d:%d, (%lld,%lld), (%lld,%lld) == (%lld,%lld)\n", aln.score, rb, re, is_rev, is_larger, a->rb, a->re, ma->a[0].rb, ma->a[0].re, b.rb, b.re);
 			kv_push(mem_alnreg_t, *ma, b); // make room for a new element
 			// move b s.t. ma is sorted
 			for (i = 0; i < ma->n - 1; ++i) // find the insertion point
@@ -220,8 +227,8 @@ void mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, c
 	a0[0].score = a0[1].score = -1;
 	if (a[0].n) a0[0] = a[0].a[0];
 	if (a[1].n) a0[1] = a[1].a[0];
-	if (a0[0].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, 0, &a0[0], s[1].l_seq, (uint8_t*)s[1].seq, &a[1]);
-	if (a0[1].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, 1, &a0[1], s[0].l_seq, (uint8_t*)s[0].seq, &a[0]);
+	if (a0[0].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, &a0[0], s[1].l_seq, (uint8_t*)s[1].seq, &a[1]);
+	if (a0[1].score > 0) mem_matesw(opt, bns->l_pac, pac, pes, &a0[1], s[0].l_seq, (uint8_t*)s[0].seq, &a[0]);
 	// pairing single-end hits
 	if (mem_pair(opt, bns->l_pac, pac, pes, s, a, h) == 0) { // successful pairing
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
