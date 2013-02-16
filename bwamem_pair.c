@@ -135,20 +135,22 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 			int tmp, xtra = KSW_XSUBO | KSW_XSTART | (l_ms * opt->a < 250? KSW_XBYTE : 0) | opt->min_seed_len;
 			aln = ksw_align(l_ms, seq, len, ref, 5, opt->mat, opt->q, opt->r, xtra, 0);
 			memset(&b, 0, sizeof(mem_alnreg_t));
-			b.qb = aln.qb; b.qe = aln.qe + 1;
-			b.rb = is_rev? (l_pac<<1) - (rb + aln.te + 1) : rb + aln.tb;
-			b.re = is_rev? (l_pac<<1) - (rb + aln.tb) : rb + aln.te + 1;
-			b.score = aln.score;
-			b.csub = aln.score2;
-			b.secondary = -1;
-//			printf("*** %d, [%lld,%lld], %d:%d, (%lld,%lld), (%lld,%lld) == (%lld,%lld)\n", aln.score, rb, re, is_rev, is_larger, a->rb, a->re, ma->a[0].rb, ma->a[0].re, b.rb, b.re);
-			kv_push(mem_alnreg_t, *ma, b); // make room for a new element
-			// move b s.t. ma is sorted
-			for (i = 0; i < ma->n - 1; ++i) // find the insertion point
-				if (ma->a[i].score < b.score) break;
-			tmp = i;
-			for (i = ma->n - 1; i > tmp; --i) ma->a[i] = ma->a[i-1];
-			ma->a[i] = b;
+			if (aln.score >= opt->min_seed_len) {
+				b.qb = aln.qb; b.qe = aln.qe + 1;
+				b.rb = is_rev? (l_pac<<1) - (rb + aln.te + 1) : rb + aln.tb;
+				b.re = is_rev? (l_pac<<1) - (rb + aln.tb) : rb + aln.te + 1;
+				b.score = aln.score;
+				b.csub = aln.score2;
+				b.secondary = -1;
+//				printf("*** %d, [%lld,%lld], %d:%d, (%lld,%lld), (%lld,%lld) == (%lld,%lld)\n", aln.score, rb, re, is_rev, is_larger, a->rb, a->re, ma->a[0].rb, ma->a[0].re, b.rb, b.re);
+				kv_push(mem_alnreg_t, *ma, b); // make room for a new element
+				// move b s.t. ma is sorted
+				for (i = 0; i < ma->n - 1; ++i) // find the insertion point
+					if (ma->a[i].score < b.score) break;
+				tmp = i;
+				for (i = ma->n - 1; i > tmp; --i) ma->a[i] = ma->a[i-1];
+				ma->a[i] = b;
+			}
 			++n;
 		}
 		if (rev == 0) free(rev);
@@ -214,17 +216,22 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2])
 {
-	int n = 0;
+	int n = 0, i, j;
 	kstring_t str;
 	bwahit_t h[2];
-	mem_alnreg_t a0[2];
+	mem_alnreg_t b[2][2];
 	str.l = str.m = 0; str.s = 0;
 	// perform SW for the best alignment
-	a0[0].score = a0[1].score = -1;
-	if (a[0].n) a0[0] = a[0].a[0];
-	if (a[1].n) a0[1] = a[1].a[0];
-	if (a0[0].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &a0[0], s[1].l_seq, (uint8_t*)s[1].seq, &a[1]);
-	if (a0[1].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &a0[1], s[0].l_seq, (uint8_t*)s[0].seq, &a[0]);
+	for (i = 0; i < 2; ++i)
+		for (j = 0; j < 2; ++j) b[i][j].score = -1;
+	for (i = 0; i < 2; ++i) {
+		for (j = 0; j < a[i].n && j < 2; ++j) b[i][j] = a[i].a[j];
+		if (b[i][0].score > 0 && b[i][1].score > 0 && b[i][1].score < b[i][0].score * 0.8)
+			b[i][1].score = -1;
+	}
+	for (i = 0; i < 2; ++i)
+		for (j = 0; j < 2; ++j)
+			if (b[i][j].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i][j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
 	// pairing single-end hits
 	if (mem_pair(opt, bns->l_pac, pac, pes, s, a, h) == 0) { // successful pairing
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->is_hard);
