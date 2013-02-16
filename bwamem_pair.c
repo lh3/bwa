@@ -6,6 +6,7 @@
 #include "bwamem.h"
 #include "kvec.h"
 #include "utils.h"
+#include "ksw.h"
 
 #define MIN_RATIO     0.8
 #define MIN_DIR_CNT   10
@@ -126,8 +127,28 @@ void mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const m
 			rb = (is_larger? a->rb + pes[r].low : a->rb - pes[r].high) - l_ms; // similarly on opposite strands
 			re = is_larger? a->rb + pes[r].high: a->rb - pes[r].low;
 		}
+		if (rb < 0) rb = 0;
+		if (re > l_pac) re = l_pac;
 		ref = bns_get_seq(l_pac, pac, rb, re, &len);
-		if (len == re - rb) {
+		if (len == re - rb) { // no funny things happening
+			kswr_t aln;
+			mem_alnreg_t b;
+			int tmp, xtra = KSW_XSUBO | KSW_XSTART | (l_ms * opt->a < 250? KSW_XBYTE : 0) | opt->min_seed_len;
+			aln = ksw_align(l_ms, seq, len, ref, 5, opt->mat, opt->q, opt->r, xtra, 0);
+			memset(&b, 0, sizeof(mem_alnreg_t));
+			b.qb = aln.qb; b.qe = aln.qe + 1;
+			b.rb = rb + aln.tb;
+			b.re = rb + aln.te + 1;
+			b.score = aln.score;
+			b.csub = aln.score2;
+			b.secondary = -1;
+			kv_push(mem_alnreg_t, *ma, b); // make room for a new element
+			// move b s.t. ma is sorted
+			for (i = 0; i < ma->n - 1; ++i) // find the insertion point
+				if (ma->a[i].score < b.score) break;
+			tmp = i;
+			for (i = ma->n - 1; i > tmp; --i) ma->a[i] = ma->a[i-1];
+			ma->a[i] = b;
 		}
 		if (rev == 0) free(rev);
 		free(ref);
