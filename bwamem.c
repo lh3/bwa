@@ -31,6 +31,7 @@ mem_opt_t *mem_opt_init()
 	mem_opt_t *o;
 	o = calloc(1, sizeof(mem_opt_t));
 	o->a = 1; o->b = 5; o->q = 8; o->r = 1; o->w = 100;
+	o->flag = 0;
 	o->min_seed_len = 19;
 	o->split_width = 10;
 	o->max_occ = 10000;
@@ -41,7 +42,6 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->pe_dir = 0<<1|1;
-	o->is_pe = 0;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -598,11 +598,11 @@ void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h)
 	h->score = a->score;
 	h->sub = a->sub > a->csub? a->sub : a->csub;
 	h->qual = 0; // quality unset
-	h->flag = a->secondary? 0x100 : 0; // only the "secondary" bit is set
+	h->flag = a->secondary >= 0? 0x100 : 0; // only the "secondary" bit is set
 	h->mb = h->me = -2; // mate positions are unset
 }
 
-void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
+void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag)
 {
 	int k;
 	kstring_t str;
@@ -612,10 +612,11 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			bwahit_t h;
 			if (a->a[k].secondary >= 0) continue;
 			mem_alnreg2hit(&a->a[k], &h);
+			h.flag |= extra_flag;
 			h.qual = approx_mapq_se(opt, &a->a[k]);
-			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->is_hard);
+			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP);
 		}
-	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->is_hard);
+	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP);
 	s->sam = str.s;
 }
 
@@ -657,25 +658,25 @@ static void *worker1(void *data)
 	for (i = w->start; i < w->n; i += w->step) {
 		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
 		w->regs[i].n = mem_sort_and_dedup(w->regs[i].n, w->regs[i].a);
-		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
 	}
 	return 0;
 }
 
 static void *worker2(void *data)
 {
-	extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2]);
+	extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2]);
 	worker_t *w = (worker_t*)data;
 	int i;
-	if (!w->opt->is_pe) {
+	if (!(w->opt->flag&MEM_F_PE)) {
 		for (i = 0; i < w->n; i += w->step) {
-			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i]);
+			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
+			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0);
 			free(w->regs[i].a);
 		}
 	} else {
 		int n = 0;
 		for (i = 0; i < w->n>>1; i += w->step) { // not implemented yet
-			n += mem_sam_pe(w->opt, w->bns, w->pac, w->pes, &w->seqs[i<<1], &w->regs[i<<1]);
+			n += mem_sam_pe(w->opt, w->bns, w->pac, w->pes, i, &w->seqs[i<<1], &w->regs[i<<1]);
 			free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 		}
 		fprintf(stderr, "[M::%s@%d] performed mate-SW for %d reads\n", __func__, w->start, n);
@@ -702,21 +703,21 @@ int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads == 1) {
 		worker1(w);
-		if (opt->is_pe) mem_pestat(opt, bns->l_pac, n, regs, pes);
+		if (opt->flag&MEM_F_PE) mem_pestat(opt, bns->l_pac, n, regs, pes);
 		worker2(w);
 	} else {
 		pthread_t *tid;
 		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
-		if (opt->is_pe) mem_pestat(opt, bns->l_pac, n, regs, pes);
+		if (opt->flag&MEM_F_PE) mem_pestat(opt, bns->l_pac, n, regs, pes);
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker2, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		free(tid);
 	}
 #else
 	worker1(w);
-	if (opt->is_pe) mem_pestat(opt, bns->l_pac, n, regs, pes);
+	if (opt->flag&MEM_F_PE) mem_pestat(opt, bns->l_pac, n, regs, pes);
 	worker2(w);
 #endif
 	for (i = 0; i < n; ++i) {

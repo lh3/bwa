@@ -15,13 +15,17 @@ typedef struct {
 	int32_t qbeg, len;
 } mem_seed_t;
 
+#define MEM_F_HARDCLIP  0x1
+#define MEM_F_PE        0x2
+#define MEM_F_NOPAIRING 0x4
+
 typedef struct {
 	int a, b, q, r, w;
+	int flag;
 	int split_width;
 	int min_seed_len, max_occ, max_chain_gap;
 	int n_threads, chunk_size;
-	int pe_dir, is_pe;
-	int is_hard; // if to use hard clip
+	int pe_dir;
 	float mask_level, chain_drop_ratio;
 	int max_ins; // maximum insert size
 	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset

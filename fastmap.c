@@ -24,8 +24,10 @@ int main_mem(int argc, char *argv[])
 	bseq1_t *seqs;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "k:c:v:s:")) >= 0) {
+	while ((c = getopt(argc, argv, "PHk:c:v:s:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
+		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
+		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'v') mem_verbose = atoi(optarg);
 		else if (c == 's') opt->split_width = atoi(optarg);
@@ -59,7 +61,7 @@ int main_mem(int argc, char *argv[])
 	if (optind + 2 < argc) {
 		fp2 = gzopen(argv[optind + 2], "r");
 		ks2 = kseq_init(fp2);
-		opt->is_pe = 1;
+		opt->flag |= MEM_F_PE;
 	}
 	while ((seqs = bseq_read(opt->n_threads * opt->chunk_size, &n, ks, ks2)) != 0) {
 		mem_process_seqs(opt, bwt, bns, pac, n, seqs);
