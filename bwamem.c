@@ -577,7 +577,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
  * Integrated interface *
  ************************/
 
-static inline int approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
+int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 {
 	int mapq, l, sub = a->sub? a->sub : opt->min_seed_len * opt->a;
 	double identity;
@@ -613,7 +613,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			if (a->a[k].secondary >= 0) continue;
 			mem_alnreg2hit(&a->a[k], &h);
 			h.flag |= extra_flag;
-			h.qual = approx_mapq_se(opt, &a->a[k]);
+			h.qual = mem_approx_mapq_se(opt, &a->a[k]);
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP);
 		}
 	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP);

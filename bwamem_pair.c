@@ -159,6 +159,12 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 	return n;
 }
 
+static inline double approx_match(const mem_opt_t *opt, const mem_alnreg_v *a)
+{
+	int l = a->qe - a->qb < a->re - a->rb? a->qe - a->qb : a->re - a->rb;
+	return l - (double)(l * opt->a - a->score) / (opt->a + opt->b);
+}
+
 uint64_t mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, uint64_t *sub, int z[2])
 {
 	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
@@ -219,9 +225,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 {
 	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a);
 	extern void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag);
+	extern int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a);
+
 	int n = 0, i, j, z[2];
 	kstring_t str;
-	bwahit_t h[2];
 	mem_alnreg_t b[2][2];
 	uint64_t o, subo;
 
@@ -237,12 +244,40 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	for (i = 0; i < 2; ++i)
 		for (j = 0; j < 2; ++j)
 			if (b[i][j].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i][j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
+	mem_mark_primary_se(opt, a[0].n, a[0].a);
+	mem_mark_primary_se(opt, a[1].n, a[1].a);
 	// pairing single-end hits
 	o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z);
-	if (0&&o) { // with proper pairing
-	} else { // no proper pairing
-		mem_mark_primary_se(opt, a[0].n, a[0].a); mem_sam_se(opt, bns, pac, &s[0], &a[0], 0x41);
-		mem_mark_primary_se(opt, a[1].n, a[1].a); mem_sam_se(opt, bns, pac, &s[1], &a[1], 0x81);
-	}
+	if (o && !(opt->flag&MEM_F_NOPAIRING)) { // with proper pairing
+		int is_multi[2], q_se[2], q_pe, is_tandem[2];
+		// check if an end has multiple hits even after mate-SW
+		for (i = 0; i < 2; ++i) {
+			for (j = 1; j < a[i].n; ++j)
+				if (a[i].a[j].secondary < 0) break;
+			is_multi[i] = j < a[i].n? 1 : 0;
+		}
+		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
+		// compute mapQ for the best SE hit
+		for (i = 0; i < 2; ++i) {
+			q_se[i] = mem_approx_mapq_se(opt, &a[i].a[0]);
+			is_tandem[i] = (a[i].a[0].csub > a[i].a[0].sub);
+		}
+		q_pe = (int)(MEM_MAPQ_COEF * (1. - (double)(subo>>32) / (o>>32)) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499);
+		// the following assumes no split hits
+		if (z[0] == 0 && z[1] == 0) { // the best hit 
+			q_pe = q_pe > q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
+			q_se[0] = is_tabdem[0]? q_se[0] : q_pe;
+			q_se[1] = is_tabdem[1]? q_se[1] : q_pe;
+		} else {
+			double m[2];
+			m[0] = approx_match(opt, a[0].a[0]) + approx_match(opt, a[1].a[0]);
+			m[1] = approx_match(opt, a[0].a[z[0]]) + approx_match(opt, a[1].a[z[1]]);
+		}
+	} else goto no_pairing;
+	return n;
+
+no_pairing:
+	mem_sam_se(opt, bns, pac, &s[0], &a[0], 0x41);
+	mem_sam_se(opt, bns, pac, &s[1], &a[1], 0x81);
 	return n;
 }

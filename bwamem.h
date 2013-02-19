@@ -6,6 +6,7 @@
 #include "utils.h"
 
 #define MEM_MAPQ_COEF 40.0
+#define MEM_MAPQ_MAX  60
 
 struct __smem_i;
 typedef struct __smem_i smem_i;
