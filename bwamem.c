@@ -26,11 +26,32 @@ void mem_fill_scmat(int a, int b, int8_t mat[25])
 	for (j = 0; j < 5; ++j) mat[k++] = 0;
 }
 
+/* Theory on probability and scoring *ungapped* alignment
+ *
+ * s'(a,b) = log[P(b|a)/P(b)] = log[4P(b|a)], assuming uniform base distribution
+ * s'(a,a) = log(4), s'(a,b) = log(4e/3), where e is the error rate
+ *
+ * Scale s'(a,b) to s(a,a) s.t. s(a,a)=x. Then s(a,b) = x*s'(a,b)/log(4), or conversely: s'(a,b)=s(a,b)*log(4)/x
+ *
+ * If the matching score is x and mismatch penalty is -y, we can compute error rate e:
+ *   e = .75 * exp[-log(4) * y/x]
+ *
+ * log P(seq) = \sum_i log P(b_i|a_i) = \sum_i {s'(a,b) - log(4)}
+ *   = \sum_i { s(a,b)*log(4)/x - log(4) } = log(4) * (S/x - l)
+ *
+ * where S=\sum_i s(a,b) is the alignment score. Converting to the phred scale:
+ *   Q(seq) = -10/log(10) * log P(seq) = 10*log(4)/log(10) * (l - S/x) = 6.02 * (l - S/x)
+ *
+ *
+ * Gap open (zero gap): q' = log[P(gap-open)], r' = log[P(gap-ext)] (see Durbin et al. (1998) Section 4.1)
+ * Then q = x*log[P(gap-open)]/log(4), r = x*log[P(gap-ext)]/log(4)
+ */
+
 mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
 	o = calloc(1, sizeof(mem_opt_t));
-	o->a = 1; o->b = 5; o->q = 8; o->r = 1; o->w = 100;
+	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
 	o->flag = 0;
 	o->min_seed_len = 19;
 	o->split_width = 10;
