@@ -159,7 +159,7 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
 
 #include "kbtree.h"
 
-#define chain_cmp(a, b) ((a).pos - (b).pos)
+#define chain_cmp(a, b) (((b).pos < (a).pos) - ((a).pos < (b).pos))
 KBTREE_INIT(chn, mem_chain_t, chain_cmp)
 
 static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t *p)
