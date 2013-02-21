@@ -463,15 +463,14 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
 			a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
+		if (a->score >= best.score) csub = best.score, best = *a;
 		if (mem_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
-		// check how many seeds have been covered
+		// jump to the next seed that: 1) has no overlap with the previous seed; 2) is not fully contained in the alignment
 		for (i = k + 1; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
-			if (t->rbeg + t->len > a->re || t->qbeg + t->len > a->qe)
-				break;
+			if ((t-1)->rbeg + (t-1)->len >= t->rbeg || (t-1)->qbeg + (t-1)->len >= t->qbeg) break;
+			if (t->rbeg + t->len > a->re || t->qbeg + t->len > a->qe) break;
 		}
-		if (a->score >= best.score) csub = best.score, best = *a;
-		if (i >= c->n) break; // all seeds are included; no need to proceed
 		k = i;
 	}
 	if (a->score < best.score) *a = best;
