@@ -27,7 +27,9 @@ typedef struct {
 	int min_seed_len, max_occ, max_chain_gap;
 	int n_threads, chunk_size;
 	int pe_dir;
-	float mask_level, chain_drop_ratio;
+	float mask_level;
+	float chain_drop_ratio;
+	float split_factor; // split into a seed if MEM is longer than min_seed_len*split_factor
 	int pen_unpaired; // phred-scaled penalty for unpaired reads
 	int max_ins; // maximum insert size
 	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset

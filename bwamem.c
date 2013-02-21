@@ -62,6 +62,7 @@ mem_opt_t *mem_opt_init()
 	o->max_ins = 10000;
 	o->mask_level = 0.50;
 	o->chain_drop_ratio = 0.50;
+	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->pe_dir = 0<<1|1;
@@ -186,7 +187,8 @@ static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t
 static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
 {
 	const bwtintv_v *a;
-	while ((a = smem_next(itr, opt->min_seed_len<<1, opt->split_width)) != 0) { // to find all SMEM and some internal MEM
+	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
+	while ((a = smem_next(itr, split_len, opt->split_width)) != 0) { // to find all SMEM and some internal MEM
 		int i;
 		for (i = 0; i < a->n; ++i) { // go through each SMEM/MEM up to itr->start
 			bwtintv_t *p = &a->a[i];
