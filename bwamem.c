@@ -316,7 +316,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 				int min_l = a[i].end - a[i].beg < a[j].end - a[j].beg? a[i].end - a[i].beg : a[j].end - a[j].beg;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].p2 == 0) a[j].p2 = a[i].p;
-					if (a[i].w < a[j].w * opt->chain_drop_ratio)
+					if (a[i].w < a[j].w * opt->chain_drop_ratio && a[j].w - a[i].w >= opt->min_seed_len<<1)
 						break;
 				}
 			}
