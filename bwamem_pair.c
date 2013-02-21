@@ -153,7 +153,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 			}
 			++n;
 		}
-		if (rev == 0) free(rev);
+		if (rev) free(rev);
 		free(ref);
 	}
 	return n;

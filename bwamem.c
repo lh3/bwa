@@ -363,7 +363,10 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a)
 			a[i].qe = a[i].qb;
 	}
 	for (i = 1, m = 1; i < n; ++i) // exclude identical hits
-		if (a[i].qe > a[i].qb) a[m++] = a[i];
+		if (a[i].qe > a[i].qb) {
+			if (m != i) a[m++] = a[i];
+			else ++m;
+		}
 	return m;
 }
 
