@@ -203,8 +203,8 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 				q = (int)((v.a[i].y>>32) + (v.a[i].y>>32) - 4.343 * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
 				pair = (uint64_t)k<<32 | i;
 				x = (uint64_t)q<<32 | (hash_64(pair ^ id<<8) & 0xffffffffU);
-				if (x > o.x) subo = o, o.x = x, o.y = pair;
-				else if (x > subo.x) subo.x = x, subo.y = pair;
+				if (x < o.x) subo = o, o.x = x, o.y = pair;
+				else if (x < subo.x) subo.x = x, subo.y = pair;
 			}
 		}
 		y[v.a[i].y&3] = i;
