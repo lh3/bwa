@@ -268,13 +268,16 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// the following assumes no split hits
 		if (z[0] == 0 && z[1] == 0) { // the best hit 
 			q_pe = q_pe > q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
+			if (q_pe > 60) q_pe = 60;
 			q_se[0] = is_tandem[0]? q_se[0] : q_pe;
 			q_se[1] = is_tandem[1]? q_se[1] : q_pe;
 			extra_flag |= 2;
 		} else {
 			if (o > un) { // then move the pair
-				q_se[0] = z[0] == 0? q_se[0] : 0;
-				q_se[1] = z[1] == 0? q_se[1] : 0;
+				int tmp[2];
+				tmp[0] = q_se[0]; tmp[1] = q_se[1];
+				q_se[0] = z[0] == 0? q_se[0] : tmp[1] < q_pe? tmp[1] : q_pe;
+				q_se[1] = z[1] == 0? q_se[1] : tmp[0] < q_pe? tmp[0] : q_pe;
 				if (q_se[0] == 0) q_se[0] = q_se[1];
 				if (q_se[1] == 0) q_se[1] = q_se[0];
 			} else { // the unpaired alignment is much better
