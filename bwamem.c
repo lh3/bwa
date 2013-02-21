@@ -45,6 +45,8 @@ void mem_fill_scmat(int a, int b, int8_t mat[25])
  *
  * Gap open (zero gap): q' = log[P(gap-open)], r' = log[P(gap-ext)] (see Durbin et al. (1998) Section 4.1)
  * Then q = x*log[P(gap-open)]/log(4), r = x*log[P(gap-ext)]/log(4)
+ *
+ * When there are gaps, l should be the length of alignment matches (i.e. the M operator in CIGAR)
  */
 
 mem_opt_t *mem_opt_init()
@@ -63,6 +65,7 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->pe_dir = 0<<1|1;
+	o->pen_unpaired = 50;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }

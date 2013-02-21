@@ -28,6 +28,7 @@ typedef struct {
 	int n_threads, chunk_size;
 	int pe_dir;
 	float mask_level, chain_drop_ratio;
+	int pen_unpaired; // phred-scaled penalty for unpaired reads
 	int max_ins; // maximum insert size
 	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;

@@ -159,13 +159,13 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 	return n;
 }
 
-static inline double approx_match(const mem_opt_t *opt, const mem_alnreg_v *a)
+static inline double aln_q(const mem_opt_t *opt, const mem_alnreg_t *a)
 {
 	int l = a->qe - a->qb < a->re - a->rb? a->qe - a->qb : a->re - a->rb;
-	return l - (double)(l * opt->a - a->score) / (opt->a + opt->b);
+	return (int)(6.02 * (l - (double)a->score / opt->a) + .499);
 }
 
-uint64_t mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, uint64_t *sub, int z[2])
+int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int z[2])
 {
 	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
 	pair64_v v;
@@ -177,7 +177,7 @@ uint64_t mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const
 			pair64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
 			key.x = e->rb < l_pac? e->rb : (l_pac<<1) - 1 - e->rb; // forward position
-			key.y = (uint64_t)e->score << 32 | i << 2 | (e->rb >= l_pac)<<1 | r;
+			key.y = (uint64_t)aln_q(opt, e) << 32 | i << 2 | (e->rb >= l_pac)<<1 | r;
 			kv_push(pair64_t, v, key);
 		}
 	}
@@ -192,19 +192,17 @@ uint64_t mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const
 			if (y[which] < 0) continue; // no previous hits
 			for (k = y[which]; k >= 0; --k) { // TODO: this is a O(n^2) solution in the worst case; remember to check if this loop takes a lot of time (I doubt)
 				int64_t dist;
-				int raw_score, score;
+				int q;
 				double ns;
 				uint64_t x, pair;
 				if ((v.a[k].y&3) != which) continue;
 				dist = (int64_t)v.a[i].x - v.a[k].x;
 				if (dist > pes[dir].high) break;
 				if (dist < pes[dir].low)  continue;
-				raw_score = (v.a[i].y>>32) + (v.a[i].y>>32);
-				if (raw_score + 20 * opt->a < (subo.x>>8&0xffffff)) continue; // skip the following if the score is too small
 				ns = (dist - pes[dir].avg) / pes[dir].std;
-				score = (int)(raw_score - 4.343 / 23. * (opt->a + opt->b) * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
+				q = (int)((v.a[i].y>>32) + (v.a[i].y>>32) - 4.343 * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
 				pair = (uint64_t)k<<32 | i;
-				x = (uint64_t)score<<32 | (int64_t)raw_score<<8 | (hash_64(pair ^ id<<8)&0xff);
+				x = (uint64_t)q<<32 | (hash_64(pair ^ id<<8) & 0xffffffffU);
 				if (x > o.x) subo = o, o.x = x, o.y = pair;
 				else if (x > subo.x) subo.x = x, subo.y = pair;
 			}
@@ -217,8 +215,8 @@ uint64_t mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const
 		z[v.a[k].y&1] = v.a[k].y<<32>>34;
 	}
 	free(v.a);
-	*sub = subo.x;
-	return o.x;
+	*sub = subo.x>>32;
+	return o.x>>32;
 }
 
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2])
@@ -226,11 +224,12 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a);
 	extern void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag);
 	extern int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a);
+	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
+	extern void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard);
 
-	int n = 0, i, j, z[2];
+	int n = 0, i, j, z[2], o, subo;
 	kstring_t str;
 	mem_alnreg_t b[2][2];
-	uint64_t o, subo;
 
 	str.l = str.m = 0; str.s = 0;
 	// perform SW for the best alignment
@@ -249,7 +248,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	// pairing single-end hits
 	o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z);
 	if (o && !(opt->flag&MEM_F_NOPAIRING)) { // with proper pairing
-		int is_multi[2], q_se[2], q_pe, is_tandem[2];
+		int is_multi[2], q_se[2], q_pe, is_tandem[2], extra_flag = 1, un;
+		bwahit_t h[2];
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
 			for (j = 1; j < a[i].n; ++j)
@@ -262,17 +262,29 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[i] = mem_approx_mapq_se(opt, &a[i].a[0]);
 			is_tandem[i] = (a[i].a[0].csub > a[i].a[0].sub);
 		}
-		q_pe = (int)(MEM_MAPQ_COEF * (1. - (double)(subo>>32) / (o>>32)) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499);
+		un = aln_q(opt, &a[0].a[0]) + aln_q(opt, &a[1].a[0]) + opt->pen_unpaired;
+		subo = subo < un? subo : un;
+		q_pe = subo - o;
 		// the following assumes no split hits
 		if (z[0] == 0 && z[1] == 0) { // the best hit 
 			q_pe = q_pe > q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
-			q_se[0] = is_tabdem[0]? q_se[0] : q_pe;
-			q_se[1] = is_tabdem[1]? q_se[1] : q_pe;
+			q_se[0] = is_tandem[0]? q_se[0] : q_pe;
+			q_se[1] = is_tandem[1]? q_se[1] : q_pe;
+			extra_flag |= 2;
 		} else {
-			double m[2];
-			m[0] = approx_match(opt, a[0].a[0]) + approx_match(opt, a[1].a[0]);
-			m[1] = approx_match(opt, a[0].a[z[0]]) + approx_match(opt, a[1].a[z[1]]);
+			if (o > un) { // then move the pair
+				q_se[0] = z[0] == 0? q_se[0] : 0;
+				q_se[1] = z[1] == 0? q_se[1] : 0;
+				if (q_se[0] == 0) q_se[0] = q_se[1];
+				if (q_se[1] == 0) q_se[1] = q_se[0];
+			} else { // the unpaired alignment is much better
+				z[0] = z[1] = 0;
+			}
 		}
+		mem_alnreg2hit(&a[0].a[z[0]], &h[0]); h[0].qual = q_se[0]; h[0].flag |= 0x40 | extra_flag;
+		mem_alnreg2hit(&a[1].a[z[1]], &h[1]); h[1].qual = q_se[1]; h[1].flag |= 0x80 | extra_flag;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->flag&MEM_F_HARDCLIP); s[0].sam = strdup(str.s); str.l = 0;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->flag&MEM_F_HARDCLIP); s[1].sam = str.s;
 	} else goto no_pairing;
 	return n;
 
