@@ -415,16 +415,14 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 	return l > 1? l : 1;
 }
 
-void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_t *a)
+void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
-	int i, k, csub = 0;
+	int i, k;
 	int64_t rlen, rmax[2], tmp, max = 0, max_i = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
-	mem_alnreg_t best;
 
-	memset(&best, 0, sizeof(mem_alnreg_t));
-	memset(a, 0, sizeof(mem_alnreg_t));
+	av->n = 0;
 	// get the max possible span
 	rmax[0] = l_pac<<1; rmax[1] = 0;
 	for (i = 0; i < c->n; ++i) {
@@ -441,6 +439,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	if (rlen != rmax[1] - rmax[0]) return;
 
 	for (k = 0; k < c->n;) {
+		mem_alnreg_t *a;
+		a = kv_pushp(mem_alnreg_t, *av);
 		s = &c->seeds[k];
 		memset(a, 0, sizeof(mem_alnreg_t));
 		if (s->qbeg) { // left extension
@@ -463,9 +463,14 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
 			a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
-		if (a->score >= best.score) csub = best.score, best = *a;
 		if (mem_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
-		// jump to the next seed that: 1) has no overlap with the previous seed; 2) is not fully contained in the alignment
+		// compute seedcov
+		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
+			const mem_seed_t *t = &c->seeds[i];
+			if (t->qbeg >= a->qb && t->qbeg + t->len <= a->qe && t->rbeg >= a->rb && t->rbeg + t->len <= a->re) // seed fully contained
+				a->seedcov += t->len; // this is not very accurate, but for approx. mapQ, this is good enough
+		}
+		// jump to the next seed that: 1) has no overlap with the previous seed, or 2) is not fully contained in the alignment
 		for (i = k + 1; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
 			if ((t-1)->rbeg + (t-1)->len >= t->rbeg || (t-1)->qbeg + (t-1)->len >= t->qbeg) break;
@@ -473,18 +478,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		}
 		k = i;
 	}
-	if (a->score < best.score) *a = best;
-	a->csub = csub;
 	free(rseq);
-
-	// compute seedcov
-	if (c->n > 1) {
-		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
-			s = &c->seeds[i];
-			if (s->qbeg >= a->qb && s->qbeg + s->len <= a->qe && s->rbeg >= a->rb && s->rbeg + s->len <= a->re) // seed fully contained
-				a->seedcov += s->len; // this is not very accurate, but for approx. mapQ, this is good enough
-		}
-	} else a->seedcov = c->seeds[0].len;
 }
 
 /*****************************
@@ -650,21 +644,23 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 
 static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s)
 {
-	int i;
+	int i, j;
 	mem_chain_v chn;
-	mem_alnreg_v regs;
+	mem_alnreg_v regs, tmp;
 	for (i = 0; i < s->l_seq; ++i)
 		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
 	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
 	if (mem_verbose >= 4) mem_print_chain(bns, &chn);
-	regs.n = regs.m = chn.n;
-	regs.a = malloc(regs.n * sizeof(mem_alnreg_t));
+	kv_init(regs); kv_init(tmp);
 	for (i = 0; i < chn.n; ++i) {
-		mem_chain2aln(opt, bns->l_pac, pac, s->l_seq, (uint8_t*)s->seq, &chn.a[i], &regs.a[i]);
+		mem_chain2aln(opt, bns->l_pac, pac, s->l_seq, (uint8_t*)s->seq, &chn.a[i], &tmp);
+		for (j = 0; j < tmp.n; ++j)
+			kv_push(mem_alnreg_t, regs, tmp.a[j]);
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
+	regs.n = mem_sort_and_dedup(regs.n, regs.a);
 	return regs;
 }
 
@@ -683,10 +679,8 @@ static void *worker1(void *data)
 {
 	worker_t *w = (worker_t*)data;
 	int i;
-	for (i = w->start; i < w->n; i += w->step) {
+	for (i = w->start; i < w->n; i += w->step)
 		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
-		w->regs[i].n = mem_sort_and_dedup(w->regs[i].n, w->regs[i].a);
-	}
 	return 0;
 }
 
