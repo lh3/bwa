@@ -470,10 +470,10 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			if (t->qbeg >= a->qb && t->qbeg + t->len <= a->qe && t->rbeg >= a->rb && t->rbeg + t->len <= a->re) // seed fully contained
 				a->seedcov += t->len; // this is not very accurate, but for approx. mapQ, this is good enough
 		}
-		// jump to the next seed that: 1) has no overlap with the previous seed, or 2) is not fully contained in the alignment
+		// jump to the next seed that: 1) has no >7bp overlap with the previous seed, or 2) is not fully contained in the alignment
 		for (i = k + 1; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
-			if ((t-1)->rbeg + (t-1)->len >= t->rbeg || (t-1)->qbeg + (t-1)->len >= t->qbeg) break;
+			if ((t-1)->rbeg + (t-1)->len >= t->rbeg + 7 || (t-1)->qbeg + (t-1)->len >= t->qbeg + 7) break;
 			if (t->rbeg + t->len > a->re || t->qbeg + t->len > a->qe) break;
 		}
 		k = i;
@@ -659,7 +659,7 @@ static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bn
 			kv_push(mem_alnreg_t, regs, tmp.a[j]);
 		free(chn.a[i].seeds);
 	}
-	free(chn.a);
+	free(chn.a); free(tmp.a);
 	regs.n = mem_sort_and_dedup(regs.n, regs.a);
 	return regs;
 }
