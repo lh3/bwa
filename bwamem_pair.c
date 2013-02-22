@@ -248,7 +248,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
 	if ((o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z)) > 0) {
-		int is_multi[2], q_se[2], q_pe, is_tandem[2], extra_flag = 1, un;
+		int is_multi[2], q_se[2], q_pe, extra_flag = 1;
 		bwahit_t h[2];
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
@@ -258,31 +258,26 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		}
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
-		for (i = 0; i < 2; ++i) {
+		for (i = 0; i < 2; ++i)
 			q_se[i] = mem_approx_mapq_se(opt, &a[i].a[0]);
-			is_tandem[i] = (a[i].a[0].csub > a[i].a[0].sub);
-		}
-		un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
-		if (un < 0) un = 0;
-		subo = subo > un? subo : un;
 		q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		if (q_pe > 60) q_pe = 60;
 		// the following assumes no split hits
 		if (z[0] == 0 && z[1] == 0) { // the best hit 
-			q_pe = q_pe < q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
-			if (q_pe > 60) q_pe = 60;
-			q_se[0] = is_tandem[0]? q_se[0] : q_pe;
-			q_se[1] = is_tandem[1]? q_se[1] : q_pe;
+			q_se[0] = q_se[0] > q_pe? q_se[0] : q_pe;
+			q_se[1] = q_se[1] > q_pe? q_se[1] : q_pe;
 			extra_flag |= 2;
 		} else {
-			if (o > un) { // then move the pair
+			if (o > a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired) { // then move the pair
 				int tmp[2];
+				q_pe = q_pe > 7? q_pe - 7 : 0;
 				tmp[0] = q_se[0]; tmp[1] = q_se[1];
 				q_se[0] = z[0] == 0? q_se[0] : tmp[1] < q_pe? tmp[1] : q_pe;
 				q_se[1] = z[1] == 0? q_se[1] : tmp[0] < q_pe? tmp[0] : q_pe;
 				for (i = 0; i < 2; ++i)
 					if (a[i].a[z[i]].secondary >= 0)
 						a[i].a[z[i]].sub = a[i].a[a[i].a[z[i]].secondary].score, a[i].a[z[i]].secondary = -2;
+				extra_flag |= 2;
 			} else { // the unpaired alignment is much better
 				z[0] = z[1] = 0;
 			}
