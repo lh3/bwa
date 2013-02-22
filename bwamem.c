@@ -66,7 +66,7 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->pe_dir = 0<<1|1;
-	o->pen_unpaired = 50;
+	o->pen_unpaired = 9;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }

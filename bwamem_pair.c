@@ -161,12 +161,6 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 	return n;
 }
 
-static inline double aln_q(const mem_opt_t *opt, const mem_alnreg_t *a)
-{
-	int l = a->qe - a->qb < a->re - a->rb? a->qe - a->qb : a->re - a->rb;
-	return (int)(6.02 * (l - (double)a->score / opt->a) + .499);
-}
-
 int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int z[2])
 {
 	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
@@ -179,13 +173,14 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 			pair64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
 			key.x = e->rb < l_pac? e->rb : (l_pac<<1) - 1 - e->rb; // forward position
-			key.y = (uint64_t)aln_q(opt, e) << 32 | i << 2 | (e->rb >= l_pac)<<1 | r;
+			key.y = (uint64_t)e->score << 32 | i << 2 | (e->rb >= l_pac)<<1 | r;
 			kv_push(pair64_t, v, key);
 		}
 	}
 	ks_introsort_128(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
-	o.x = subo.x = o.x = subo.x = 0x7fffffffULL<<32; o.y = subo.y = 0;
+	o.x = subo.x = o.y = subo.y = 0;
+	//for (i = 0; i < v.n; ++i) printf("[%d]\t%d\t%c%ld\n", i, (int)(v.a[i].y&1)+1, "+-"[v.a[i].y>>1&1], (long)v.a[i].x);
 	for (i = 0; i < v.n; ++i) {
 		for (r = 0; r < 2; ++r) { // loop through direction
 			int dir = r<<1 | (v.a[i].y>>1&1), which;
@@ -199,14 +194,17 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 				uint64_t x, pair;
 				if ((v.a[k].y&3) != which) continue;
 				dist = (int64_t)v.a[i].x - v.a[k].x;
+				//printf("%d: %lld\n", k, dist);
 				if (dist > pes[dir].high) break;
 				if (dist < pes[dir].low)  continue;
 				ns = (dist - pes[dir].avg) / pes[dir].std;
-				q = (int)((v.a[i].y>>32) + (v.a[k].y>>32) - 4.343 * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
+				q = (int)((v.a[i].y>>32) + (v.a[k].y>>32) + .721 * log(2. * erfc(fabs(ns) * M_SQRT1_2)) + .499); // .721 = 1/log(4)
+				if (q < 0) q = 0;
 				pair = (uint64_t)k<<32 | i;
 				x = (uint64_t)q<<32 | (hash_64(pair ^ id<<8) & 0xffffffffU);
-				if (x < o.x) subo = o, o.x = x, o.y = pair;
-				else if (x < subo.x) subo.x = x, subo.y = pair;
+				//printf("[%lld,%lld]\t%d\tdist=%ld\n", v.a[k].x, v.a[i].x, q, (long)dist);
+				if (x > o.x) subo = o, o.x = x, o.y = pair;
+				else if (x > subo.x) subo.x = x, subo.y = pair;
 			}
 		}
 		y[v.a[i].y&3] = i;
@@ -264,9 +262,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[i] = mem_approx_mapq_se(opt, &a[i].a[0]);
 			is_tandem[i] = (a[i].a[0].csub > a[i].a[0].sub);
 		}
-		un = aln_q(opt, &a[0].a[0]) + aln_q(opt, &a[1].a[0]) + opt->pen_unpaired;
-		subo = subo < un? subo : un;
-		q_pe = subo - o;
+		un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
+		if (un < 0) un = 0;
+		subo = subo > un? subo : un;
+		q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		if (q_pe > 60) q_pe = 60;
 		// the following assumes no split hits
 		if (z[0] == 0 && z[1] == 0) { // the best hit 
@@ -276,14 +275,14 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[1] = is_tandem[1]? q_se[1] : q_pe;
 			extra_flag |= 2;
 		} else {
-			if (o < un) { // then move the pair
+			if (o > un) { // then move the pair
 				int tmp[2];
 				tmp[0] = q_se[0]; tmp[1] = q_se[1];
 				q_se[0] = z[0] == 0? q_se[0] : tmp[1] < q_pe? tmp[1] : q_pe;
 				q_se[1] = z[1] == 0? q_se[1] : tmp[0] < q_pe? tmp[0] : q_pe;
-				if (q_se[0] == 0) q_se[0] = q_se[1];
-				if (q_se[1] == 0) q_se[1] = q_se[0];
-				a[0].a[z[0]].secondary = a[1].a[z[1]].secondary = -2;
+				for (i = 0; i < 2; ++i)
+					if (a[i].a[z[i]].secondary >= 0)
+						a[i].a[z[i]].sub = a[i].a[a[i].a[z[i]].secondary].score, a[i].a[z[i]].secondary = -2;
 			} else { // the unpaired alignment is much better
 				z[0] = z[1] = 0;
 			}
