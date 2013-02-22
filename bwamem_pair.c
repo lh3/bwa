@@ -275,7 +275,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[1] = is_tandem[1]? q_se[1] : q_pe;
 			extra_flag |= 2;
 		} else {
-			if (o > un) { // then move the pair
+			if (o < un) { // then move the pair
 				int tmp[2];
 				tmp[0] = q_se[0]; tmp[1] = q_se[1];
 				q_se[0] = z[0] == 0? q_se[0] : tmp[1] < q_pe? tmp[1] : q_pe;
