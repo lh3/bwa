@@ -6,7 +6,6 @@ extern "C" {
 #endif
 
 	int bwa_fa2pac(int argc, char *argv[]);
-	int bwa_pac2cspac(int argc, char *argv[]);
 	int bwa_pac2bwt(int argc, char *argv[]);
 	int bwa_bwtupdate(int argc, char *argv[]);
 	int bwa_bwt2sa(int argc, char *argv[]);

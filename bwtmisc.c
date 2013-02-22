@@ -157,57 +157,6 @@ int bwa_bwtupdate(int argc, char *argv[])
 	return 0;
 }
 
-const int nst_color_space_table[] = { 4, 0, 0, 1, 0, 2, 3, 4, 0, 3, 2, 4, 1, 4, 4, 4};
-
-/* this function is not memory efficient, but this will make life easier
-   Ideally we should also change .amb files as one 'N' in the nucleotide
-   sequence leads to two ambiguous colors. I may do this later... */
-uint8_t *bwa_pac2cspac_core(const bntseq_t *bns)
-{
-	uint8_t *pac, *cspac;
-	bwtint_t i;
-	int c1, c2;
-	pac = (uint8_t*)calloc(bns->l_pac/4 + 1, 1);
-	cspac = (uint8_t*)calloc(bns->l_pac/4 + 1, 1);
-	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
-	rewind(bns->fp_pac);
-	c1 = pac[0]>>6; cspac[0] = c1<<6;
-	for (i = 1; i < bns->l_pac; ++i) {
-		c2 = pac[i>>2] >> (~i&3)*2 & 3;
-		cspac[i>>2] |= nst_color_space_table[(1<<c1)|(1<<c2)] << (~i&3)*2;
-		c1 = c2;
-	}
-	free(pac);
-	return cspac;
-}
-
-int bwa_pac2cspac(int argc, char *argv[])
-{
-	bntseq_t *bns;
-	uint8_t *cspac, ct;
-	char *str;
-	FILE *fp;
-
-	if (argc < 3) {
-		fprintf(stderr, "Usage: bwa pac2cspac <in.nt.prefix> <out.cs.prefix>\n");
-		return 1;
-	}
-	bns = bns_restore(argv[1]);
-	cspac = bwa_pac2cspac_core(bns);
-	bns_dump(bns, argv[2]);
-	// now write cspac
-	str = (char*)calloc(strlen(argv[2]) + 5, 1);
-	strcat(strcpy(str, argv[2]), ".pac");
-	fp = xopen(str, "wb");
-	fwrite(cspac, 1, bns->l_pac/4 + 1, fp);
-	ct = bns->l_pac % 4;
-	fwrite(&ct, 1, 1, fp);	
-	fclose(fp);
-	bns_destroy(bns);
-	free(cspac);
-	return 0;
-}
-
 int bwa_bwt2sa(int argc, char *argv[])
 {
 	bwt_t *bwt;

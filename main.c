@@ -27,7 +27,6 @@ static int usage()
 	fprintf(stderr, "         pac2bwtgen    alternative algorithm for generating BWT\n");
 	fprintf(stderr, "         bwtupdate     update .bwt to the new format\n");
 	fprintf(stderr, "         bwt2sa        generate SA from BWT and Occ\n");
-	fprintf(stderr, "         pac2cspac     convert PAC to color-space PAC\n");
 	fprintf(stderr, "\n");
 	return 1;
 }
@@ -52,7 +51,6 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "aln") == 0) ret = bwa_aln(argc-1, argv+1);
 	else if (strcmp(argv[1], "samse") == 0) ret = bwa_sai2sam_se(argc-1, argv+1);
 	else if (strcmp(argv[1], "sampe") == 0) ret = bwa_sai2sam_pe(argc-1, argv+1);
-	else if (strcmp(argv[1], "pac2cspac") == 0) ret = bwa_pac2cspac(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwtsw2") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "dbwtsw") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwasw") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
