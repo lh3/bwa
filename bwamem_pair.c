@@ -268,9 +268,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[1] = q_se[1] > q_pe? q_se[1] : q_pe;
 			extra_flag |= 2;
 		} else {
-			if (o > a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired) { // then move the pair
-				int tmp[2];
-				q_pe = q_pe > 7? q_pe - 7 : 0;
+			int un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
+			if (o > un) { // then move the pair
+				int tmp[2], q_un = (o - un) * 6;
+				q_pe = q_pe < q_un? q_pe : q_un;
 				tmp[0] = q_se[0]; tmp[1] = q_se[1];
 				q_se[0] = z[0] == 0? q_se[0] : tmp[1] < q_pe? tmp[1] : q_pe;
 				q_se[1] = z[1] == 0? q_se[1] : tmp[0] < q_pe? tmp[0] : q_pe;
