@@ -269,7 +269,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		if (q_pe > 60) q_pe = 60;
 		// the following assumes no split hits
 		if (z[0] == 0 && z[1] == 0) { // the best hit 
-			q_pe = q_pe > q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
+			q_pe = q_pe < q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
 			if (q_pe > 60) q_pe = 60;
 			q_se[0] = is_tandem[0]? q_se[0] : q_pe;
 			q_se[1] = is_tandem[1]? q_se[1] : q_pe;
