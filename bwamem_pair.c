@@ -229,20 +229,19 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 
 	int n = 0, i, j, z[2], o, subo;
 	kstring_t str;
-	mem_alnreg_t b[2][2];
+	mem_alnreg_v b[2];
 
 	str.l = str.m = 0; str.s = 0;
 	// perform SW for the best alignment
+	kv_init(b[0]); kv_init(b[1]);
 	for (i = 0; i < 2; ++i)
-		for (j = 0; j < 2; ++j) b[i][j].score = -1;
-	for (i = 0; i < 2; ++i) {
-		for (j = 0; j < a[i].n && j < 2; ++j) b[i][j] = a[i].a[j];
-		if (b[i][0].score > 0 && b[i][1].score > 0 && b[i][1].score < b[i][0].score * 0.8)
-			b[i][1].score = -1;
-	}
+		for (j = 0; j < a[i].n; ++j)
+			if (a[i].a[j].score >= a[i].a[0].score  - opt->pen_unpaired)
+				kv_push(mem_alnreg_t, b[i], a[i].a[j]);
 	for (i = 0; i < 2; ++i)
-		for (j = 0; j < 2; ++j)
-			if (b[i][j].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i][j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
+		for (j = 0; j < b[i].n; ++j)
+			n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
+	free(b[0].a); free(b[1].a);
 	mem_mark_primary_se(opt, a[0].n, a[0].a);
 	mem_mark_primary_se(opt, a[1].n, a[1].a);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
