@@ -14,7 +14,6 @@
 #define OUTLIER_BOUND 2.0
 #define MAPPING_BOUND 3.0
 #define MAX_STDDEV    4.0
-#define EXT_STDDEV    4.0
 
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard);
 
@@ -247,7 +246,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
 	if ((o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z)) > 0) {
-		int is_multi[2], q_se[2], q_pe, extra_flag = 1;
+		int is_multi[2], q_pe, extra_flag = 1, score_un, q_se[2];
 		bwahit_t h[2];
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
@@ -257,30 +256,30 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		}
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
-		for (i = 0; i < 2; ++i)
-			q_se[i] = mem_approx_mapq_se(opt, &a[i].a[0]);
-		q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
+		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
+		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
+		subo = subo > score_un? subo : score_un;
+		q_pe = (o - subo) * 6;
 		if (q_pe > 60) q_pe = 60;
 		// the following assumes no split hits
-		if (z[0] == 0 && z[1] == 0) { // the best hit 
-			q_se[0] = q_se[0] > q_pe? q_se[0] : q_pe;
-			q_se[1] = q_se[1] > q_pe? q_se[1] : q_pe;
-			extra_flag |= 2;
-		} else {
-			int un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
-			if (o > un) { // then move the pair
-				int tmp[2], q_un = (o - un) * 6;
-				q_pe = q_pe < q_un? q_pe : q_un;
-				tmp[0] = q_se[0]; tmp[1] = q_se[1];
-				q_se[0] = z[0] == 0? q_se[0] : tmp[1] < q_pe? tmp[1] : q_pe;
-				q_se[1] = z[1] == 0? q_se[1] : tmp[0] < q_pe? tmp[0] : q_pe;
-				for (i = 0; i < 2; ++i)
-					if (a[i].a[z[i]].secondary >= 0)
-						a[i].a[z[i]].sub = a[i].a[a[i].a[z[i]].secondary].score, a[i].a[z[i]].secondary = -2;
-				extra_flag |= 2;
-			} else { // the unpaired alignment is much better
-				z[0] = z[1] = 0;
+		if (o > score_un) { // paired alignment is preferred
+			mem_alnreg_t *c[2];
+			c[0] = &a[0].a[z[0]]; c[1] = &a[1].a[z[1]];
+			for (i = 0; i < 2; ++i) {
+				if (c[i]->secondary >= 0)
+					c[i]->sub = a[i].a[c[i]->secondary].score, c[i]->secondary = -2;
+				q_se[i] = mem_approx_mapq_se(opt, c[i]);
 			}
+			q_se[0] = q_se[0] > q_pe? q_se[0] : q_pe < q_se[0] + 40? q_pe : q_se[0] + 40;
+			q_se[1] = q_se[1] > q_pe? q_se[1] : q_pe < q_se[1] + 40? q_pe : q_se[1] + 40;
+			extra_flag |= 2;
+			// cap at the tandem repeat score
+			q_se[0] = q_se[0] < (c[0]->score - c[0]->csub) * 6? q_se[0] : (c[0]->score - c[0]->csub) * 6;
+			q_se[1] = q_se[1] < (c[1]->score - c[1]->csub) * 6? q_se[1] : (c[1]->score - c[1]->csub) * 6;
+		} else { // the unpaired alignment is preferred
+			z[0] = z[1] = 0;
+			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
+			q_se[1] = mem_approx_mapq_se(opt, &a[1].a[0]);
 		}
 		mem_alnreg2hit(&a[0].a[z[0]], &h[0]); h[0].qual = q_se[0]; h[0].flag |= 0x40 | extra_flag;
 		mem_alnreg2hit(&a[1].a[z[1]], &h[1]); h[1].qual = q_se[1]; h[1].flag |= 0x80 | extra_flag;

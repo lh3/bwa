@@ -604,6 +604,7 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	int mapq, l, sub = a->sub? a->sub : opt->min_seed_len * opt->a;
 	double identity;
 	sub = a->csub > sub? a->csub : sub;
+	if (sub >= a->score) return 0;
 	l = a->qe - a->qb > a->re - a->rb? a->qe - a->qb : a->re - a->rb;
 	mapq = a->score? (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
