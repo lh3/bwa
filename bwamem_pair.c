@@ -185,7 +185,7 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 	}
 	ks_introsort_128(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
-	o.x = subo.x = (uint64_t)-1; o.y = subo.y = 0;
+	o.x = subo.x = o.x = subo.x = 0x7fffffffULL<<32; o.y = subo.y = 0;
 	for (i = 0; i < v.n; ++i) {
 		for (r = 0; r < 2; ++r) { // loop through direction
 			int dir = r<<1 | (v.a[i].y>>1&1), which;
@@ -267,6 +267,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		un = aln_q(opt, &a[0].a[0]) + aln_q(opt, &a[1].a[0]) + opt->pen_unpaired;
 		subo = subo < un? subo : un;
 		q_pe = subo - o;
+		if (q_pe > 60) q_pe = 60;
 		// the following assumes no split hits
 		if (z[0] == 0 && z[1] == 0) { // the best hit 
 			q_pe = q_pe > q_se[0] + q_se[1]? q_pe : q_se[0] + q_se[1];
@@ -282,6 +283,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				q_se[1] = z[1] == 0? q_se[1] : tmp[0] < q_pe? tmp[0] : q_pe;
 				if (q_se[0] == 0) q_se[0] = q_se[1];
 				if (q_se[1] == 0) q_se[1] = q_se[0];
+				a[0].a[z[0]].secondary = a[1].a[z[1]].secondary = -2;
 			} else { // the unpaired alignment is much better
 				z[0] = z[1] = 0;
 			}
