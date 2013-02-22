@@ -58,7 +58,6 @@ typedef struct {
 	int qb, qe, flag, qual;
 	// optional info
 	int score, sub;
-	int64_t mb, me; // mb: mate start; -1 if single-end; -2 if mate unmapped
 } bwahit_t;
 
 typedef struct { size_t n, m; mem_chain_t *a;  } mem_chain_v;

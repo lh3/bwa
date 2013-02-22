@@ -15,8 +15,6 @@
 #define MAPPING_BOUND 3.0
 #define MAX_STDDEV    4.0
 
-void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard);
-
 static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 {
 	int j;
@@ -221,14 +219,15 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2])
 {
 	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a);
-	extern void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag);
+	extern void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const bwahit_t *m);
 	extern int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a);
 	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
-	extern void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard);
+	extern void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p, int is_hard, const bwahit_t *m);
 
 	int n = 0, i, j, z[2], o, subo;
 	kstring_t str;
 	mem_alnreg_v b[2];
+	bwahit_t h[2];
 
 	str.l = str.m = 0; str.s = 0;
 	// perform SW for the best alignment
@@ -245,9 +244,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	mem_mark_primary_se(opt, a[1].n, a[1].a);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
-	if ((o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z)) > 0) {
+	if (a[0].n && a[1].n && (o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z)) > 0) {
 		int is_multi[2], q_pe, extra_flag = 1, score_un, q_se[2];
-		bwahit_t h[2];
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
 			for (j = 1; j < a[i].n; ++j)
@@ -283,13 +281,17 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		}
 		mem_alnreg2hit(&a[0].a[z[0]], &h[0]); h[0].qual = q_se[0]; h[0].flag |= 0x40 | extra_flag;
 		mem_alnreg2hit(&a[1].a[z[1]], &h[1]); h[1].qual = q_se[1]; h[1].flag |= 0x80 | extra_flag;
-		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->flag&MEM_F_HARDCLIP); s[0].sam = strdup(str.s); str.l = 0;
-		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->flag&MEM_F_HARDCLIP); s[1].sam = str.s;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->flag&MEM_F_HARDCLIP, &h[1]); s[0].sam = strdup(str.s); str.l = 0;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->flag&MEM_F_HARDCLIP, &h[0]); s[1].sam = str.s;
 	} else goto no_pairing;
 	return n;
 
 no_pairing:
-	mem_sam_se(opt, bns, pac, &s[0], &a[0], 0x41);
-	mem_sam_se(opt, bns, pac, &s[1], &a[1], 0x81);
+	for (i = 0; i < 2; ++i) {
+		if (a[i].n) mem_alnreg2hit(&a[i].a[0], &h[i]);
+		else h[i].rb = h[i].re = -1;
+	}
+	mem_sam_se(opt, bns, pac, &s[0], &a[0], 0x41, &h[1]);
+	mem_sam_se(opt, bns, pac, &s[1], &a[1], 0x81, &h[0]);
 	return n;
 }

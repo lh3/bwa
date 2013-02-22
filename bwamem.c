@@ -519,21 +519,37 @@ ret_gen_cigar:
 	return cigar;
 }
 
-void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, bwahit_t *p, int is_hard)
+
+void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p_, int is_hard, const bwahit_t *m)
 {
-	int score, n_cigar, is_rev = 0, nn, rid, mid, is_unmapped = 0;
+#define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)
+	int score, n_cigar, is_rev = 0, nn, rid, mid, copy_mate = 0;
 	uint32_t *cigar = 0;
 	int64_t pos;
+	bwahit_t ptmp, *p = &ptmp;
 
-	kputs(s->name, str);
-	if (p && p->rb >= 0 && p->re < bns->l_pac<<1) {
-		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
+	if (!p_) { // in this case, generate an unmapped alignment
+		memset(&ptmp, 0, sizeof(bwahit_t));
+		ptmp.rb = ptmp.re = -1;
+	} else ptmp = *p_;
+	p->flag |= m? 1 : 0; // is paired in sequencing
+	p->flag |= !is_mapped(p)? 4 : 0; // is mapped
+	p->flag |= m && !is_mapped(m)? 8 : 0; // is mate mapped
+	if (m && !is_mapped(p) && is_mapped(m)) {
+		p->rb = m->rb; p->re = m->re; p->qb = 0; p->qe = s->l_seq;
+		copy_mate = 1;
+	}
+	p->flag |= p->rb >= bns->l_pac? 0x10 : 0; // is reverse strand
+	p->flag |= m && m->rb >= bns->l_pac? 0x20 : 0; // is mate on reverse strand
+	kputs(s->name, str); kputc('\t', str);
+	if (is_mapped(p)) { // has a coordinate, no matter whether it is mapped or copied from the mate
+		if (!copy_mate) {
+			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
+			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
+		} else n_cigar = 0, cigar = 0;
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
 		nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
-		p->flag |= is_rev? 16 : 0; // reverse
-		p->flag |= p->mb >= 0? 1 : 0; // paired in sequencing
-		p->flag |= n_cigar == 0? 8 : 0; // FIXME: check why this may happen (this has already happened)
-		kputc('\t', str); kputw(p->flag, str); kputc('\t', str);
+		kputw(p->flag, str); kputc('\t', str);
 		kputs(bns->anns[rid].name, str); kputc('\t', str); kputuw(pos - bns->anns[rid].offset + 1, str); kputc('\t', str);
 		kputw(p->qual, str); kputc('\t', str);
 		if (n_cigar) {
@@ -546,29 +562,29 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 			}
 			if (clip3) { kputw(clip3, str); kputc("SH"[(is_hard!=0)], str); }
 		} else kputc('*', str);
-		if (p->mb >= 0 && p->mb < bns->l_pac<<1) { // then print mate pos and isize
-			pos = bns_depos(bns, p->mb < bns->l_pac? p->mb : p->me - 1, &is_rev);
-			nn = bns_cnt_ambi(bns, pos, p->me - p->mb, &mid);
-			kputc('\t', str);
-			if (mid == rid) kputc('=', str);
-			else kputs(bns->anns[mid].name, str);
-			kputc('\t', str); kputuw(pos - bns->anns[mid].offset + 1, str);
-			kputc('\t', str);
-			if (mid != rid) {
-				int64_t p0 = p->rb < bns->l_pac? p->rb : (bns->l_pac<<1) - 1 - p->rb;
-				int64_t p1 = p->mb < bns->l_pac? p->mb : (bns->l_pac<<1) - 1 - p->mb;
-				kputw(abs(p0 - p1), str);
-			}
-			kputc('\t', str);
-		} else kputsn("\t*\t0\t0\t", 7, str);
-	} else { // unaligned
-		is_unmapped = 1;
-		kputw(p? p->flag : 0, str);
-		kputs("\t*\t0\t0\t*\t*\t0\t0\t", str);
+	} else { // no coordinate
+		kputw(p->flag, str);
+		kputs("\t*\t0\t0\t*", str);
+		rid = -1;
 	}
-	if (!is_rev) { // print SEQ and QUAL, the forward strand
+	if (m && is_mapped(m)) { // then print mate pos and isize
+		pos = bns_depos(bns, m->rb < bns->l_pac? m->rb : m->re - 1, &is_rev);
+		nn = bns_cnt_ambi(bns, pos, m->re - m->rb, &mid);
+		kputc('\t', str);
+		if (mid == rid) kputc('=', str);
+		else kputs(bns->anns[mid].name, str);
+		kputc('\t', str); kputuw(pos - bns->anns[mid].offset + 1, str);
+		kputc('\t', str);
+		if (mid == rid) {
+			int64_t p0 = p->rb < bns->l_pac? p->rb : (bns->l_pac<<1) - 1 - p->rb;
+			int64_t p1 = m->rb < bns->l_pac? m->rb : (bns->l_pac<<1) - 1 - m->rb;
+			kputw(p0 - p1, str);
+		} else kputw(0, str);
+		kputc('\t', str);
+	} else kputsn("\t*\t0\t0\t", 7, str);
+	if (!(p->flag&0x10)) { // print SEQ and QUAL, the forward strand
 		int i, qb = 0, qe = s->l_seq;
-		if (!is_unmapped && is_hard) qb = p->qb, qe = p->qe;
+		if (!(p->flag&4) && is_hard) qb = p->qb, qe = p->qe;
 		ks_resize(str, str->l + (qe - qb) + 1);
 		for (i = qb; i < qe; ++i) str->s[str->l++] = "ACGTN"[(int)s->seq[i]];
 		kputc('\t', str);
@@ -579,7 +595,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		} else kputc('*', str);
 	} else { // the reverse strand
 		int i, qb = 0, qe = s->l_seq;
-		if (!is_unmapped && is_hard) qb = p->qb, qe = p->qe;
+		if (!(p->flag&4) && is_hard) qb = p->qb, qe = p->qe;
 		ks_resize(str, str->l + (qe - qb) + 1);
 		for (i = qe-1; i >= qb; --i) str->s[str->l++] = "TGCAN"[(int)s->seq[i]];
 		kputc('\t', str);
@@ -589,10 +605,11 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 			str->s[str->l] = 0;
 		} else kputc('*', str);
 	}
-	if (!is_unmapped && p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
-	if (!is_unmapped && p->sub >= 0) { kputsn("\tss:i:", 6, str); kputw(p->sub, str); }
+	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
+	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	kputc('\n', str);
 	free(cigar);
+#undef is_mapped
 }
 
 /************************
@@ -622,10 +639,9 @@ void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h)
 	h->sub = a->sub > a->csub? a->sub : a->csub;
 	h->qual = 0; // quality unset
 	h->flag = a->secondary >= 0? 0x100 : 0; // only the "secondary" bit is set
-	h->mb = h->me = -2; // mate positions are unset
 }
 
-void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag)
+void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const bwahit_t *m)
 {
 	int k;
 	kstring_t str;
@@ -637,9 +653,9 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			mem_alnreg2hit(&a->a[k], &h);
 			h.flag |= extra_flag;
 			h.qual = mem_approx_mapq_se(opt, &a->a[k]);
-			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP);
+			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
 		}
-	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP);
+	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP, m);
 	s->sam = str.s;
 }
 
@@ -693,7 +709,7 @@ static void *worker2(void *data)
 	if (!(w->opt->flag&MEM_F_PE)) {
 		for (i = 0; i < w->n; i += w->step) {
 			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
-			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0);
+			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 			free(w->regs[i].a);
 		}
 	} else {
