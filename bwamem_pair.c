@@ -201,7 +201,7 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 				if (dist > pes[dir].high) break;
 				if (dist < pes[dir].low)  continue;
 				ns = (dist - pes[dir].avg) / pes[dir].std;
-				q = (int)((v.a[i].y>>32) + (v.a[i].y>>32) - 4.343 * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
+				q = (int)((v.a[i].y>>32) + (v.a[k].y>>32) - 4.343 * log(erfc(fabs(ns) * M_SQRT1_2)) + .499);
 				pair = (uint64_t)k<<32 | i;
 				x = (uint64_t)q<<32 | (hash_64(pair ^ id<<8) & 0xffffffffU);
 				if (x < o.x) subo = o, o.x = x, o.y = pair;
