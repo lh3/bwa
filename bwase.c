@@ -489,17 +489,6 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 	}
 }
 
-bntseq_t *bwa_open_nt(const char *prefix)
-{
-	bntseq_t *ntbns;
-	char *str;
-	str = (char*)calloc(strlen(prefix) + 10, 1);
-	strcat(strcpy(str, prefix), ".nt");
-	ntbns = bns_restore(str);
-	free(str);
-	return ntbns;
-}
-
 void bwa_print_sam_SQ(const bntseq_t *bns)
 {
 	int i;

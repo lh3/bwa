@@ -17,7 +17,7 @@ int main_mem(int argc, char *argv[])
 	mem_opt_t *opt;
 	bwt_t *bwt;
 	bntseq_t *bns;
-	int c, n;
+	int c, n, l;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	uint8_t *pac = 0;
@@ -57,6 +57,8 @@ int main_mem(int argc, char *argv[])
 		pac = calloc(bns->l_pac/4+1, 1);
 		fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 	}
+	for (l = 0; l < bns->n_seqs; ++l)
+		printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[l].name, bns->anns[l].len);
 
 	fp = strcmp(argv[optind + 1], "-")? gzopen(argv[optind + 1], "r") : gzdopen(fileno(stdin), "r");
 	ks = kseq_init(fp);

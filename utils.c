@@ -40,6 +40,10 @@
 KSORT_INIT(128, pair64_t, pair64_lt)
 KSORT_INIT(64,  uint64_t, ks_lt_generic)
 
+/********************
+ * System utilities *
+ ********************/
+
 FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
 {
 	FILE *fp = 0;
