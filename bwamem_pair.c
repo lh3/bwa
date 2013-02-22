@@ -142,6 +142,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 				b.score = aln.score;
 				b.csub = aln.score2;
 				b.secondary = -1;
+				b.seedcov = (b.re - b.rb < b.qe - b.qb? b.re - b.rb : b.qe - b.qb) >> 1;
 //				printf("*** %d, [%lld,%lld], %d:%d, (%lld,%lld), (%lld,%lld) == (%lld,%lld)\n", aln.score, rb, re, is_rev, is_larger, a->rb, a->re, ma->a[0].rb, ma->a[0].re, b.rb, b.re);
 				kv_push(mem_alnreg_t, *ma, b); // make room for a new element
 				// move b s.t. ma is sorted
@@ -183,7 +184,7 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 	}
 	ks_introsort_128(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
-	o.x = o.y = subo.x = subo.y = 0;
+	o.x = subo.x = (uint64_t)-1; o.y = subo.y = 0;
 	for (i = 0; i < v.n; ++i) {
 		for (r = 0; r < 2; ++r) { // loop through direction
 			int dir = r<<1 | (v.a[i].y>>1&1), which;
@@ -245,9 +246,9 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			if (b[i][j].score > 0) n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i][j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
 	mem_mark_primary_se(opt, a[0].n, a[0].a);
 	mem_mark_primary_se(opt, a[1].n, a[1].a);
+	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
-	o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z);
-	if (o && !(opt->flag&MEM_F_NOPAIRING)) { // with proper pairing
+	if ((o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, z)) > 0) {
 		int is_multi[2], q_se[2], q_pe, is_tandem[2], extra_flag = 1, un;
 		bwahit_t h[2];
 		// check if an end has multiple hits even after mate-SW
