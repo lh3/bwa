@@ -69,7 +69,7 @@ int main_mem(int argc, char *argv[])
 		ks2 = kseq_init(fp2);
 		opt->flag |= MEM_F_PE;
 	}
-	while ((seqs = bseq_read(opt->n_threads * opt->chunk_size, &n, ks, ks2)) != 0) {
+	while ((seqs = bseq_read(opt->chunk_size, &n, ks, ks2)) != 0) {
 		mem_process_seqs(opt, bwt, bns, pac, n, seqs);
 		free(seqs);
 	}
