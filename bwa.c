@@ -212,17 +212,20 @@ char *bwa_set_rg(const char *s)
 {
 	char *p, *q, *r, *rg_line = 0;
 	memset(bwa_rg_id, 0, 256);
-	if (strstr(s, "@RG") != s) return 0;
+	if (strstr(s, "@RG") != s) {
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] the read group line is not started with @RG\n", __func__);
+		goto err_set_rg;
+	}
 	rg_line = strdup(s);
 	bwa_escape(rg_line);
 	if ((p = strstr(rg_line, "\tID:")) == 0) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID in the @RG line\n", __func__);
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID at the read group line\n", __func__);
 		goto err_set_rg;
 	}
 	p += 4;
 	for (q = p; *q && *q != '\t' && *q != '\n'; ++q);
 	if (q - p + 1 > 256) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] RG:ID is longer than 255 characters\n", __func__);
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] @RG:ID is longer than 255 characters\n", __func__);
 		goto err_set_rg;
 	}
 	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n'; ++q)
