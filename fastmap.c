@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "bntseq.h"
-#include "bwt.h"
+#include "bwa.h"
 #include "bwamem.h"
 #include "kvec.h"
 #include "utils.h"
@@ -15,13 +14,11 @@ extern unsigned char nst_nt4_table[256];
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt;
-	bwt_t *bwt;
-	bntseq_t *bns;
 	int c, n, l;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
-	uint8_t *pac = 0;
 	bseq1_t *seqs;
+	bwaidx_t *idx;
 
 	opt = mem_opt_init();
 	while ((c = getopt(argc, argv, "PHk:c:v:s:r:t:")) >= 0) {
@@ -48,19 +45,9 @@ int main_mem(int argc, char *argv[])
 		return 1;
 	}
 	mem_fill_scmat(opt->a, opt->b, opt->mat);
-	{ // load the packed sequences, BWT and SA
-		char *tmp = calloc(strlen(argv[optind]) + 5, 1);
-		strcat(strcpy(tmp, argv[optind]), ".bwt");
-		bwt = bwt_restore_bwt(tmp);
-		strcat(strcpy(tmp, argv[optind]), ".sa");
-		bwt_restore_sa(tmp, bwt);
-		free(tmp);
-		bns = bns_restore(argv[optind]);
-		pac = calloc(bns->l_pac/4+1, 1);
-		fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
-	}
-	for (l = 0; l < bns->n_seqs; ++l)
-		printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[l].name, bns->anns[l].len);
+	idx = bwa_idx_load(argv[optind], BWA_IDX_ALL);
+	for (l = 0; l < idx->bns->n_seqs; ++l)
+		printf("@SQ\tSN:%s\tLN:%d\n", idx->bns->anns[l].name, idx->bns->anns[l].len);
 
 	fp = strcmp(argv[optind + 1], "-")? gzopen(argv[optind + 1], "r") : gzdopen(fileno(stdin), "r");
 	ks = kseq_init(fp);
@@ -70,13 +57,12 @@ int main_mem(int argc, char *argv[])
 		opt->flag |= MEM_F_PE;
 	}
 	while ((seqs = bseq_read(opt->chunk_size, &n, ks, ks2)) != 0) {
-		mem_process_seqs(opt, bwt, bns, pac, n, seqs);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs);
 		free(seqs);
 	}
 
-	free(opt); free(pac);
-	bns_destroy(bns);
-	bwt_destroy(bwt);
+	free(opt);
+	bwa_idx_destroy(idx);
 	kseq_destroy(ks);
 	gzclose(fp);
 	if (ks2) {
@@ -92,10 +78,9 @@ int main_fastmap(int argc, char *argv[])
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
-	bwt_t *bwt;
-	bntseq_t *bns;
 	smem_i *itr;
 	const bwtintv_v *a;
+	bwaidx_t *idx;
 
 	while ((c = getopt(argc, argv, "w:l:ps:")) >= 0) {
 		switch (c) {
@@ -112,16 +97,8 @@ int main_fastmap(int argc, char *argv[])
 
 	fp = gzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
-	{ // load the packed sequences, BWT and SA
-		char *tmp = calloc(strlen(argv[optind]) + 5, 1);
-		strcat(strcpy(tmp, argv[optind]), ".bwt");
-		bwt = bwt_restore_bwt(tmp);
-		strcat(strcpy(tmp, argv[optind]), ".sa");
-		bwt_restore_sa(tmp, bwt);
-		free(tmp);
-		bns = bns_restore(argv[optind]);
-	}
-	itr = smem_itr_init(bwt);
+	idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS);
+	itr = smem_itr_init(idx->bwt);
 	while (kseq_read(seq) >= 0) {
 		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {
@@ -141,10 +118,10 @@ int main_fastmap(int argc, char *argv[])
 						bwtint_t pos;
 						int len, is_rev, ref_id;
 						len  = (uint32_t)p->info - (p->info>>32);
-						pos = bns_depos(bns, bwt_sa(bwt, p->x[0] + k), &is_rev);
+						pos = bns_depos(idx->bns, bwt_sa(idx->bwt, p->x[0] + k), &is_rev);
 						if (is_rev) pos -= len - 1;
-						bns_cnt_ambi(bns, pos, len, &ref_id);
-						printf("\t%s:%c%ld", bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
+						bns_cnt_ambi(idx->bns, pos, len, &ref_id);
+						printf("\t%s:%c%ld", idx->bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - idx->bns->anns[ref_id].offset) + 1);
 					}
 				} else fputs("\t*", stdout);
 				putchar('\n');
@@ -154,8 +131,7 @@ int main_fastmap(int argc, char *argv[])
 	}
 
 	smem_itr_destroy(itr);
-	bns_destroy(bns);
-	bwt_destroy(bwt);
+	bwa_idx_destroy(idx);
 	kseq_destroy(seq);
 	gzclose(fp);
 	return 0;

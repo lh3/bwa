@@ -94,3 +94,40 @@ ret_gen_cigar:
 	return cigar;
 }
 
+/*********************
+ * Full index reader *
+ *********************/
+
+bwaidx_t *bwa_idx_load(const char *prefix, int which)
+{
+	bwaidx_t *idx;
+	idx = calloc(1, sizeof(bwaidx_t));
+	if (which & BWA_IDX_BWT) {
+		char *tmp;
+		tmp = calloc(strlen(prefix) + 5, 1);
+		strcat(strcpy(tmp, prefix), ".bwt"); // FM-index
+		idx->bwt = bwt_restore_bwt(tmp);
+		strcat(strcpy(tmp, prefix), ".sa");  // partial suffix array (SA)
+		bwt_restore_sa(tmp, idx->bwt);
+		free(tmp);
+	}
+	if (which & BWA_IDX_BNS) {
+		idx->bns = bns_restore(prefix);
+		if (which & BWA_IDX_PAC) {
+			idx->pac = calloc(idx->bns->l_pac/4+1, 1);
+			fread(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
+		}
+		fclose(idx->bns->fp_pac);
+		idx->bns->fp_pac = 0;
+	}
+	return idx;
+}
+
+void bwa_idx_destroy(bwaidx_t *idx)
+{
+	if (idx == 0) return;
+	if (idx->bwt) bwt_destroy(idx->bwt);
+	if (idx->bns) bns_destroy(idx->bns);
+	if (idx->pac) free(idx->pac);
+	free(idx);
+}
