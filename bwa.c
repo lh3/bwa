@@ -25,7 +25,7 @@ static inline void trim_readno(kstring_t *s)
 static inline void kseq2bseq1(const kseq_t *ks, bseq1_t *s)
 { // TODO: it would be better to allocate one chunk of memory, but probably it does not matter in practice
 	s->name = strdup(ks->name.s);
-	s->comment = ks->comment.l? strdup(s->comment) : 0;
+	s->comment = ks->comment.l? strdup(ks->comment.s) : 0;
 	s->seq = strdup(ks->seq.s);
 	s->qual = ks->qual.l? strdup(ks->qual.s) : 0;
 	s->l_seq = strlen(s->seq);

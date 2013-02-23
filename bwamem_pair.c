@@ -47,7 +47,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		dir = mem_infer_dir(l_pac, r[0]->a[0].rb, r[1]->a[0].rb, &is);
 		if (is && is <= opt->max_ins) kv_push(uint64_t, isize[dir], is);
 	}
-	if (mem_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
+	if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
 	for (d = 0; d < 4; ++d) { // TODO: this block is nearly identical to the one in bwtsw2_pair.c. It would be better to merge these two.
 		mem_pestat_t *r = &pes[d];
 		uint64_v *q = &isize[d];

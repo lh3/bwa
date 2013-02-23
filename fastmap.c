@@ -14,7 +14,7 @@ extern unsigned char nst_nt4_table[256];
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt;
-	int c, n;
+	int i, c, n, copy_comment = 0;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	bseq1_t *seqs;
@@ -22,14 +22,15 @@ int main_mem(int argc, char *argv[])
 	char *rg_line = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "PHk:c:v:s:r:t:R:")) >= 0) {
+	while ((c = getopt(argc, argv, "CPHk:c:v:s:r:t:R:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
 		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
-		else if (c == 'v') mem_verbose = atoi(optarg);
+		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
+		else if (c == 'C') copy_comment = 1;
 		else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
 		} else if (c == 's') opt->split_width = atoi(optarg);
@@ -43,7 +44,8 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "         -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "         -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 		fprintf(stderr, "         -R STR     read group header line such as '@RG\tID:foo\tSM:bar' [null]\n");
-		fprintf(stderr, "         -v INT     verbose level [%d]\n", mem_verbose);
+		fprintf(stderr, "         -v INT     verbose level [%d]\n", bwa_verbose);
+		fprintf(stderr, "         -C         append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;
@@ -60,6 +62,14 @@ int main_mem(int argc, char *argv[])
 		opt->flag |= MEM_F_PE;
 	}
 	while ((seqs = bseq_read(opt->chunk_size, &n, ks, ks2)) != 0) {
+		int64_t size = 0;
+		if (!copy_comment)
+			for (i = 0; i < n; ++i) {
+				free(seqs[i].comment); seqs[i].comment = 0;
+			}
+		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
+		if (bwa_verbose >= 3)
+			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
 		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs);
 		free(seqs);
 	}

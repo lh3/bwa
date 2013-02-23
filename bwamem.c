@@ -13,8 +13,6 @@
 #include "kvec.h"
 #include "ksort.h"
 
-int mem_verbose = 3; // 1: error only; 2: error+warning; 3: message+error+warning; >=4: debugging
-
 void mem_fill_scmat(int a, int b, int8_t mat[25])
 {
 	int i, j, k;
@@ -462,7 +460,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
 			a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
-		if (mem_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
+		if (bwa_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
@@ -572,6 +570,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id) { kputsn("\tRG:i:", 6, str); kputs(bwa_rg_id, str); }
+	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
 	kputc('\n', str);
 	free(cigar);
 #undef is_mapped
@@ -633,7 +632,7 @@ static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bn
 		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
 	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
-	if (mem_verbose >= 4) mem_print_chain(bns, &chn);
+	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 	kv_init(regs); kv_init(tmp);
 	for (i = 0; i < chn.n; ++i) {
 		mem_chain2aln(opt, bns->l_pac, pac, s->l_seq, (uint8_t*)s->seq, &chn.a[i], &tmp);
