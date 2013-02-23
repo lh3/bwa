@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #ifndef _WIN32
 #include <netdb.h>

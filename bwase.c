@@ -434,7 +434,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			err_printf("%s", p->qual);
 		} else err_printf("*");
 
-		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
+		if (bwa_rg_id[0]) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
 		if (p->type != BWA_TYPE_NO_MATCH) {
@@ -482,7 +482,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			err_printf("%s", p->qual);
 		} else err_printf("*");
-		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
+		if (bwa_rg_id[0]) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
 		putchar('\n');
