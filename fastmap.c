@@ -11,15 +11,19 @@ KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
 
+void *kopen(const char *fn, int *_fd);
+int kclose(void *a);
+
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt;
-	int i, c, n, copy_comment = 0;
+	int fd, fd2, i, c, n, copy_comment = 0;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	bseq1_t *seqs;
 	bwaidx_t *idx;
 	char *rg_line = 0;
+	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
 	while ((c = getopt(argc, argv, "CPHk:c:v:s:r:t:R:")) >= 0) {
@@ -54,10 +58,12 @@ int main_mem(int argc, char *argv[])
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
 	bwa_print_sam_hdr(idx->bns, rg_line);
 
-	fp = strcmp(argv[optind + 1], "-")? gzopen(argv[optind + 1], "r") : gzdopen(fileno(stdin), "r");
+	ko = kopen(argv[optind + 1], &fd);
+	fp = gzdopen(fd, "r");
 	ks = kseq_init(fp);
 	if (optind + 2 < argc) {
-		fp2 = gzopen(argv[optind + 2], "r");
+		ko2 = kopen(argv[optind + 2], &fd2);
+		fp2 = gzdopen(fd2, "r");
 		ks2 = kseq_init(fp2);
 		opt->flag |= MEM_F_PE;
 	}
@@ -77,10 +83,10 @@ int main_mem(int argc, char *argv[])
 	free(opt);
 	bwa_idx_destroy(idx);
 	kseq_destroy(ks);
-	gzclose(fp);
+	gzclose(fp); kclose(ko);
 	if (ks2) {
 		kseq_destroy(ks2);
-		gzclose(fp2);
+		gzclose(fp2); kclose(ko2);
 	}
 	return 0;
 }
