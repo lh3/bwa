@@ -132,7 +132,7 @@ extern "C" {
 #else
 static inline bwtint_t bwt_invPsi(const bwt_t *bwt, bwtint_t k)
 {
-	register int64_t x = k - (k > bwt->primary);
+	bwtint_t x = k - (k > bwt->primary);
 	x = bwt_B0(bwt, x);
 	x = bwt->L2[x] + bwt_occ(bwt, k, x);
 	return k == bwt->primary? 0 : x;
