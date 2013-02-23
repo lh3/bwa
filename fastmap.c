@@ -14,14 +14,15 @@ extern unsigned char nst_nt4_table[256];
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt;
-	int c, n, l;
+	int c, n;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	bseq1_t *seqs;
 	bwaidx_t *idx;
+	char *rg_line = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "PHk:c:v:s:r:t:")) >= 0) {
+	while ((c = getopt(argc, argv, "PHk:c:v:s:r:t:R:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
@@ -29,7 +30,9 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'v') mem_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
-		else if (c == 's') opt->split_width = atoi(optarg);
+		else if (c == 'R') {
+			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
+		} else if (c == 's') opt->split_width = atoi(optarg);
 	}
 	if (optind + 1 >= argc) {
 		fprintf(stderr, "\n");
@@ -39,15 +42,15 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "         -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "         -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "         -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
+		fprintf(stderr, "         -R STR     read group header line such as '@RG\tID:foo\tSM:bar' [null]\n");
 		fprintf(stderr, "         -v INT     verbose level [%d]\n", mem_verbose);
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;
 	}
 	mem_fill_scmat(opt->a, opt->b, opt->mat);
-	idx = bwa_idx_load(argv[optind], BWA_IDX_ALL);
-	for (l = 0; l < idx->bns->n_seqs; ++l)
-		printf("@SQ\tSN:%s\tLN:%d\n", idx->bns->anns[l].name, idx->bns->anns[l].len);
+	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
+	bwa_print_sam_hdr(idx->bns, rg_line);
 
 	fp = strcmp(argv[optind + 1], "-")? gzopen(argv[optind + 1], "r") : gzdopen(fileno(stdin), "r");
 	ks = kseq_init(fp);

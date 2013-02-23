@@ -13,7 +13,6 @@
 #include "bwa.h"
 
 int g_log_n[256];
-char *bwa_rg_line, *bwa_rg_id;
 
 void bwa_print_sam_PG();
 
@@ -490,56 +489,13 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 	}
 }
 
-void bwa_print_sam_SQ(const bntseq_t *bns)
-{
-	int i;
-	for (i = 0; i < bns->n_seqs; ++i)
-		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
-	if (bwa_rg_line) err_printf("%s\n", bwa_rg_line);
-}
-
 void bwase_initialize() 
 {
 	int i;
 	for (i = 1; i != 256; ++i) g_log_n[i] = (int)(4.343 * log(i) + 0.5);
 }
 
-char *bwa_escape(char *s)
-{
-	char *p, *q;
-	for (p = q = s; *p; ++p) {
-		if (*p == '\\') {
-			++p;
-			if (*p == 't') *q++ = '\t';
-			else if (*p == 'n') *q++ = '\n';
-			else if (*p == 'r') *q++ = '\r';
-			else if (*p == '\\') *q++ = '\\';
-		} else *q++ = *p;
-	}
-	*q = '\0';
-	return s;
-}
-
-int bwa_set_rg(const char *s)
-{
-	char *p, *q, *r;
-	if (strstr(s, "@RG") != s) return -1;
-	if (bwa_rg_line) free(bwa_rg_line);
-	if (bwa_rg_id) free(bwa_rg_id);
-	bwa_rg_line = strdup(s);
-	bwa_rg_id = 0;
-	bwa_escape(bwa_rg_line);
-	p = strstr(bwa_rg_line, "\tID:");
-	if (p == 0) return -1;
-	p += 4;
-	for (q = p; *q && *q != '\t' && *q != '\n'; ++q);
-	bwa_rg_id = calloc(q - p + 1, 1);
-	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n'; ++q)
-		*r++ = *q;
-	return 0;
-}
-
-void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ)
+void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ, const char *rg_line)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
 	int i, n_seqs, tot_seqs = 0, m_aln;
@@ -559,7 +515,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 	m_aln = 0;
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa);
-	bwa_print_sam_SQ(bns);
+	bwa_print_sam_hdr(bns, rg_line);
 	//bwa_print_sam_PG();
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
@@ -608,15 +564,12 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 int bwa_sai2sam_se(int argc, char *argv[])
 {
 	int c, n_occ = 3;
-	char *prefix;
+	char *prefix, *rg_line = 0;
 	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
 		switch (c) {
 		case 'h': break;
 		case 'r':
-			if (bwa_set_rg(optarg) < 0) {
-				fprintf(stderr, "[%s] malformated @RG line\n", __func__);
-				return 1;
-			}
+			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
 			break;
 		case 'n': n_occ = atoi(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
@@ -630,10 +583,8 @@ int bwa_sai2sam_se(int argc, char *argv[])
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		free(bwa_rg_line); free(bwa_rg_id);
 		return 0;
 	}
-	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ);
-	free(bwa_rg_line); free(bwa_rg_id);
+	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line);
 	return 0;
 }

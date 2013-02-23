@@ -611,7 +611,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 	return pacseq;
 }
 
-void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt)
+void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt, const char *rg_line)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
 	int i, j, n_seqs, tot_seqs = 0;
@@ -654,7 +654,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	}
 
 	// core loop
-	bwa_print_sam_SQ(bns);
+	bwa_print_sam_hdr(bns, rg_line);
 	bwa_print_sam_PG();
 	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt0.mode, opt0.trim_qual)) != 0) {
 		int cnt_chg;
@@ -715,20 +715,15 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 int bwa_sai2sam_pe(int argc, char *argv[])
 {
-	extern char *bwa_rg_line, *bwa_rg_id;
-	extern int bwa_set_rg(const char *s);
 	int c;
 	pe_opt_t *popt;
-	char *prefix;
+	char *prefix, *rg_line = 0;
 
 	popt = bwa_init_pe_opt();
 	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
 		switch (c) {
 		case 'r':
-			if (bwa_set_rg(optarg) < 0) {
-				fprintf(stderr, "[%s] malformated @RG line\n", __func__);
-				return 1;
-			}
+			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
 			break;
 		case 'a': popt->max_isize = atoi(optarg); break;
 		case 'o': popt->max_occ = atoi(optarg); break;
@@ -764,11 +759,9 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		free(bwa_rg_line); free(bwa_rg_id);
 		return 0;
 	}
-	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt);
-	free(bwa_rg_line); free(bwa_rg_id); free(prefix);
-	free(popt);
+	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt, rg_line);
+	free(prefix); free(popt);
 	return 0;
 }

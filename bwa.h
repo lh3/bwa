@@ -22,6 +22,7 @@ typedef struct {
 } bseq1_t;
 
 extern int bwa_verbose;
+extern char bwa_rg_id[256];
 
 #ifdef __cplusplus
 extern "C" {
@@ -35,6 +36,9 @@ extern "C" {
 	bwt_t *bwa_idx_load_bwt(const char *hint);
 	bwaidx_t *bwa_idx_load(const char *hint, int which);
 	void bwa_idx_destroy(bwaidx_t *idx);
+
+	void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line);
+	char *bwa_set_rg(const char *s);
 
 #ifdef __cplusplus
 }

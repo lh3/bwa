@@ -571,6 +571,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	}
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
+	if (bwa_rg_id) { kputsn("\tRG:i:", 6, str); kputs(bwa_rg_id, str); }
 	kputc('\n', str);
 	free(cigar);
 #undef is_mapped

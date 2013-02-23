@@ -1,10 +1,13 @@
+#include <string.h>
 #include <stdio.h>
 #include <zlib.h>
 #include "bntseq.h"
 #include "bwa.h"
 #include "ksw.h"
+#include "utils.h"
 
 int bwa_verbose = 3;
+char bwa_rg_id[256];
 
 /************************
  * Batch FASTA/Q reader *
@@ -132,8 +135,7 @@ bwt_t *bwa_idx_load_bwt(const char *hint)
 	bwt_t *bwt;
 	prefix = bwa_idx_infer_prefix(hint);
 	if (prefix == 0) {
-		if (bwa_verbose >= 1)
-			fprintf(stderr, "[E::%s] fail to locate the index files\n", __func__);
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to locate the index files\n", __func__);
 		return 0;
 	}
 	tmp = calloc(strlen(prefix) + 5, 1);
@@ -150,7 +152,10 @@ bwaidx_t *bwa_idx_load(const char *hint, int which)
 	bwaidx_t *idx;
 	char *prefix;
 	prefix = bwa_idx_infer_prefix(hint);
-	if (prefix == 0) return 0;
+	if (prefix == 0) {
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to locate the index files\n", __func__);
+		return 0;
+	}
 	idx = calloc(1, sizeof(bwaidx_t));
 	if (which & BWA_IDX_BWT) idx->bwt = bwa_idx_load_bwt(hint);
 	if (which & BWA_IDX_BNS) {
@@ -174,3 +179,58 @@ void bwa_idx_destroy(bwaidx_t *idx)
 	if (idx->pac) free(idx->pac);
 	free(idx);
 }
+
+/***********************
+ * SAM header routines *
+ ***********************/
+
+void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
+{
+	int i;
+	for (i = 0; i < bns->n_seqs; ++i)
+		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
+	if (rg_line) err_printf("%s\n", rg_line);
+}
+
+static char *bwa_escape(char *s)
+{
+	char *p, *q;
+	for (p = q = s; *p; ++p) {
+		if (*p == '\\') {
+			++p;
+			if (*p == 't') *q++ = '\t';
+			else if (*p == 'n') *q++ = '\n';
+			else if (*p == 'r') *q++ = '\r';
+			else if (*p == '\\') *q++ = '\\';
+		} else *q++ = *p;
+	}
+	*q = '\0';
+	return s;
+}
+
+char *bwa_set_rg(const char *s)
+{
+	char *p, *q, *r, *rg_line = 0;
+	memset(bwa_rg_id, 0, 256);
+	if (strstr(s, "@RG") != s) return 0;
+	rg_line = strdup(s);
+	bwa_escape(rg_line);
+	if ((p = strstr(rg_line, "\tID:")) == 0) {
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID in the @RG line\n", __func__);
+		goto err_set_rg;
+	}
+	p += 4;
+	for (q = p; *q && *q != '\t' && *q != '\n'; ++q);
+	if (q - p + 1 > 256) {
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] RG:ID is longer than 255 characters\n", __func__);
+		goto err_set_rg;
+	}
+	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n'; ++q)
+		*r++ = *q;
+	return rg_line;
+
+err_set_rg:
+	free(rg_line);
+	return 0;
+}
+
