@@ -74,13 +74,6 @@ typedef struct { size_t n, m; bwtintv_t *a; } bwtintv_v;
  * called bwt_B0 instead of bwt_B */
 #define bwt_B0(b, k) (bwt_bwt(b, k)>>((~(k)&0xf)<<1)&3)
 
-// inverse Psi function
-#define bwt_invPsi(bwt, k)												\
-	(((k) == (bwt)->primary)? 0 :										\
-	 ((k) < (bwt)->primary)?											\
-	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
-	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
-
 #define bwt_set_intv(bwt, c, ik) ((ik).x[0] = (bwt)->L2[(int)(c)]+1, (ik).x[2] = (bwt)->L2[(int)(c)+1]-(bwt)->L2[(int)(c)], (ik).x[1] = (bwt)->L2[3-(c)]+1, (ik).info = 0)
 
 #ifdef __cplusplus
@@ -126,6 +119,23 @@ extern "C" {
 	// SMEM iterator interface
 
 #ifdef __cplusplus
+}
+#endif
+
+// inverse Psi function
+#if 0
+#define bwt_invPsi(bwt, k)												\
+	(((k) == (bwt)->primary)? 0 :										\
+	 ((k) < (bwt)->primary)?											\
+	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
+	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
+#else
+static inline bwtint_t bwt_invPsi(const bwt_t *bwt, bwtint_t k)
+{
+	register int64_t x = k - (k > bwt->primary);
+	x = bwt_B0(bwt, x);
+	x = bwt->L2[x] + bwt_occ(bwt, k, x);
+	return k == bwt->primary? 0 : x;
 }
 #endif
 
