@@ -186,14 +186,14 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 		bsw2aux_t *q = b->aux + i;
 		uint8_t *query;
 		bwtint_t k;
-		int score, path_len, beg, end;
+		int path_len, beg, end;
 		if (p->l) continue;
 		beg = (p->flag & 0x10)? lq - p->end : p->beg;
 		end = (p->flag & 0x10)? lq - p->beg : p->end;
 		query = seq[(p->flag & 0x10)? 1 : 0] + beg;
 		for (k = p->k; k < p->k + p->len; ++k) // in principle, no out-of-boundary here
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
-		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
+		aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
 		q->cigar = aln_path2cigar32(path, path_len, &q->n_cigar);
 #if 0
 		if (name && score != p->G) { // debugging only

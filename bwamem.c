@@ -418,7 +418,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 { // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
 	int i, k;
-	int64_t rlen, rmax[2], tmp, max = 0, max_i = 0;
+	int64_t rlen, rmax[2], tmp, max = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
 
@@ -432,7 +432,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		e = t->rbeg + t->len + ((l_query - t->qbeg - t->len) + cal_max_gap(opt, l_query - t->qbeg - t->len));
 		rmax[0] = rmax[0] < b? rmax[0] : b;
 		rmax[1] = rmax[1] > e? rmax[1] : e;
-		if (t->len > max) max = t->len, max_i = i;
+		if (t->len > max) max = t->len;
 	}
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
@@ -523,7 +523,7 @@ ret_gen_cigar:
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p_, int is_hard, const bwahit_t *m)
 {
 #define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)
-	int score, n_cigar, is_rev = 0, nn, rid, mid, copy_mate = 0;
+	int score, n_cigar, is_rev = 0, rid, mid, copy_mate = 0;
 	uint32_t *cigar = 0;
 	int64_t pos;
 	bwahit_t ptmp, *p = &ptmp;
@@ -548,7 +548,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
 		} else n_cigar = 0, cigar = 0;
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
-		nn = bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
+		bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
 		kputw(p->flag, str); kputc('\t', str);
 		kputs(bns->anns[rid].name, str); kputc('\t', str); kputuw(pos - bns->anns[rid].offset + 1, str); kputc('\t', str);
 		kputw(p->qual, str); kputc('\t', str);
@@ -569,7 +569,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	}
 	if (m && is_mapped(m)) { // then print mate pos and isize
 		pos = bns_depos(bns, m->rb < bns->l_pac? m->rb : m->re - 1, &is_rev);
-		nn = bns_cnt_ambi(bns, pos, m->re - m->rb, &mid);
+		bns_cnt_ambi(bns, pos, m->re - m->rb, &mid);
 		kputc('\t', str);
 		if (mid == rid) kputc('=', str);
 		else kputs(bns->anns[mid].name, str);

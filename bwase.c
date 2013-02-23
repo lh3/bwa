@@ -71,8 +71,8 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 				}
 				rest -= q->l - q->k + 1;
 			} else { // Random sampling (http://code.activestate.com/recipes/272884/). In fact, we never come here. 
-				int j, i, k;
-				for (j = rest, i = q->l - q->k + 1, k = 0; j > 0; --j) {
+				int j, i;
+				for (j = rest, i = q->l - q->k + 1; j > 0; --j) {
 					double p = 1.0, x = drand48();
 					while (x < p) p -= p * j / (i--);
 					s->multi[z].pos = q->l - i;
@@ -412,11 +412,11 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 
 		// print mate coordinate
 		if (mate && mate->type != BWA_TYPE_NO_MATCH) {
-			int m_seqid, m_is_N;
+			int m_seqid;
 			long long isize;
 			am = mate->seQ < p->seQ? mate->seQ : p->seQ; // smaller single-end mapping quality
 			// redundant calculation here, but should not matter too much
-			m_is_N = bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
+			bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
 			err_printf("\t%s\t", (seqid == m_seqid)? "=" : bns->anns[m_seqid].name);
 			isize = (seqid == m_seqid)? pos_5(mate) - pos_5(p) : 0;
 			if (p->type == BWA_TYPE_NO_MATCH) isize = 0;
