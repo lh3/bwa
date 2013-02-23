@@ -3,7 +3,7 @@ CFLAGS=		-g -Wall -O2
 CXXFLAGS=	$(CFLAGS)
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
-LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwamem.o bwamem_pair.o
+LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o
 AOBJS=		QSufSort.o bwt_gen.o stdaln.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
@@ -28,14 +28,16 @@ bwa:libbwa.a $(AOBJS) main.o
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
+QSufSort.o:QSufSort.h
+bwt_gen.o:QSufSort.h
+
+ksw.o:ksw.h
+utils.o:utils.h ksort.h kseq.h
+bntseq.o:bntseq.h
+bwt.o:bwt.h utils.h
 bwa.o:bwa.h
 
-QSufSort.o:QSufSort.h
-
-bwt.o:bwt.h
-bwtio.o:bwt.h
 bwtaln.o:bwt.h bwtaln.h kseq.h
-bntseq.o:bntseq.h
 bwtgap.o:bwtgap.h bwtaln.h bwt.h
 
 bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h

@@ -13,6 +13,7 @@
 #include "bwtsw2.h"
 #include "stdaln.h"
 #include "kstring.h"
+#include "bwa.h"
 
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)

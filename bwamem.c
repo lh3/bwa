@@ -485,41 +485,6 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
  * Basic hit->SAM conversion *
  *****************************/
 
-uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar)
-{
-	uint32_t *cigar = 0;
-	uint8_t tmp, *rseq;
-	int i, w;
-	int64_t rlen;
-	*n_cigar = 0;
-	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
-	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
-	if (re - rb != rlen) goto ret_gen_cigar; // possible if out of range
-	if (rb >= l_pac) { // then reverse both query and rseq; this is to ensure indels to be placed at the leftmost position
-		for (i = 0; i < l_query>>1; ++i)
-			tmp = query[i], query[i] = query[l_query - 1 - i], query[l_query - 1 - i] = tmp;
-		for (i = 0; i < rlen>>1; ++i)
-			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
-	}
-	//printf("[Q] "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
-	//printf("[R] "); for (i = 0; i < re - rb; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
-	// set the band-width
-	w = (int)((double)(l_query * mat[0] - q) / r + 1.);
-	w = w < 1? w : 1;
-	w = w < w_? w : w_;
-	w += abs(rlen - l_query);
-	// NW alignment
-	*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
-	if (rb >= l_pac) // reverse back query
-		for (i = 0; i < l_query>>1; ++i)
-			tmp = query[i], query[i] = query[l_query - 1 - i], query[l_query - 1 - i] = tmp;
-
-ret_gen_cigar:
-	free(rseq);
-	return cigar;
-}
-
-
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p_, int is_hard, const bwahit_t *m)
 {
 #define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)

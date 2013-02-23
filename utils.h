@@ -52,11 +52,6 @@ typedef struct {
 typedef struct { size_t n, m; uint64_t *a; } uint64_v;
 typedef struct { size_t n, m; pair64_t *a; } pair64_v;
 
-typedef struct {
-	int l_seq;
-	char *name, *comment, *seq, *qual, *sam;
-} bseq1_t;
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -79,8 +74,6 @@ extern "C" {
 
 	void ks_introsort_64 (size_t n, uint64_t *a);
 	void ks_introsort_128(size_t n, pair64_t *a);
-
-	bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_);
 
 #ifdef __cplusplus
 }

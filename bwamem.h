@@ -3,7 +3,7 @@
 
 #include "bwt.h"
 #include "bntseq.h"
-#include "utils.h"
+#include "bwa.h"
 
 #define MEM_MAPQ_COEF 40.0
 #define MEM_MAPQ_MAX  60
