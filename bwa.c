@@ -4,6 +4,8 @@
 #include "bwa.h"
 #include "ksw.h"
 
+int bwa_verbose = 3;
+
 /************************
  * Batch FASTA/Q reader *
  ************************/
@@ -98,28 +100,69 @@ ret_gen_cigar:
  * Full index reader *
  *********************/
 
-bwaidx_t *bwa_idx_load(const char *prefix, int which)
+char *bwa_idx_infer_prefix(const char *hint)
+{
+	char *prefix;
+	int l_hint;
+	FILE *fp;
+	l_hint = strlen(hint);
+	prefix = malloc(l_hint + 3 + 4 + 1);
+	strcpy(prefix, hint);
+	strcpy(prefix + l_hint, ".64.bwt");
+	if ((fp = fopen(prefix, "rb")) != 0) {
+		fclose(fp);
+		prefix[l_hint + 3] = 0;
+		return prefix;
+	} else {
+		strcpy(prefix + l_hint, ".bwt");
+		if ((fp = fopen(prefix, "rb")) == 0) {
+			free(prefix);
+			return 0;
+		} else {
+			fclose(fp);
+			prefix[l_hint] = 0;
+			return prefix;
+		}
+	}
+}
+
+bwt_t *bwa_idx_load_bwt(const char *hint)
+{
+	char *tmp, *prefix;
+	bwt_t *bwt;
+	prefix = bwa_idx_infer_prefix(hint);
+	if (prefix == 0) {
+		if (bwa_verbose >= 1)
+			fprintf(stderr, "[E::%s] fail to locate the index files\n", __func__);
+		return 0;
+	}
+	tmp = calloc(strlen(prefix) + 5, 1);
+	strcat(strcpy(tmp, prefix), ".bwt"); // FM-index
+	bwt = bwt_restore_bwt(tmp);
+	strcat(strcpy(tmp, prefix), ".sa");  // partial suffix array (SA)
+	bwt_restore_sa(tmp, bwt);
+	free(tmp); free(prefix);
+	return bwt;
+}
+
+bwaidx_t *bwa_idx_load(const char *hint, int which)
 {
 	bwaidx_t *idx;
+	char *prefix;
+	prefix = bwa_idx_infer_prefix(hint);
+	if (prefix == 0) return 0;
 	idx = calloc(1, sizeof(bwaidx_t));
-	if (which & BWA_IDX_BWT) {
-		char *tmp;
-		tmp = calloc(strlen(prefix) + 5, 1);
-		strcat(strcpy(tmp, prefix), ".bwt"); // FM-index
-		idx->bwt = bwt_restore_bwt(tmp);
-		strcat(strcpy(tmp, prefix), ".sa");  // partial suffix array (SA)
-		bwt_restore_sa(tmp, idx->bwt);
-		free(tmp);
-	}
+	if (which & BWA_IDX_BWT) idx->bwt = bwa_idx_load_bwt(hint);
 	if (which & BWA_IDX_BNS) {
 		idx->bns = bns_restore(prefix);
 		if (which & BWA_IDX_PAC) {
 			idx->pac = calloc(idx->bns->l_pac/4+1, 1);
 			fread(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
+			fclose(idx->bns->fp_pac);
+			idx->bns->fp_pac = 0;
 		}
-		fclose(idx->bns->fp_pac);
-		idx->bns->fp_pac = 0;
 	}
+	free(prefix);
 	return idx;
 }
 

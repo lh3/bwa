@@ -10,6 +10,7 @@
 #include "bntseq.h"
 #include "utils.h"
 #include "kstring.h"
+#include "bwa.h"
 
 int g_log_n[256];
 char *bwa_rg_line, *bwa_rg_id;
@@ -606,7 +607,6 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 int bwa_sai2sam_se(int argc, char *argv[])
 {
-	extern char *bwa_infer_prefix(const char *hint);
 	int c, n_occ = 3;
 	char *prefix;
 	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
@@ -628,7 +628,7 @@ int bwa_sai2sam_se(int argc, char *argv[])
 		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
 		return 1;
 	}
-	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
 		free(bwa_rg_line); free(bwa_rg_id);
 		return 0;

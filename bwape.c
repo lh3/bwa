@@ -10,6 +10,7 @@
 #include "utils.h"
 #include "stdaln.h"
 #include "bwase.h"
+#include "bwa.h"
 
 typedef struct {
 	int n;
@@ -716,7 +717,6 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 {
 	extern char *bwa_rg_line, *bwa_rg_id;
 	extern int bwa_set_rg(const char *s);
-	extern char *bwa_infer_prefix(const char *hint);
 	int c;
 	pe_opt_t *popt;
 	char *prefix;
@@ -762,7 +762,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "\n");
 		return 1;
 	}
-	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
 		free(bwa_rg_line); free(bwa_rg_id);
 		return 0;

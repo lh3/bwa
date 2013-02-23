@@ -21,6 +21,8 @@ typedef struct {
 	char *name, *comment, *seq, *qual, *sam;
 } bseq1_t;
 
+extern int bwa_verbose;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,7 +31,9 @@ extern "C" {
 
 	uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar);
 
-	bwaidx_t *bwa_idx_load(const char *prefix, int which);
+	char *bwa_idx_infer_prefix(const char *hint);
+	bwt_t *bwa_idx_load_bwt(const char *hint);
+	bwaidx_t *bwa_idx_load(const char *hint, int which);
 	void bwa_idx_destroy(bwaidx_t *idx);
 
 #ifdef __cplusplus
