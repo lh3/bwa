@@ -707,14 +707,14 @@ static void *worker2(void *data)
 	worker_t *w = (worker_t*)data;
 	int i;
 	if (!(w->opt->flag&MEM_F_PE)) {
-		for (i = 0; i < w->n; i += w->step) {
+		for (i = w->start; i < w->n; i += w->step) {
 			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
 			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 			free(w->regs[i].a);
 		}
 	} else {
 		int n = 0;
-		for (i = 0; i < w->n>>1; i += w->step) { // not implemented yet
+		for (i = w->start; i < w->n>>1; i += w->step) { // not implemented yet
 			n += mem_sam_pe(w->opt, w->bns, w->pac, w->pes, i, &w->seqs[i<<1], &w->regs[i<<1]);
 			free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 		}
