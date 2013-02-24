@@ -6,6 +6,7 @@
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
+
 #include "kstring.h"
 #include "bwamem.h"
 #include "bntseq.h"
@@ -632,19 +633,19 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	s->sam = str.s;
 }
 
-static mem_alnreg_v find_alnreg(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s)
+mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
 {
 	int i, j;
 	mem_chain_v chn;
 	mem_alnreg_v regs, tmp;
-	for (i = 0; i < s->l_seq; ++i)
-		s->seq[i] = nst_nt4_table[(int)s->seq[i]];
-	chn = mem_chain(opt, bwt, s->l_seq, (uint8_t*)s->seq);
+	for (i = 0; i < l_seq; ++i)
+		seq[i] = seq[i] < 4? seq[i] : nst_nt4_table[(int)seq[i]];
+	chn = mem_chain(opt, bwt, l_seq, (uint8_t*)seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 	kv_init(regs); kv_init(tmp);
 	for (i = 0; i < chn.n; ++i) {
-		mem_chain2aln(opt, bns->l_pac, pac, s->l_seq, (uint8_t*)s->seq, &chn.a[i], &tmp);
+		mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, &chn.a[i], &tmp);
 		for (j = 0; j < tmp.n; ++j)
 			kv_push(mem_alnreg_t, regs, tmp.a[j]);
 		free(chn.a[i].seeds);
@@ -670,7 +671,7 @@ static void *worker1(void *data)
 	worker_t *w = (worker_t*)data;
 	int i;
 	for (i = w->start; i < w->n; i += w->step)
-		w->regs[i] = find_alnreg(w->opt, w->bwt, w->bns, w->pac, &w->seqs[i]);
+		w->regs[i] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
 	return 0;
 }
 
@@ -696,7 +697,7 @@ static void *worker2(void *data)
 	return 0;
 }
 
-int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs)
+void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs)
 {
 	int i;
 	worker_t *w;
@@ -737,5 +738,4 @@ int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns
 		free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 	}
 	free(regs); free(w);
-	return 0;
 }

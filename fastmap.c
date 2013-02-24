@@ -67,7 +67,7 @@ int main_mem(int argc, char *argv[])
 		ks2 = kseq_init(fp2);
 		opt->flag |= MEM_F_PE;
 	}
-	while ((seqs = bseq_read(opt->chunk_size, &n, ks, ks2)) != 0) {
+	while ((seqs = bseq_read(opt->chunk_size * (ko2? 2 : 1), &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if (!copy_comment)
 			for (i = 0; i < n; ++i) {

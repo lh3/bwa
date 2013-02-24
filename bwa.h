@@ -34,6 +34,7 @@ extern "C" {
 
 	char *bwa_idx_infer_prefix(const char *hint);
 	bwt_t *bwa_idx_load_bwt(const char *hint);
+
 	bwaidx_t *bwa_idx_load(const char *hint, int which);
 	void bwa_idx_destroy(bwaidx_t *idx);
 

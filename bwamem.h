@@ -31,10 +31,14 @@ typedef struct {
 } mem_opt_t;
 
 typedef struct {
-	int64_t rb, re;
-	int score, qb, qe, seedcov, sub, csub; // sub: suboptimal score; csub: suboptimal inside the chain
-	int sub_n; // approximate number of suboptimal hits
-	int secondary; // non-negative if the hit is secondary
+	int64_t rb, re; // [rb,re): reference sequence in the alignment
+	int qb, qe;     // [qb,qe): query sequence in the alignment
+	int score;      // best SW score
+	int sub;        // 2nd best SW score
+	int csub;       // SW score of a tandem hit
+	int sub_n;      // approximate number of suboptimal hits
+	int seedcov;    // length of regions coverged by seeds
+	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
 } mem_alnreg_t;
 
 typedef struct {
@@ -63,8 +67,57 @@ extern "C" {
 	mem_opt_t *mem_opt_init(void);
 	void mem_fill_scmat(int a, int b, int8_t mat[25]);
 
-	int mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs);
+	/**
+	 * Align a batch of sequences and generate the alignments in the SAM format
+	 *
+	 * This routine requires $seqs[i].{l_seq,seq,name} and write $seqs[i].sam.
+	 * Note that $seqs[i].sam may consist of several SAM lines if the
+	 * corresponding sequence has multiple primary hits.
+	 *
+	 * In the paired-end mode (i.e. MEM_F_PE is set in $opt->flag), query
+	 * sequences must be interleaved: $n must be an even number and the 2i-th
+	 * sequence and the (2i+1)-th sequence constitute a read pair. In this
+	 * mode, there should be enough (typically >50) unique pairs for the
+	 * routine to infer the orientation and insert size.
+	 *
+	 * @param opt    alignment parameters
+	 * @param bwt    FM-index of the reference sequence
+	 * @param bns    Information of the reference
+	 * @param pac    2-bit encoded reference
+	 * @param n      number of query sequences
+	 * @param seqs   query sequences; $seqs[i].seq/sam to be modified after the call
+	 */
+	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs);
 
+	/**
+	 * Find the aligned regions for one query sequence
+	 *
+	 * Note that this routine does not generate CIGAR. CIGAR should be
+	 * generated later by bwa_gen_cigar() defined in bwa.c.
+	 *
+	 * @param opt    alignment parameters
+	 * @param bwt    FM-index of the reference sequence
+	 * @param bns    Information of the reference
+	 * @param pac    2-bit encoded reference
+	 * @param l_seq  length of query sequence
+	 * @param seq    query sequence; conversion ACGTN/acgtn=>01234 to be applied
+	 *
+	 * @return       list of aligned regions.
+	 */
+	mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq);
+
+	/**
+	 * Infer the insert size distribution from interleaved alignment regions
+	 *
+	 * This function can be called after mem_align1(), as long as paired-end
+	 * reads are properly interleaved.
+	 *
+	 * @param opt    alignment parameters
+	 * @param l_pac  length of concatenated reference sequence
+	 * @param n      number of query sequences; must be an even number
+	 * @param regs   region array of size $n; 2i-th and (2i+1)-th elements constitute a pair
+	 * @param pes    inferred insert size distribution (output)
+	 */
 	void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4]);
 
 #ifdef __cplusplus
