@@ -48,7 +48,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "         -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "         -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "         -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
-		fprintf(stderr, "         -R STR     read group header line such as '@RG\tID:foo\tSM:bar' [null]\n");
+		fprintf(stderr, "         -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "         -v INT     verbose level [%d]\n", bwa_verbose);
 		fprintf(stderr, "         -a         output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "         -P         perform mate SW only but skip pairing\n");
