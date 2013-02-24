@@ -155,6 +155,19 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
  * Chaining while finding SMEMs *
  ********************************/
 
+typedef struct {
+	int64_t rbeg;
+	int32_t qbeg, len;
+} mem_seed_t;
+
+typedef struct {
+	int n, m;
+	int64_t pos;
+	mem_seed_t *seeds;
+} mem_chain_t;
+
+typedef struct { size_t n, m; mem_chain_t *a;  } mem_chain_v;
+
 #include "kbtree.h"
 
 #define chain_cmp(a, b) (((b).pos < (a).pos) - ((a).pos < (b).pos))
@@ -397,10 +410,6 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORT
 	}
 	free(z.a);
 }
-
-/************************
- * Pick paired-end hits *
- ************************/
 
 /****************************************
  * Construct the alignment from a chain *
