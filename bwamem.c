@@ -554,7 +554,9 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		} else kputw(0, str);
 		kputc('\t', str);
 	} else kputsn("\t*\t0\t0\t", 7, str);
-	if (!(p->flag&0x10)) { // print SEQ and QUAL, the forward strand
+	if (p->flag&0x100) { // for secondary alignments, don't write SEQ and QUAL
+		kputsn("*\t*", 3, str);
+	} else if (!(p->flag&0x10)) { // print SEQ and QUAL, the forward strand
 		int i, qb = 0, qe = s->l_seq;
 		if (!(p->flag&4) && is_hard) qb = p->qb, qe = p->qe;
 		ks_resize(str, str->l + (qe - qb) + 1);
@@ -610,7 +612,7 @@ void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h)
 {
 	h->rb = a->rb; h->re = a->re; h->qb = a->qb; h->qe = a->qe;
 	h->score = a->score;
-	h->sub = a->sub > a->csub? a->sub : a->csub;
+	h->sub = a->secondary >= 0? -1 : a->sub > a->csub? a->sub : a->csub;
 	h->qual = 0; // quality unset
 	h->flag = a->secondary >= 0? 0x100 : 0; // only the "secondary" bit is set
 }
@@ -623,10 +625,10 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	if (a->n > 0) {
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
-			if (a->a[k].secondary >= 0) continue;
+			if (a->a[k].secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
 			mem_alnreg2hit(&a->a[k], &h);
 			h.flag |= extra_flag;
-			h.qual = mem_approx_mapq_se(opt, &a->a[k]);
+			h.qual = a->a[k].secondary >= 0? 0 : mem_approx_mapq_se(opt, &a->a[k]);
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
 		}
 	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP, m);

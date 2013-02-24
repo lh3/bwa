@@ -26,11 +26,12 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "CPHk:c:v:s:r:t:R:")) >= 0) {
+	while ((c = getopt(argc, argv, "aCPHk:c:v:s:r:t:R:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
 		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
+		else if (c == 'a') opt->flag |= MEM_F_ALL;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
@@ -49,6 +50,9 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "         -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 		fprintf(stderr, "         -R STR     read group header line such as '@RG\tID:foo\tSM:bar' [null]\n");
 		fprintf(stderr, "         -v INT     verbose level [%d]\n", bwa_verbose);
+		fprintf(stderr, "         -a         output all alignments for SE or unpaired PE\n");
+		fprintf(stderr, "         -P         perform mate SW only but skip pairing\n");
+		fprintf(stderr, "         -H         hard clipping\n");
 		fprintf(stderr, "         -C         append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "\n");
 		free(opt);
