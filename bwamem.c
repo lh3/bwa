@@ -199,6 +199,7 @@ static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *i
 {
 	const bwtintv_v *a;
 	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
+	split_len = split_len < itr->len? split_len : itr->len;
 	while ((a = smem_next(itr, split_len, opt->split_width)) != 0) { // to find all SMEM and some internal MEM
 		int i;
 		for (i = 0; i < a->n; ++i) { // go through each SMEM/MEM up to itr->start
