@@ -312,6 +312,7 @@ int kclose(void *a)
 		pid = waitpid(aux->pid, &status, WNOHANG);
 		if (pid != aux->pid) kill(aux->pid, 15);
 	}
+	free(aux);
 	return 0;
 }
 
