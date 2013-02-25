@@ -18,18 +18,22 @@ typedef struct __smem_i smem_i;
 #define MEM_F_NO_MULTI  0x16
 
 typedef struct {
-	int a, b, q, r, w;
-	int flag;
-	int split_width;
-	int min_seed_len, max_occ, max_chain_gap;
-	int n_threads, chunk_size;
-	int pe_dir;
-	float mask_level;
-	float chain_drop_ratio;
-	float split_factor; // split into a seed if MEM is longer than min_seed_len*split_factor
-	int pen_unpaired; // phred-scaled penalty for unpaired reads
-	int max_ins; // maximum insert size
-	int8_t mat[25]; // scoring matrix; mat[0] == 0 if unset
+	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
+	int w;                  // band width
+	int flag;               // see MEM_F_* macros
+	int min_seed_len;       // minimum seed length
+	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
+	int split_width;        // split into a seed if its occurence is smaller than this value
+	int max_occ;            // skip a seed if its occurence is larger than this value
+	int max_chain_gap;      // do not chain seed if it is max_chain_gap-bp away from the closest seed
+	int n_threads;          // number of threads
+	int chunk_size;         // process chunk_size-bp sequences in a batch
+	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
+	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	int pen_unpaired;       // phred-scaled penalty for unpaired reads
+	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
+	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
+	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;
 
 typedef struct {

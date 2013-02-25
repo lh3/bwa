@@ -14,17 +14,6 @@
 #include "kvec.h"
 #include "ksort.h"
 
-void mem_fill_scmat(int a, int b, int8_t mat[25])
-{
-	int i, j, k;
-	for (i = k = 0; i < 4; ++i) {
-		for (j = 0; j < 4; ++j)
-			mat[k++] = i == j? a : -b;
-		mat[k++] = 0; // ambiguous base
-	}
-	for (j = 0; j < 5; ++j) mat[k++] = 0;
-}
-
 /* Theory on probability and scoring *ungapped* alignment
  *
  * s'(a,b) = log[P(b|a)/P(b)] = log[4P(b|a)], assuming uniform base distribution
@@ -64,10 +53,21 @@ mem_opt_t *mem_opt_init()
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
-	o->pe_dir = 0<<1|1;
 	o->pen_unpaired = 9;
+	o->max_matesw = 100;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
+}
+
+void mem_fill_scmat(int a, int b, int8_t mat[25])
+{
+	int i, j, k;
+	for (i = k = 0; i < 4; ++i) {
+		for (j = 0; j < 4; ++j)
+			mat[k++] = i == j? a : -b;
+		mat[k++] = 0; // ambiguous base
+	}
+	for (j = 0; j < 5; ++j) mat[k++] = 0;
 }
 
 /***************************

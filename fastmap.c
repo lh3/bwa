@@ -26,8 +26,9 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:w:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
+		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
 		else if (c == 'B') opt->b = atoi(optarg);
 		else if (c == 'O') opt->q = atoi(optarg);
@@ -52,6 +53,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "Algorithm options:\n\n");
 		fprintf(stderr, "       -t INT     number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "       -k INT     minimum seed length [%d]\n", opt->min_seed_len);
+		fprintf(stderr, "       -w INT     band width for banded alignment [%d]\n", opt->w);
 		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);

@@ -246,7 +246,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			if (a[i].a[j].score >= a[i].a[0].score  - opt->pen_unpaired)
 				kv_push(mem_alnreg_t, b[i], a[i].a[j]);
 	for (i = 0; i < 2; ++i)
-		for (j = 0; j < b[i].n; ++j)
+		for (j = 0; j < b[i].n && j < opt->max_matesw; ++j)
 			n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
 	free(b[0].a); free(b[1].a);
 	mem_mark_primary_se(opt, a[0].n, a[0].a);
