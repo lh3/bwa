@@ -515,13 +515,15 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	p->flag |= m && m->rb >= bns->l_pac? 0x20 : 0; // is mate on reverse strand
 	kputs(s->name, str); kputc('\t', str);
 	if (is_mapped(p)) { // has a coordinate, no matter whether it is mapped or copied from the mate
+		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
+		if (sam_flag&0x10000) sam_flag |= 0x100;
 		if (!copy_mate) {
 			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
 		} else n_cigar = 0, cigar = 0;
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
 		bns_cnt_ambi(bns, pos, p->re - p->rb, &rid);
-		kputw(p->flag, str); kputc('\t', str);
+		kputw(sam_flag, str); kputc('\t', str);
 		kputs(bns->anns[rid].name, str); kputc('\t', str); kputuw(pos - bns->anns[rid].offset + 1, str); kputc('\t', str);
 		kputw(p->qual, str); kputc('\t', str);
 		if (n_cigar) {
@@ -626,11 +628,13 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		int mapq0 = -1;
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
-			if (a->a[k].secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
-			if (a->a[k].secondary >= 0 && a->a[k].score < a->a[a->a[k].secondary].score * .5) continue;
-			mem_alnreg2hit(&a->a[k], &h);
+			mem_alnreg_t *p = &a->a[k];
+			if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
+			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
+			mem_alnreg2hit(p, &h);
 			h.flag |= extra_flag;
-			h.qual = a->a[k].secondary >= 0? 0 : mem_approx_mapq_se(opt, &a->a[k]);
+			if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) h.flag |= 0x10000; // print the sequence, but flag as secondary (for Picard)
+			h.qual = p->secondary >= 0? 0 : mem_approx_mapq_se(opt, p);
 			if (k == 0) mapq0 = h.qual;
 			else if (h.qual > mapq0) h.qual = mapq0;
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);

@@ -26,13 +26,14 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paCPHk:c:v:s:r:t:R:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
 		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
 		else if (c == 'a') opt->flag |= MEM_F_ALL;
 		else if (c == 'p') opt->flag |= MEM_F_PE;
+		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
@@ -43,19 +44,23 @@ int main_mem(int argc, char *argv[])
 	}
 	if (optind + 1 >= argc) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage:   bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
-		fprintf(stderr, "Options: -k INT     minimum seed length [%d]\n", opt->min_seed_len);
-		fprintf(stderr, "         -t INT     number of threads [%d]\n", opt->n_threads);
-		fprintf(stderr, "         -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
-		fprintf(stderr, "         -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
-		fprintf(stderr, "         -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
-		fprintf(stderr, "         -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
-		fprintf(stderr, "         -v INT     verbose level [%d]\n", bwa_verbose);
-		fprintf(stderr, "         -a         output all alignments for SE or unpaired PE\n");
-		fprintf(stderr, "         -p         first query file consists of interleaved paired-end sequences\n");
-		fprintf(stderr, "         -P         perform mate SW only but skip pairing\n");
-		fprintf(stderr, "         -H         hard clipping\n");
-		fprintf(stderr, "         -C         append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
+		fprintf(stderr, "Algorithm options:\n\n");
+		fprintf(stderr, "       -t INT     number of threads [%d]\n", opt->n_threads);
+		fprintf(stderr, "       -k INT     minimum seed length [%d]\n", opt->min_seed_len);
+		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
+		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
+		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
+		fprintf(stderr, "       -P         skip pairing; perform mate SW only\n");
+		fprintf(stderr, "\nInput/output options:\n\n");
+		fprintf(stderr, "       -p         first query file consists of interleaved paired-end sequences\n");
+		fprintf(stderr, "       -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "       -v INT     verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
+		fprintf(stderr, "       -a         output all alignments for SE or unpaired PE\n");
+		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "       -H         hard clipping\n");
+		fprintf(stderr, "       -M         mark shorter split hits as secondary (for Picard/GATK compatibility)\n");
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;

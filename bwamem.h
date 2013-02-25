@@ -15,6 +15,7 @@ typedef struct __smem_i smem_i;
 #define MEM_F_PE        0x2
 #define MEM_F_NOPAIRING 0x4
 #define MEM_F_ALL       0x8
+#define MEM_F_NO_MULTI  0x16
 
 typedef struct {
 	int a, b, q, r, w;
