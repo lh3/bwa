@@ -604,7 +604,7 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	mapq = a->score? (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
 	mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
-	if (a->sub_n) mapq -= (int)(4.343 * log(a->sub_n) + .499);
+	if (a->sub_n > 0) mapq -= (int)(4.343 * log(a->sub_n+1) + .499);
 	if (mapq > 60) mapq = 60;
 	if (mapq < 0) mapq = 0;
 	return mapq;
