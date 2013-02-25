@@ -623,12 +623,16 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	kstring_t str;
 	str.l = str.m = 0; str.s = 0;
 	if (a->n > 0) {
+		int mapq0 = -1;
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
 			if (a->a[k].secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
+			if (a->a[k].secondary >= 0 && a->a[k].score < a->a[a->a[k].secondary].score * .5) continue;
 			mem_alnreg2hit(&a->a[k], &h);
 			h.flag |= extra_flag;
 			h.qual = a->a[k].secondary >= 0? 0 : mem_approx_mapq_se(opt, &a->a[k]);
+			if (k == 0) mapq0 = h.qual;
+			else if (h.qual > mapq0) h.qual = mapq0;
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
 		}
 	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP, m);
