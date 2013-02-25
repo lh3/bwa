@@ -1,4 +1,4 @@
-CC=			clang
+CC=			gcc
 CFLAGS=		-g -Wall -O2
 CXXFLAGS=	$(CFLAGS)
 AR=			ar
