@@ -680,8 +680,15 @@ static void *worker1(void *data)
 {
 	worker_t *w = (worker_t*)data;
 	int i;
-	for (i = w->start; i < w->n; i += w->step)
-		w->regs[i] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
+	if (!(w->opt->flag&MEM_F_PE)) {
+		for (i = w->start; i < w->n; i += w->step)
+			w->regs[i] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
+	} else { // for PE we align the two ends in the same thread in case the 2nd read is of worse quality, in which case some threads may be faster/slower
+		for (i = w->start; i < w->n>>1; i += w->step) {
+			w->regs[i<<1|0] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq);
+			w->regs[i<<1|1] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq);
+		}
+	}
 	return 0;
 }
 
