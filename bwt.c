@@ -166,7 +166,7 @@ void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 		memset(cnt, 0, 4 * sizeof(bwtint_t));
 		return;
 	}
-	if (k >= bwt->primary) --k; // because $ is not in bwt
+	k -= (k >= bwt->primary); // because $ is not in bwt
 	p = bwt_occ_intv(bwt, k);
 	memcpy(cnt, p, 4 * sizeof(bwtint_t));
 	p += sizeof(bwtint_t);
@@ -182,16 +182,16 @@ void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4], bwtint_t cntl[4])
 {
 	bwtint_t _k, _l;
-	_k = (k >= bwt->primary)? k-1 : k;
-	_l = (l >= bwt->primary)? l-1 : l;
-	if (_l/OCC_INTERVAL != _k/OCC_INTERVAL || k == (bwtint_t)(-1) || l == (bwtint_t)(-1)) {
+	_k = k - (k >= bwt->primary);
+	_l = l - (l >= bwt->primary);
+	if (_l>>OCC_INTV_SHIFT != _k>>OCC_INTV_SHIFT || k == (bwtint_t)(-1) || l == (bwtint_t)(-1)) {
 		bwt_occ4(bwt, k, cntk);
 		bwt_occ4(bwt, l, cntl);
 	} else {
 		bwtint_t i, j, x, y;
 		uint32_t *p, tmp;
-		if (k >= bwt->primary) --k; // because $ is not in bwt
-		if (l >= bwt->primary) --l;
+		k -= (k >= bwt->primary); // because $ is not in bwt
+		l -= (l >= bwt->primary);
 		p = bwt_occ_intv(bwt, k);
 		memcpy(cntk, p, 4 * sizeof(bwtint_t));
 		p += sizeof(bwtint_t);
