@@ -648,7 +648,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 
 mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
 {
-	int i, j;
+	int i, j, k;
 	mem_chain_v chn;
 	mem_alnreg_v regs, tmp;
 	for (i = 0; i < l_seq; ++i)
@@ -658,9 +658,21 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 	kv_init(regs); kv_init(tmp);
 	for (i = 0; i < chn.n; ++i) {
-		mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, &chn.a[i], &tmp);
-		for (j = 0; j < tmp.n; ++j)
-			kv_push(mem_alnreg_t, regs, tmp.a[j]);
+		mem_chain_t *p = &chn.a[i];
+		for (j = 0; j < regs.n; ++j) { // check if all the seeds are contained in alnreg found previously
+			mem_alnreg_t *q = &regs.a[j];
+			for (k = 0; k < p->n; ++k) {
+				mem_seed_t *s = &p->seeds[k];
+				if (!(s->qbeg >= q->qb && s->qbeg + s->len <= q->qe && s->rbeg >= q->rb && s->rbeg + s->len <= q->re))
+					break; // stop if seed is not contained
+			}
+			if (k == p->n) break; // if all seeds are contained, stop
+		}
+		if (j == regs.n) {
+			mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &tmp);
+			for (j = 0; j < tmp.n; ++j)
+				kv_push(mem_alnreg_t, regs, tmp.a[j]);
+		}
 		free(chn.a[i].seeds);
 	}
 	free(chn.a); free(tmp.a);
