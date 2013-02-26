@@ -160,8 +160,8 @@ void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok,
 
 void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 {
-	bwtint_t l, j, x;
-	uint32_t *p, tmp;
+	bwtint_t x;
+	uint32_t *p, tmp, *end;
 	if (k == (bwtint_t)(-1)) {
 		memset(cnt, 0, 4 * sizeof(bwtint_t));
 		return;
@@ -169,10 +169,9 @@ void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 	k -= (k >= bwt->primary); // because $ is not in bwt
 	p = bwt_occ_intv(bwt, k);
 	memcpy(cnt, p, 4 * sizeof(bwtint_t));
-	p += sizeof(bwtint_t);
-	j = k >> 4 << 4;
-	for (l = k & ~OCC_INTV_MASK, x = 0; l < j; l += 16, ++p)
-		x += __occ_aux4(bwt, *p);
+	p += sizeof(bwtint_t); // sizeof(bwtint_t) = 4*(sizeof(bwtint_t)/sizeof(uint32_t))
+	end = p + ((k>>4) - ((k&~OCC_INTV_MASK)>>4)); // this is the end point of the following loop
+	for (x = 0; p < end; ++p) x += __occ_aux4(bwt, *p);
 	tmp = *p & ~((1U<<((~k&15)<<1)) - 1);
 	x += __occ_aux4(bwt, tmp) - (~k&15);
 	cnt[0] += x&0xff; cnt[1] += x>>8&0xff; cnt[2] += x>>16&0xff; cnt[3] += x>>24;
@@ -188,23 +187,22 @@ void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4], bwtin
 		bwt_occ4(bwt, k, cntk);
 		bwt_occ4(bwt, l, cntl);
 	} else {
-		bwtint_t i, j, x, y;
-		uint32_t *p, tmp;
+		bwtint_t x, y;
+		uint32_t *p, tmp, *endk, *endl;
 		k -= (k >= bwt->primary); // because $ is not in bwt
 		l -= (l >= bwt->primary);
 		p = bwt_occ_intv(bwt, k);
 		memcpy(cntk, p, 4 * sizeof(bwtint_t));
-		p += sizeof(bwtint_t);
+		p += sizeof(bwtint_t); // sizeof(bwtint_t) = 4*(sizeof(bwtint_t)/sizeof(uint32_t))
 		// prepare cntk[]
-		j = k >> 4 << 4;
-		for (i = k & ~OCC_INTV_MASK, x = 0; i < j; i += 16, ++p)
-			x += __occ_aux4(bwt, *p);
+		endk = p + ((k>>4) - ((k&~OCC_INTV_MASK)>>4));
+		endl = p + ((l>>4) - ((l&~OCC_INTV_MASK)>>4));
+		for (x = 0; p < endk; ++p) x += __occ_aux4(bwt, *p);
 		y = x;
 		tmp = *p & ~((1U<<((~k&15)<<1)) - 1);
 		x += __occ_aux4(bwt, tmp) - (~k&15);
 		// calculate cntl[] and finalize cntk[]
-		j = l >> 4 << 4;
-		for (; i < j; i += 16, ++p) y += __occ_aux4(bwt, *p);
+		for (; p < endl; ++p) y += __occ_aux4(bwt, *p);
 		tmp = *p & ~((1U<<((~l&15)<<1)) - 1);
 		y += __occ_aux4(bwt, tmp) - (~l&15);
 		memcpy(cntl, cntk, 4 * sizeof(bwtint_t));
