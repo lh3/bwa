@@ -47,6 +47,7 @@ int main_mem(int argc, char *argv[])
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
 		} else if (c == 's') opt->split_width = atoi(optarg);
 	}
+	if (opt->n_threads < 1) opt->n_threads = 1;
 	if (optind + 1 >= argc) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
@@ -94,7 +95,7 @@ int main_mem(int argc, char *argv[])
 			opt->flag |= MEM_F_PE;
 		}
 	}
-	while ((seqs = bseq_read(opt->chunk_size * (ko2? 2 : 1), &n, ks, ks2)) != 0) {
+	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if (!copy_comment)
 			for (i = 0; i < n; ++i) {

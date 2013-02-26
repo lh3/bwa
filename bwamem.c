@@ -496,7 +496,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p_, int is_hard, const bwahit_t *m)
 {
 #define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)
-	int score, n_cigar, is_rev = 0, rid, mid, copy_mate = 0;
+	int score, n_cigar, is_rev = 0, rid, mid, copy_mate = 0, NM = -1;
 	uint32_t *cigar = 0;
 	int64_t pos;
 	bwahit_t ptmp, *p = &ptmp;
@@ -519,7 +519,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
 		if (p->flag&0x10000) sam_flag |= 0x100;
 		if (!copy_mate) {
-			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
+			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar, &NM);
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
 		} else n_cigar = 0, cigar = 0;
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
@@ -582,6 +582,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 			str->s[str->l] = 0;
 		} else kputc('*', str);
 	}
+	if (NM >= 0) { kputsn("\tNM:i:", 6, str); kputw(NM, str); }
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }

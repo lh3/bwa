@@ -70,13 +70,13 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
  *****************/
 
 // Generate CIGAR when the alignment end points are known
-uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar)
+uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
 {
 	uint32_t *cigar = 0;
 	uint8_t tmp, *rseq;
 	int i, w;
 	int64_t rlen;
-	*n_cigar = 0;
+	*n_cigar = 0; *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
 	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
 	if (re - rb != rlen) goto ret_gen_cigar; // possible if out of range
@@ -95,6 +95,20 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 	w += abs(rlen - l_query);
 	// NW alignment
 	*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
+	{// compute NM
+		int k, x, y, n_mm = 0, n_gap = 0;
+		for (k = 0, x = y = 0; k < *n_cigar; ++k) {
+			int op  = cigar[k]&0xf;
+			int len = cigar[k]>>4;
+			if (op == 0) { // match
+				for (i = 0; i < len; ++i)
+					if (query[x + i] != rseq[y + i]) ++n_mm;
+				x += len; y += len;
+			} else if (op == 1) x += len, n_gap += len;
+			else if (op == 2) y += len, n_gap += len;
+		}
+		*NM = n_mm + n_gap;
+	}
 	if (rb >= l_pac) // reverse back query
 		for (i = 0; i < l_query>>1; ++i)
 			tmp = query[i], query[i] = query[l_query - 1 - i], query[l_query - 1 - i] = tmp;
@@ -126,10 +140,10 @@ int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns,
 		}
 	}
 	if (mid >= 0) {
-		int i, score, n_cigar, y;
+		int i, score, n_cigar, y, NM;
 		uint32_t *cigar;
 		int64_t x;
-		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar);
+		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar, &NM);
 		for (i = 0, x = *rb, y = *qb; i < n_cigar; ++i) {
 			int op = cigar[i]&0xf, len = cigar[i]>>4;
 			if (op == 0) {

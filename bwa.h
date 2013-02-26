@@ -30,7 +30,7 @@ extern "C" {
 
 	bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_);
 
-	uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar);
+	uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM);
 	int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re);
 
 	char *bwa_idx_infer_prefix(const char *hint);
