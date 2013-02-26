@@ -633,6 +633,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
 			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 			mem_alnreg2hit(p, &h);
+			bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)s->seq, &h.qb, &h.qe, &h.rb, &h.re);
 			h.flag |= extra_flag;
 			if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) h.flag |= 0x10000; // print the sequence, but flag as secondary (for Picard)
 			h.qual = p->secondary >= 0? 0 : mem_approx_mapq_se(opt, p);

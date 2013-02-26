@@ -293,7 +293,9 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[1] = mem_approx_mapq_se(opt, &a[1].a[0]);
 		}
 		mem_alnreg2hit(&a[0].a[z[0]], &h[0]); h[0].qual = q_se[0]; h[0].flag |= 0x40 | extra_flag;
+		bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)s[0].seq, &h[0].qb, &h[0].qe, &h[0].rb, &h[0].re);
 		mem_alnreg2hit(&a[1].a[z[1]], &h[1]); h[1].qual = q_se[1]; h[1].flag |= 0x80 | extra_flag;
+		bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)s[1].seq, &h[1].qb, &h[1].qe, &h[1].rb, &h[1].re);
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[0], &h[0], opt->flag&MEM_F_HARDCLIP, &h[1]); s[0].sam = strdup(str.s); str.l = 0;
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, &s[1], &h[1], opt->flag&MEM_F_HARDCLIP, &h[0]); s[1].sam = str.s;
 	} else goto no_pairing;
@@ -301,8 +303,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 
 no_pairing:
 	for (i = 0; i < 2; ++i) {
-		if (a[i].n) mem_alnreg2hit(&a[i].a[0], &h[i]);
-		else h[i].rb = h[i].re = -1;
+		if (a[i].n) {
+			mem_alnreg2hit(&a[i].a[0], &h[i]);
+			bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)s[i].seq, &h[i].qb, &h[i].qe, &h[i].rb, &h[i].re);
+		} else h[i].rb = h[i].re = -1;
 	}
 	mem_sam_se(opt, bns, pac, &s[0], &a[0], 0x41, &h[1]);
 	mem_sam_se(opt, bns, pac, &s[1], &a[1], 0x81, &h[0]);

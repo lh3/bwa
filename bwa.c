@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <zlib.h>
+#include <assert.h>
 #include "bntseq.h"
 #include "bwa.h"
 #include "ksw.h"
@@ -101,6 +102,61 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 ret_gen_cigar:
 	free(rseq);
 	return cigar;
+}
+
+int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
+{
+	int ib, ie, is_rev;
+	int64_t fb, fe, mid = -1;
+	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary
+		*qb = *qe = *rb = *re = -1;
+		return -1; // unable to fix
+	} else {
+		fb = bns_depos(bns, *rb < bns->l_pac? *rb : *re - 1, &is_rev);
+		ib = bns_pos2rid(bns, fb);
+		if (fb - bns->anns[ib].offset + (*re - *rb) <= bns->anns[ib].len) return 0; // no need to fix
+		fe = bns_depos(bns, *re - 1 < bns->l_pac? *re - 1 : *rb, &is_rev);
+		ie = bns_pos2rid(bns, fe);
+		if (ie - ib > 1) { // bridge three or more references
+			*qb = *qe = *rb = *re = -1;
+			return -2; // unable to fix
+		} else {
+			int l = bns->anns[ib].offset + bns->anns[ib].len - fb;
+			mid = is_rev? *re - l : *rb + l;
+		}
+	}
+	if (mid >= 0) {
+		int i, score, n_cigar, y;
+		uint32_t *cigar;
+		int64_t x;
+		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar);
+		for (i = 0, x = *rb, y = *qb; i < n_cigar; ++i) {
+			int op = cigar[i]&0xf, len = cigar[i]>>4;
+			if (op == 0) {
+				if (x <= mid && mid < x + len) {
+					if (mid - *rb > *re - mid) { // the first part is longer
+						if (x == mid) { // need to check the previous operation
+							assert(i); // mid != *rb should always stand
+							if ((cigar[i-1]&0xf) == 1) *qe = y - (cigar[i-1]>>4), *re = x;
+							else if ((cigar[i-1]&0xf) == 2) *qe = y, *re = x - (cigar[i-1]>>4);
+							else abort(); // should not be here
+						} else *qe = y + (mid - x), *re = mid;
+					} else *qb = y + (mid - x), *rb = mid;
+					break;
+				} else x += len, y += len;
+			} else if (op == 1) { // insertion
+				y += len;
+			} else if (op == 2) { // deletion
+				if (x <= mid && mid < x + len) {
+					if (mid - *rb > *re - mid) *qe = y, *re = x;
+					else *qb = y, *rb = x + len;
+					break;
+				} else x += len;
+			} else abort(); // should not be here
+		}
+		free(cigar);
+	}
+	return 1;
 }
 
 /*********************
