@@ -45,6 +45,14 @@ void bwt_gen_cnt_table(bwt_t *bwt)
 	}
 }
 
+static inline bwtint_t bwt_invPsi(const bwt_t *bwt, bwtint_t k) // compute inverse CSA
+{
+	bwtint_t x = k - (k > bwt->primary);
+	x = bwt_B0(bwt, x);
+	x = bwt->L2[x] + bwt_occ(bwt, k, x);
+	return k == bwt->primary? 0 : x;
+}
+
 // bwt->bwt and bwt->occ must be precalculated
 void bwt_cal_sa(bwt_t *bwt, int intv)
 {

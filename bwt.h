@@ -124,21 +124,4 @@ extern "C" {
 }
 #endif
 
-// inverse Psi function
-#if 0
-#define bwt_invPsi(bwt, k)												\
-	(((k) == (bwt)->primary)? 0 :										\
-	 ((k) < (bwt)->primary)?											\
-	 (bwt)->L2[bwt_B0(bwt, k)] + bwt_occ(bwt, k, bwt_B0(bwt, k))		\
-	 : (bwt)->L2[bwt_B0(bwt, (k)-1)] + bwt_occ(bwt, k, bwt_B0(bwt, (k)-1)))
-#else
-static inline bwtint_t bwt_invPsi(const bwt_t *bwt, bwtint_t k)
-{
-	bwtint_t x = k - (k > bwt->primary);
-	x = bwt_B0(bwt, x);
-	x = bwt->L2[x] + bwt_occ(bwt, k, x);
-	return k == bwt->primary? 0 : x;
-}
-#endif
-
 #endif
