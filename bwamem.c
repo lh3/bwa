@@ -517,7 +517,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	kputs(s->name, str); kputc('\t', str);
 	if (is_mapped(p)) { // has a coordinate, no matter whether it is mapped or copied from the mate
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
-		if (sam_flag&0x10000) sam_flag |= 0x100;
+		if (p->flag&0x10000) sam_flag |= 0x100;
 		if (!copy_mate) {
 			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar);
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
