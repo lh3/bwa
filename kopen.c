@@ -203,7 +203,7 @@ ftp_open_end:
 static char **cmd2argv(const char *cmd)
 {
 	int i, beg, end, argc;
-	char **argv, *p, *q, *str;
+	char **argv, *str;
 	end = strlen(cmd);
 	for (i = end - 1; i >= 0; --i)
 		if (!isspace(cmd[i])) break;
@@ -217,7 +217,7 @@ static char **cmd2argv(const char *cmd)
 	argv = (char**)calloc(argc + 2, sizeof(void*));
 	argv[0] = str = (char*)calloc(end - beg + 1, 1);
 	strncpy(argv[0], cmd + beg, end - beg);
-	for (i = argc = 1, q = p = str; i < end - beg; ++i)
+	for (i = argc = 1; i < end - beg; ++i)
 		if (isspace(str[i])) str[i] = 0;
 		else if (str[i] && str[i-1] == 0) argv[argc++] = &str[i];
 	return argv;

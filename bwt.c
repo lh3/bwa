@@ -105,21 +105,20 @@ static inline int __occ_aux(uint64_t y, int c)
 
 bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 {
-	bwtint_t n, l, j;
-	uint32_t *p;
+	bwtint_t n;
+	uint32_t *p, *end;
 
 	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];
 	if (k == (bwtint_t)(-1)) return 0;
-	if (k >= bwt->primary) --k; // because $ is not in bwt
+	k -= (k >= bwt->primary); // because $ is not in bwt
 
 	// retrieve Occ at k/OCC_INTERVAL
 	n = ((bwtint_t*)(p = bwt_occ_intv(bwt, k)))[c];
 	p += sizeof(bwtint_t); // jump to the start of the first BWT cell
 
 	// calculate Occ up to the last k/32
-	j = k >> 5 << 5;
-	for (l = k/OCC_INTERVAL*OCC_INTERVAL; l < j; l += 32, p += 2)
-		n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+	end = p + (((k>>5) - ((k&~OCC_INTV_MASK)>>5))<<1);
+	for (; p < end; p += 2) n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
 
 	// calculate Occ
 	n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
