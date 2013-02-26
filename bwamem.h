@@ -15,7 +15,7 @@ typedef struct __smem_i smem_i;
 #define MEM_F_PE        0x2
 #define MEM_F_NOPAIRING 0x4
 #define MEM_F_ALL       0x8
-#define MEM_F_NO_MULTI  0x16
+#define MEM_F_NO_MULTI  0x10
 
 typedef struct {
 	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
