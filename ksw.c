@@ -492,10 +492,10 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			uint8_t d; // direction
 			p->h = h1;
 			h += q[j];
-			d = h > e? 0 : 1;
-			h = h > e? h : e;
-			d = h > f? d : 2;
-			h = h > f? h : f;
+			d = h >= e? 0 : 1;
+			h = h >= e? h : e;
+			d = h >= f? d : 2;
+			h = h >= f? h : f;
 			h1 = h;
 			h -= gapoe;
 			e -= gape;
