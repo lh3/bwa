@@ -13,6 +13,7 @@
 #include "ksw.h"
 #include "kvec.h"
 #include "ksort.h"
+#include "utils.h"
 
 /* Theory on probability and scoring *ungapped* alignment
  *
@@ -417,6 +418,21 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORT
  * Construct the alignment from a chain *
  ****************************************/
 
+static const char LogTable256[256] = {
+#define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
+    -1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+    LT(4), LT(5), LT(5), LT(6), LT(6), LT(6), LT(6),
+    LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7)
+};
+#undef LT
+
+static inline int ilog2(uint32_t v)
+{
+	register uint32_t t, tt;
+	if ((tt = (v >> 16))) return (t = (tt >> 8)) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
+	return (t = (v >> 8)) ? 8 + LogTable256[t] : LogTable256[v];
+}
+
 static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 {
 	int l = (int)((double)(qlen * opt->a - opt->q) / opt->r + 1.);
@@ -429,8 +445,9 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	int64_t rlen, rmax[2], tmp, max = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
+	uint64_t *srt;
 
-	av->n = 0;
+	if (c->n == 0) return;
 	// get the max possible span
 	rmax[0] = l_pac<<1; rmax[1] = 0;
 	for (i = 0; i < c->n; ++i) {
@@ -446,11 +463,31 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
 	if (rlen != rmax[1] - rmax[0]) return;
 
-	for (k = 0; k < c->n;) {
+	srt = malloc(c->n * 8);
+	for (i = 0; i < c->n; ++i)
+		srt[i] = (uint64_t)c->seeds[i].len<<32 | i;
+	ks_introsort_64(c->n, srt);
+
+	for (k = c->n - 1; k >= 0; --k) {
 		mem_alnreg_t *a;
+		s = &c->seeds[(uint32_t)srt[k]];
+
+		for (i = 0; i < av->n; ++i) { // test whether extension has been made before
+			mem_alnreg_t *p = &av->a[i];
+			int64_t rd;
+			int qd, w;
+			if (s->qbeg < p->qb || s->qbeg + s->len > p->qe || s->rbeg < p->rb || s->rbeg + s->len > p->re) continue;
+			qd = s->qbeg - p->qb;
+			rd = s->rbeg - p->rb;
+			w = ilog2(p->re - p->rb)<<1; // heuristic band width: small size for short hits
+			w = w < opt->w? w : opt->w;
+			if (qd - rd < w && rd - qd < w) break; // the seed is "around" a previous hit
+		}
+		if (i < av->n) continue;
+
 		a = kv_pushp(mem_alnreg_t, *av);
-		s = &c->seeds[k];
 		memset(a, 0, sizeof(mem_alnreg_t));
+
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
 			int qle, tle;
@@ -464,7 +501,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			free(qs); free(rs);
 		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
-		if (s->qbeg + s->len != l_query) { // right extension of the first seed
+		if (s->qbeg + s->len != l_query) { // right extension
 			int qle, tle, qe, re;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
@@ -472,21 +509,15 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			a->qe = qe + qle; a->re = rmax[0] + re + tle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
+
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
 			if (t->qbeg >= a->qb && t->qbeg + t->len <= a->qe && t->rbeg >= a->rb && t->rbeg + t->len <= a->re) // seed fully contained
 				a->seedcov += t->len; // this is not very accurate, but for approx. mapQ, this is good enough
 		}
-		// jump to the next seed that: 1) has no >7bp overlap with the previous seed, or 2) is not fully contained in the alignment
-		for (i = k + 1; i < c->n; ++i) {
-			const mem_seed_t *t = &c->seeds[i];
-			if ((t-1)->rbeg + (t-1)->len >= t->rbeg + 7 || (t-1)->qbeg + (t-1)->len >= t->qbeg + 7) break;
-			if (t->rbeg + t->len > a->re || t->qbeg + t->len > a->qe) break;
-		}
-		k = i;
 	}
-	free(rseq);
+	free(srt); free(rseq);
 }
 
 /*****************************
@@ -648,34 +679,24 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 
 mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
 {
-	int i, j, k;
+	int i;
 	mem_chain_v chn;
-	mem_alnreg_v regs, tmp;
-	for (i = 0; i < l_seq; ++i)
+	mem_alnreg_v regs;
+
+	for (i = 0; i < l_seq; ++i) // convert to 2-bit encoding if we have not done so
 		seq[i] = seq[i] < 4? seq[i] : nst_nt4_table[(int)seq[i]];
+
 	chn = mem_chain(opt, bwt, l_seq, (uint8_t*)seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
-	kv_init(regs); kv_init(tmp);
+
+	kv_init(regs);
 	for (i = 0; i < chn.n; ++i) {
 		mem_chain_t *p = &chn.a[i];
-		for (j = 0; j < regs.n; ++j) { // check if all the seeds are contained in alnreg found previously
-			mem_alnreg_t *q = &regs.a[j];
-			for (k = 0; k < p->n; ++k) {
-				mem_seed_t *s = &p->seeds[k];
-				if (!(s->qbeg >= q->qb && s->qbeg + s->len <= q->qe && s->rbeg >= q->rb && s->rbeg + s->len <= q->re))
-					break; // stop if seed is not contained
-			}
-			if (k == p->n) break; // if all seeds are contained, stop
-		}
-		if (j == regs.n) {
-			mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &tmp);
-			for (j = 0; j < tmp.n; ++j)
-				kv_push(mem_alnreg_t, regs, tmp.a[j]);
-		}
+		mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);
 	}
-	free(chn.a); free(tmp.a);
+	free(chn.a);
 	regs.n = mem_sort_and_dedup(regs.n, regs.a);
 	return regs;
 }
