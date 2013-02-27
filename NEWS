@@ -16,20 +16,20 @@ In addition to the algorithmic improvements, BWA-SW also implements a few
 handy features, some of which are experimental:
 
  1. BWA-MEM automatically infers pair orientation from a batch of single-end
-	alignments. It allows more than one orientations if there are sufficient
-	reads supporting them. This feature has not been tested on reads from
-	Illumina jumping library yet.
+    alignments. It allows more than one orientations if there are sufficient
+    reads supporting them. This feature has not been tested on reads from
+    Illumina jumping library yet.
 
  2. BWA-MEM optionally takes one interleaved fastq for paired-end mapping. It
-	is possible to convert a name-sorted BAM to an interleaved fastq on the fly
-	and feed the data stream to BWA-MEM for mapping.
+    is possible to convert a name-sorted BAM to an interleaved fastq on the fly
+    and feed the data stream to BWA-MEM for mapping.
 
  3. BWA-MEM optionally copies FASTA/Q comments to the final SAM output. This
     helps to transfer individual read annotations to the output.
 
  4. BWA-MEM supports more advanced piping. Users can now run:
-	(bwa mem ref.fa '<bzcat r1.fq.bz2' '<bzcat r2.fq.bz2') to map bzip'd read
-	files without replying on the bash feature.
+    (bwa mem ref.fa '<bzcat r1.fq.bz2' '<bzcat r2.fq.bz2') to map bzip'd read
+    files without replying on the bash feature.
 
 The BWA-MEM algorithm is in the beta phase. It is not advised to use BWA-MEM
 for production use yet. However, when the implementation becomes stable after a
