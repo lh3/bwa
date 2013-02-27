@@ -1,47 +1,45 @@
-.TH bwa 1 "19 June 2012" "bwa-0.6.2" "Bioinformatics tools"
+.TH bwa 1 "27 Feburary 2013" "bwa-0.7.0" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
 .SH SYNOPSIS
 .PP
-bwa index -a bwtsw database.fasta
+bwa index ref.fa
 .PP
-bwa aln database.fasta short_read.fastq > aln_sa.sai
+bwa mem ref.fa reads.fq > aln-se.sam
 .PP
-bwa samse database.fasta aln_sa.sai short_read.fastq > aln.sam
+bwa mem ref.fa read1.fq read2.fq > aln-pe.sam
 .PP
-bwa sampe database.fasta aln_sa1.sai aln_sa2.sai read1.fq read2.fq > aln.sam
+bwa aln ref.fa short_read.fq > aln_sa.sai
 .PP
-bwa bwasw database.fasta long_read.fastq > aln.sam
+bwa samse ref.fa aln_sa.sai short_read.fq > aln-se.sam
+.PP
+bwa sampe ref.fa aln_sa1.sai aln_sa2.sai read1.fq read2.fq > aln-pe.sam
+.PP
+bwa bwasw ref.fa long_read.fq > aln.sam
 
 .SH DESCRIPTION
 .PP
-BWA is a fast light-weighted tool that aligns relatively short sequences
-(queries) to a sequence database (targe), such as the human reference
-genome. It implements two different algorithms, both based on
-Burrows-Wheeler Transform (BWT). The first algorithm is designed for
-short queries up to ~150bp with low error rate (<3%). It does gapped
-global alignment w.r.t. queries, supports paired-end reads, and is one
-of the fastest short read alignment algorithms to date while also
-visiting suboptimal hits. The second algorithm, BWA-SW, is designed for
-reads longer than 100bp with more errors. It performs a heuristic Smith-Waterman-like
-alignment to find high-scoring local hits and split hits. On
-low-error short queries, BWA-SW is a little slower and less accurate than the
-first algorithm, but on long queries, it is better.
-.PP
-For both algorithms, the database file in the FASTA format must be
-first indexed with the
-.B `index'
-command, which typically takes a few hours for a 3GB genome. The first algorithm is
-implemented via the
-.B `aln'
-command, which finds the suffix array (SA) coordinates of good hits of
-each individual read, and the
-.B `samse/sampe'
-command, which converts SA coordinates to chromosomal coordinate and
-pairs reads (for `sampe'). The second algorithm is invoked by the
-.B `bwasw'
-command. It works for single-end reads only.
+BWA is a software package for mapping low-divergent sequences against a large
+reference genome, such as the human genome. It consists of three algorithms:
+BWA-backtrack, BWA-SW and BWA-MEM. The first algorithm is designed for Illumina
+sequence reads up to 100bp, while the rest two for longer sequences ranged from
+70bp to 1Mbp. BWA-MEM and BWA-SW share similar features such as long-read
+support and split alignment, but BWA-MEM, which is the latest, is generally
+recommended for high-quality queries as it is faster and more accurate.
+BWA-MEM also has better performance than BWA-backtrack for 70-100bp Illumina
+reads.
+
+For all the algorithms, BWA first needs to construct the FM-index for
+the reference genome (the
+.B index
+command). Alignment algorithms are invoked with different sub-commands:
+.BR aln / samse / sampe
+for BWA-backtrack,
+.B bwasw
+for BWA-SW and
+.B mem
+for the BWA-MEM algorithm.
 
 .SH COMMANDS AND OPTIONS
 .TP
@@ -53,9 +51,6 @@ Index database sequences in the FASTA format.
 .B OPTIONS:
 .RS
 .TP 10
-.B -c
-Build color-space index. The input fast should be in nucleotide space. (Disabled since 0.6.x)
-.TP
 .BI -p \ STR
 Prefix of the output database [same as db filename]
 .TP
@@ -73,6 +68,168 @@ reimplemented by Yuta Mori.
 .B bwtsw
 Algorithm implemented in BWT-SW. This method works with the whole human
 genome.
+.RE
+.RE
+
+.TP
+.B mem
+.B bwa mem
+.RB [ -aCHMpP ]
+.RB [ -t
+.IR nThreads ]
+.RB [ -k
+.IR minSeedLen ]
+.RB [ -w
+.IR bandWidth ]
+.RB [ -r
+.IR seedSplitRatio ]
+.RB [ -c
+.IR maxOcc ]
+.RB [ -A
+.IR matchScore ]
+.RB [ -B
+.IR mmPenalty ]
+.RB [ -O
+.IR gapOpenPen ]
+.RB [ -E
+.IR gapExtPen ]
+.RB [ -U
+.IR unpairPen ]
+.RB [ -R
+.IR RGline ]
+.RB [ -v
+.IR verboseLevel ]
+.I db.prefix
+.I reads.fq
+.RI [ mates.fq ]
+
+Align 70bp-1Mbp query sequences with the BWA-MEM algorithm. Briefly, the
+algorithm works by seeding alignments with maximal exact matches (MEMs) and
+then extending seeds with the affine-gap Smith-Waterman algorithm (SW).
+
+If
+.I mates.fq
+file is absent and option
+.B -p
+is not set, this command regards input reads are single-end. If
+.I mates.fq
+is present, this command assumes the
+.IR i -th
+read in
+.I reads.fq
+and the
+.IR i -th
+read in
+.I mates.fq
+constitute a read pair. If
+.B -p
+is used, the command assumes the
+.RI 2 i -th
+and the
+.RI (2 i +1)-th
+read in
+.I reads.fq
+constitute a read pair (such input file is said to be interleaved). In this case,
+.I mates.fq
+is ignored. In the paired-end mode, the
+.B mem
+command will infer the read orientation and the insert size distribution from a
+batch of reads.
+
+The BWA-MEM algorithm performs local alignment. It may produce multiple primary
+alignments for different part of a query sequence. This is a crucial feature
+for long sequences. However, some tools such as Picard's markDuplicates does
+not work with split alignments. One may consider to use option
+.B -M
+to flag shorter split hits as secondary.
+
+.B OPTIONS:
+.RS
+.TP 10
+.BI -t \ INT
+Number of threads [1]
+.TP
+.BI -k \ INT
+Minimum seed length. Matches shorter than
+.I INT
+will be missed. The alignment speed is usually insensitive to this value unless
+it significantly deviates 20. [19]
+.TP
+.BI -w \ INT
+Band width. Essentially, gaps longer than
+.I INT
+will not be found. Note that the maximum gap length is also affected by the
+scoring matrix and the hit length, not solely determined by this option. [100]
+.TP
+.BI -r \ FLOAT
+Trigger re-seeding for a MEM longer than
+.IR minSeedLen * FLOAT .
+This is a key heuristic parameter for tuning the performance. Larger value
+yields fewer seeds, which leads to faster alignment speed but lower accuracy. [1.5]
+.TP
+.BI -c \ INT
+Discard a MEM if it has more than
+.I INT
+occurence in the genome. This is an insensitive parameter. [10000]
+.TP
+.B -P
+In the paired-end mode, perform SW to rescue missing hits only but do not try to find
+hits that fit a proper pair.
+.TP
+.BI -A \ INT
+Matching score. [1]
+.TP
+.BI -B \ INT
+Mismatch penalty. The sequence error rate is approximately: {.75 * exp[-log(4) * B/A]}. [4]
+.TP
+.BI -O \ INT
+Gap open penalty. [6]
+.TP
+.BI -E \ INT
+Gap extension penalty. A gap of length k costs O + k*E (i.e.
+.B -O
+is for opening a zero-length gap). [1]
+.TP
+.BI -U \ INT
+Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
+.RI scoreRead1+scoreRead2- INT
+and scores a paired as scoreRead1+scoreRead2-insertPenalty. It compares these
+two scores to determine whether we should force pairing. [9]
+.TP
+.B -p
+Assume the first input query file is interleaved paired-end FASTA/Q. See the command description for details.
+.TP
+.BI -R \ STR
+Complete read group header line. '\\t' can be used in
+.I STR
+and will be converted to a TAB in the output SAM. The read group ID will be
+attached to every read in the output. An example is '@RG\\tID:foo\\tSM:bar'.
+[null]
+.TP
+.B -a
+Output all found alignments for single-end or unpaired paired-end reads. These
+alignments will be flagged as secondary alignments.
+.TP
+.B -C
+Append append FASTA/Q comment to SAM output. This option can be used to
+transfer read meta information (e.g. barcode) to the SAM output. Note that the
+FASTA/Q comment (the string after a space in the header line) must conform the SAM
+spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
+.TP
+.B -H
+Use hard clipping 'H' in the SAM output. This option may dramatically reduce
+the redundancy of output when mapping long contig or BAC sequences.
+.TP
+.B -M
+Mark shorter split hits as secondary (for Picard compatibility).
+.TP
+.BI -v \ INT
+Control the verbose level of the output. This option has not been fully
+supported throughout BWA. Ideally, a value 0 for disabling all the output to
+stderr; 1 for outputting errors only; 2 for warnings and errors; 3 for
+all normal messages; 4 or higher for debugging. When this option takes value
+4, the output is not SAM. [3]
+
 .RE
 .RE
 
@@ -482,24 +639,6 @@ Pairing is slower for shorter reads. This is mainly because shorter
 reads have more spurious hits and converting SA coordinates to
 chromosomal coordinates are very costly.
 
-.SH NOTES ON LONG-READ ALIGNMENT
-.PP
-Command
-.B bwasw
-is designed for long-read alignment. BWA-SW essentially aligns the trie
-of the reference genome against the directed acyclic word graph (DAWG) of a
-read to find seeds not highly repetitive in the genome, and then performs a
-standard Smith-Waterman algorithm to extend the seeds. A key heuristic, called
-the Z-best heuristic, is that at each vertex in the DAWG, BWA-SW only keeps the
-top Z reference suffix intervals that match the vertex. BWA-SW is more accurate
-if the resultant alignment is supported by more seeds, and therefore BWA-SW
-usually performs better on long queries or queries with low divergence to the
-reference genome.
-
-BWA-SW is perhaps a better choice than BWA-short for 100bp single-end HiSeq reads
-mainly because it gives better gapped alignment. For paired-end reads, it is yet
-to know whether BWA-short or BWA-SW yield overall better results.
-
 .SH CHANGES IN BWA-0.6
 .PP
 Since version 0.6, BWA has been able to work with a reference genome longer than 4GB.
@@ -534,16 +673,23 @@ The full BWA package is distributed under GPLv3 as it uses source codes
 from BWT-SW which is covered by GPL. Sorting, hash table, BWT and IS
 libraries are distributed under the MIT license.
 .PP
-If you use the short-read alignment component, please cite the following
+If you use the BWA-backtrack algorithm, please cite the following
 paper:
 .PP
 Li H. and Durbin R. (2009) Fast and accurate short read alignment with
 Burrows-Wheeler transform. Bioinformatics, 25, 1754-1760. [PMID: 19451168]
 .PP
-If you use the long-read component (BWA-SW), please cite:
+If you use the BWA-SW algorithm, please cite:
 .PP
 Li H. and Durbin R. (2010) Fast and accurate long-read alignment with
 Burrows-Wheeler transform. Bioinformatics, 26, 589-595. [PMID: 20080505]
+.PP
+If you use the fastmap component of BWA, please cite:
+.PP
+Li H. (2012) Exploring single-sample SNP and INDEL calling with whole-genome de
+novo assembly. Bioinformatics, 28, 1838-1844. [PMID: 22569178]
+.PP
+The BWA-MEM algorithm has not been published yet.
 
 .SH HISTORY
 BWA is largely influenced by BWT-SW. It uses source codes from BWT-SW
@@ -569,3 +715,11 @@ short-read aligners are being implemented.
 
 The BWA-SW algorithm is a new component of BWA. It was conceived in
 November 2008 and implemented ten months later.
+
+The BWA-MEM algorithm is based on an algorithm finding super-maximal exact
+matches (SMEMs), which was first published with the fermi assembler paper
+in 2012. I first implemented the basic SMEM algorithm in the
+.B fastmap
+command for an experiment and then extended the basic algorithm and added the
+extension part in Feburary 2013 to make BWA-MEM a fully featured mapper.
+

@@ -26,13 +26,14 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:w:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
 		else if (c == 'B') opt->b = atoi(optarg);
 		else if (c == 'O') opt->q = atoi(optarg);
 		else if (c == 'E') opt->r = atoi(optarg);
+		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
 		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
@@ -56,13 +57,14 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -k INT     minimum seed length [%d]\n", opt->min_seed_len);
 		fprintf(stderr, "       -w INT     band width for banded alignment [%d]\n", opt->w);
 		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
-		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
+//		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "       -P         skip pairing; perform mate SW only\n");
 		fprintf(stderr, "       -A INT     score for a sequence match [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT     penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT     gap open penalty [%d]\n", opt->q);
 		fprintf(stderr, "       -E INT     gap extension penalty; a gap of size k cost {-O} + {-E}*k [%d]\n", opt->r);
+		fprintf(stderr, "       -U INT     penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p         first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -72,6 +74,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -H         hard clipping\n");
 		fprintf(stderr, "       -M         mark shorter split hits as secondary (for Picard/GATK compatibility)\n");
+		fprintf(stderr, "\nNote: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;
