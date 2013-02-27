@@ -74,7 +74,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 {
 	uint32_t *cigar = 0;
 	uint8_t tmp, *rseq;
-	int i, w;
+	int i, w, max_gap, min_w;
 	int64_t rlen;
 	*n_cigar = 0; *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
@@ -89,10 +89,12 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 	//printf("[Q] "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
 	//printf("[R] "); for (i = 0; i < re - rb; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 	// set the band-width
-	w = (int)((double)(l_query * mat[0] - q) / r + 1.);
-	w = w < 1? w : 1;
+	max_gap = (int)((double)(((l_query+1)>>1) * mat[0] - q) / r + 1.);
+	max_gap = max_gap > 1? max_gap : 1;
+	w = (max_gap + abs(rlen - l_query) + 1) >> 1;
 	w = w < w_? w : w_;
-	w += abs(rlen - l_query);
+	min_w = abs(rlen - l_query) + 3;
+	w = w > min_w? w : min_w;
 	// NW alignment
 	*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
 	{// compute NM
