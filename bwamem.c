@@ -418,25 +418,11 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORT
  * Construct the alignment from a chain *
  ****************************************/
 
-static const char LogTable256[256] = {
-#define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
-    -1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
-    LT(4), LT(5), LT(5), LT(6), LT(6), LT(6), LT(6),
-    LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7)
-};
-#undef LT
-
-static inline int ilog2(uint32_t v)
-{
-	register uint32_t t, tt;
-	if ((tt = (v >> 16))) return (t = (tt >> 8)) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
-	return (t = (v >> 8)) ? 8 + LogTable256[t] : LogTable256[v];
-}
-
 static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 {
 	int l = (int)((double)(qlen * opt->a - opt->q) / opt->r + 1.);
-	return l > 1? l : 1;
+	l = l > 1? l : 1;
+	return l < opt->w<<1? l : opt->w<<1;
 }
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
@@ -475,13 +461,18 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		for (i = 0; i < av->n; ++i) { // test whether extension has been made before
 			mem_alnreg_t *p = &av->a[i];
 			int64_t rd;
-			int qd, w;
-			if (s->qbeg < p->qb || s->qbeg + s->len > p->qe || s->rbeg < p->rb || s->rbeg + s->len > p->re) continue;
-			qd = s->qbeg - p->qb;
-			rd = s->rbeg - p->rb;
-			w = ilog2(p->re - p->rb)<<1; // heuristic band width: small size for short hits
-			w = w < opt->w? w : opt->w;
+			int qd, w, max_gap;
+			if (s->rbeg < p->rb || s->rbeg + s->len > p->re || s->qbeg < p->qb || s->qbeg + s->len > p->qe) continue; // not fully contained
+			// qd: distance ahead of the seed on query; rd: on reference
+			qd = s->qbeg - p->qb; rd = s->rbeg - p->rb;
+			max_gap = cal_max_gap(opt, qd < rd? qd : rd); // the maximal gap allowed in regions ahead of the seed
+			w = max_gap < opt->w? max_gap : opt->w; // bounded by the band width
 			if (qd - rd < w && rd - qd < w) break; // the seed is "around" a previous hit
+			// similar to the previous four lines, but this time we look at the region behind
+			qd = p->qe - (s->qbeg + s->len); rd = p->re - (s->rbeg + s->len);
+			max_gap = cal_max_gap(opt, qd < rd? qd : rd);
+			w = max_gap < opt->w? max_gap : opt->w;
+			if (qd - rd < w && rd - qd < w) break;
 		}
 		if (i < av->n) continue;
 
