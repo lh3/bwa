@@ -445,6 +445,12 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		rmax[1] = rmax[1] > e? rmax[1] : e;
 		if (t->len > max) max = t->len;
 	}
+	rmax[0] = rmax[0] > 0? rmax[0] : 0;
+	rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
+	if (rmax[0] < l_pac && l_pac < rmax[1]) { // crossing the forward-reverse boundary; then choose one side
+		if (l_pac - rmax[0] > rmax[1] - l_pac) rmax[1] = l_pac;
+		else rmax[0] = l_pac;
+	}
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
 	if (rlen != rmax[1] - rmax[0]) return;
