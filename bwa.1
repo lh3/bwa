@@ -93,6 +93,8 @@ genome.
 .IR gapOpenPen ]
 .RB [ -E
 .IR gapExtPen ]
+.RB [ -L
+.IR clipPen ]
 .RB [ -U
 .IR unpairPen ]
 .RB [ -R
@@ -189,6 +191,13 @@ Gap open penalty. [6]
 Gap extension penalty. A gap of length k costs O + k*E (i.e.
 .B -O
 is for opening a zero-length gap). [1]
+.TP
+.BI -L \ INT
+Clipping penalty. When performing SW extension, BWA-MEM keeps track of the best
+score reaching the end of query. If this score is larger than the best SW score
+minus the clipping penalty, clipping will not be applied. Note that in this
+case, the SAM AS tag reports the best SW score; clipping penalty is not
+deducted. [5]
 .TP
 .BI -U \ INT
 Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as

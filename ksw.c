@@ -359,11 +359,11 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap;
+	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap, max_ie, gscore;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
 	qp = malloc(qlen * m);
@@ -385,7 +385,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	max_gap = max_gap > 1? max_gap : 1;
 	w = w < max_gap? w : max_gap;
 	// DP loop
-	max = h0, max_i = max_j = -1;
+	max = h0, max_i = max_j = -1; max_ie = -1, gscore = -1;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int f = 0, h1, m = 0, mj = -1;
@@ -421,6 +421,10 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			f = f > h? f : h;   // computed F(i,j+1)
 		}
 		eh[end].h = h1; eh[end].e = 0;
+		if (j == qlen) {
+			max_ie = gscore > h1? max_ie : i;
+			gscore = gscore > h1? gscore : h1;
+		}
 		if (m == 0) break;
 		if (m > max) max = m, max_i = i, max_j = mj;
 		// update beg and end for the next round
@@ -433,6 +437,8 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	free(eh); free(qp);
 	if (_qle) *_qle = max_j + 1;
 	if (_tle) *_tle = max_i + 1;
+	if (_gtle) *_gtle = max_ie + 1;
+	if (_gscore) *_gscore = gscore;
 	return max;
 }
 

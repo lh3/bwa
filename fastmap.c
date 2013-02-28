@@ -26,13 +26,14 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
 		else if (c == 'B') opt->b = atoi(optarg);
 		else if (c == 'O') opt->q = atoi(optarg);
 		else if (c == 'E') opt->r = atoi(optarg);
+		else if (c == 'L') opt->pen_clip = atoi(optarg);
 		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
@@ -64,6 +65,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -B INT     penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT     gap open penalty [%d]\n", opt->q);
 		fprintf(stderr, "       -E INT     gap extension penalty; a gap of size k cost {-O} + {-E}*k [%d]\n", opt->r);
+		fprintf(stderr, "       -L INT     penalty for clipping [%d]\n", opt->pen_clip);
 		fprintf(stderr, "       -U INT     penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p         first query file consists of interleaved paired-end sequences\n");

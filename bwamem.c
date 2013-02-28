@@ -42,8 +42,10 @@ mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
 	o = calloc(1, sizeof(mem_opt_t));
-	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
 	o->flag = 0;
+	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
+	o->pen_unpaired = 9;
+	o->pen_clip = 5;
 	o->min_seed_len = 19;
 	o->split_width = 10;
 	o->max_occ = 10000;
@@ -54,7 +56,6 @@ mem_opt_t *mem_opt_init()
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
-	o->pen_unpaired = 9;
 	o->max_matesw = 100;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
@@ -487,23 +488,27 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
-			int qle, tle;
+			int qle, tle, gtle, gscore;
 			qs = malloc(s->qbeg);
 			for (i = 0; i < s->qbeg; ++i) qs[i] = query[s->qbeg - 1 - i];
 			tmp = s->rbeg - rmax[0];
 			rs = malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, &qle, &tle);
-			a->qb = s->qbeg - qle; a->rb = s->rbeg - tle;
+			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, &qle, &tle, &gtle, &gscore);
+			// check whether we prefer to reach the end of the query
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qb = s->qbeg - qle, a->rb = s->rbeg - tle; // local hits
+			else a->qb = 0, a->rb = s->rbeg - gtle; // reach the end
 			free(qs); free(rs);
 		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension
-			int qle, tle, qe, re;
+			int qle, tle, qe, re, gtle, gscore;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
-			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
-			a->qe = qe + qle; a->re = rmax[0] + re + tle;
+			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle, &gtle, &gscore);
+			// similar to the above
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
+			else a->qe = l_query, a->re = rmax[0] + re + gtle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
 

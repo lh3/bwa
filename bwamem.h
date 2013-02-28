@@ -19,7 +19,10 @@ typedef struct __smem_i smem_i;
 
 typedef struct {
 	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
+	int pen_unpaired;       // phred-scaled penalty for unpaired reads
+	int pen_clip;           // clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
+
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
@@ -30,7 +33,6 @@ typedef struct {
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
-	int pen_unpaired;       // phred-scaled penalty for unpaired reads
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
