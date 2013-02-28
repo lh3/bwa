@@ -526,6 +526,15 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
  * Basic hit->SAM conversion *
  *****************************/
 
+static inline int infer_bw(int l1, int l2, int score, int a, int q, int r)
+{
+	int w;
+	if (l1 == l2 && l1 * a - score < (q + r)<<1) return 0; // to get equal alignment length, we need at least two gaps
+	w = ((double)((l1 < l2? l1 : l2) * a - score - q) / r + 1.);
+	if (w < abs(l1 - l2)) w = abs(l1 - l2);
+	return w;
+}
+
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p_, int is_hard, const bwahit_t *m)
 {
 #define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)
@@ -552,8 +561,8 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
 		if (p->flag&0x10000) sam_flag |= 0x100;
 		if (!copy_mate) {
-			int w2 = (int)((double)((p->qe - p->qb < p->re - p->rb? p->qe - p->qb : p->re - p->rb) * mat[0] - p->score - q) / r + 1.499);
-			w2 = w2 > 1? w2 : 1;
+			int w2;
+			w2 = infer_bw(p->qe - p->qb, p->re - p->rb, p->score, mat[0], q, r);
 			w2 = w2 < w? w2 : w;
 			cigar = bwa_gen_cigar(mat, q, r, w2, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar, &NM);
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
@@ -723,8 +732,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	memset(&a, 0, sizeof(mem_aln_t));
 	a.mapq = mem_approx_mapq_se(opt, ar);
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
-	w2 = (int)((double)((qe - qb < re - rb? qe - qb : re - rb) * opt->a - ar->score - opt->q) / opt->r + 1.499);
-	w2 = w2 > 1? w2 : 1;
+	w2 = infer_bw(qe - qb, re - rb, ar->score, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 	a.NM = NM;
