@@ -679,7 +679,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	s->sam = str.s;
 }
 
-mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
+mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
 {
 	int i;
 	mem_chain_v chn;
@@ -703,6 +703,32 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	return regs;
 }
 
+mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
+{ // the difference from mem_align1_core() lies in that this routine calls mem_mark_primary_se()
+	mem_alnreg_v ar;
+	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
+	mem_mark_primary_se(opt, ar.n, ar.a);
+	return ar;
+}
+
+// This routine is only used for the API purpose
+mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, const mem_alnreg_t *ar)
+{
+	mem_aln_t a;
+	int qb = ar->qb, qe = ar->qe, NM, score, is_rev;
+	int64_t pos, rb = ar->rb, re = ar->re;
+	memset(&a, 0, sizeof(mem_aln_t));
+	a.mapq = mem_approx_mapq_se(opt, ar);
+	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
+	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, opt->w, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
+	a.NM = NM;
+	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
+	a.is_rev = is_rev;
+	a.rid = bns_pos2rid(bns, pos);
+	a.pos = pos - bns->anns[a.rid].offset;
+	return a;
+}
+
 typedef struct {
 	int start, step, n;
 	const mem_opt_t *opt;
@@ -720,11 +746,11 @@ static void *worker1(void *data)
 	int i;
 	if (!(w->opt->flag&MEM_F_PE)) {
 		for (i = w->start; i < w->n; i += w->step)
-			w->regs[i] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
+			w->regs[i] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
 	} else { // for PE we align the two ends in the same thread in case the 2nd read is of worse quality, in which case some threads may be faster/slower
 		for (i = w->start; i < w->n>>1; i += w->step) {
-			w->regs[i<<1|0] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq);
-			w->regs[i<<1|1] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq);
+			w->regs[i<<1|0] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq);
+			w->regs[i<<1|1] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq);
 		}
 	}
 	return 0;
