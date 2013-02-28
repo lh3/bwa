@@ -13,23 +13,32 @@ task given longer reads, either, and the edit-distance criterion is arguably
 not as important in long-read alignment.
 
 In addition to the algorithmic improvements, BWA-SW also implements a few
-handy features, some of which are experimental:
+handy features in practical aspects:
 
- 1. BWA-MEM automatically infers pair orientation from a batch of single-end
+ 1. BWA-MEM automatically switches between local and glocal (global wrt reads;
+	local wrt reference) alignment. It reports the end-to-end glocal alignment
+	if the glocal alignment is not much worse than the optimal local alignment.
+	Glocal alignment reduces reference bias.
+
+ 2. BWA-MEM automatically infers pair orientation from a batch of single-end
     alignments. It allows more than one orientations if there are sufficient
-    reads supporting them. This feature has not been tested on reads from
-    Illumina jumping library yet.
+	supporting reads. This feature has not been tested on reads from Illumina
+	jumping library yet. (EXPERIMENTAL)
 
- 2. BWA-MEM optionally takes one interleaved fastq for paired-end mapping. It
+ 3. BWA-MEM optionally takes one interleaved fastq for paired-end mapping. It
     is possible to convert a name-sorted BAM to an interleaved fastq on the fly
     and feed the data stream to BWA-MEM for mapping.
 
- 3. BWA-MEM optionally copies FASTA/Q comments to the final SAM output. This
+ 4. BWA-MEM optionally copies FASTA/Q comments to the final SAM output, which
     helps to transfer individual read annotations to the output.
 
- 4. BWA-MEM supports more advanced piping. Users can now run:
+ 5. BWA-MEM supports more advanced piping. Users can now run:
     (bwa mem ref.fa '<bzcat r1.fq.bz2' '<bzcat r2.fq.bz2') to map bzip'd read
-    files without replying on the bash feature.
+    files without replying on bash features.
+
+ 6. BWA-MEM provides a few basic APIs for single-end mapping. The `example.c'
+	program in the source code directory implements a full single-end mapper in
+	50 lines of code.
 
 The BWA-MEM algorithm is in the beta phase. It is not advised to use BWA-MEM
 for production use yet. However, when the implementation becomes stable after a

@@ -33,10 +33,11 @@ int main(int argc, char *argv[])
 			mem_aln_t a;
 			if (ar.a[i].secondary >= 0) continue; // skip secondary alignments
 			a = mem_reg2aln(opt, idx->bns, idx->pac, ks->seq.l, (uint8_t*)ks->seq.s, &ar.a[i]); // get forward-strand position and CIGAR
+			// print alignment
 			printf("%s\t%c\t%s\t%d\t%d\t", ks->name.s, "+-"[a.is_rev], idx->bns->anns[a.rid].name, a.pos, a.mapq);
-			for (k = 0; k < a.n_cigar; ++k)
+			for (k = 0; k < a.n_cigar; ++k) // print CIGAR
 				printf("%d%c", a.cigar[k]>>4, "MIDSH"[a.cigar[k]&0xf]);
-			printf("\t%d\n", a.NM);
+			printf("\t%d\n", a.NM); // print edit distance
 			free(a.cigar); // don't forget to deallocate CIGAR
 		}
 		free(ar.a); // and deallocate the hit list
