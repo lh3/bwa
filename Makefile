@@ -28,14 +28,19 @@ bwa:libbwa.a $(AOBJS) main.o
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
-QSufSort.o:QSufSort.h
-bwt_gen.o:QSufSort.h
-
 ksw.o:ksw.h
+kstring.o:kstring.h
 utils.o:utils.h ksort.h kseq.h
 bntseq.o:bntseq.h
 bwt.o:bwt.h utils.h
-bwa.o:bwa.h
+bwa.o:bwa.h bwt.h bntseq.h
+bwamem.o:ksw.h kbtree.h ksort.h kvec.h kstring.h utils.h bwamem.h
+bwamem_pair.o:ksw.h kvec.h kstring.h utils.h bwamem.h
+
+QSufSort.o:QSufSort.h
+bwt_gen.o:QSufSort.h
+
+fastmap.o:bwt.h bwamem.h
 
 bwtaln.o:bwt.h bwtaln.h kseq.h
 bwtgap.o:bwtgap.h bwtaln.h bwt.h
@@ -43,10 +48,6 @@ bwtgap.o:bwtgap.h bwtaln.h bwt.h
 bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
 bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
 bwtsw2_main.o:bwtsw2.h
-
-bwamem.o:bwamem.h
-bwamem_pair.o:bwamem.h
-fastmap.o:bwt.h bwamem.h
 
 clean:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a
