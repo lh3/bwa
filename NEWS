@@ -9,10 +9,10 @@ longer low-divergence query sequences, BWA-MEM is about twice as fast as BWA
 and BWA-SW and is more accurate. It also supports split alignments like BWA-SW
 and may optionally output multiple hits like BWA. BWA-MEM does not guarantee
 to find hits within a certain edit distance, but BWA is not efficient for such
-task given longer reads, either, and the edit-distance criterion is arguably
+task given longer reads anyway, and the edit-distance criterion is arguably
 not as important in long-read alignment.
 
-In addition to the algorithmic improvements, BWA-SW also implements a few
+In addition to the algorithmic improvements, BWA-MEM also implements a few
 handy features in practical aspects:
 
  1. BWA-MEM automatically switches between local and glocal (global wrt reads;
@@ -47,7 +47,7 @@ for 76bp or longer Illumina reads and long query sequences. The original BWA
 short-read algorithm will not deliver satisfactory results for 150bp+ Illumina
 reads. Change of mappers will be necessary sooner or later.
 
-(0.7.0 beta: 28 Feburary 2013, r304)
+(0.7.0 beta: 28 Feburary 2013, r313)
 
 
 
