@@ -122,7 +122,7 @@ extern "C" {
 	 */
 	mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq);
 
-	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, const mem_alnreg_t *ar);
+	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar);
 
 	/**
 	 * Infer the insert size distribution from interleaved alignment regions

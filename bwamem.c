@@ -712,7 +712,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 }
 
 // This routine is only used for the API purpose
-mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, const mem_alnreg_t *ar)
+mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
 	int qb = ar->qb, qe = ar->qe, NM, score, is_rev;
@@ -722,6 +722,18 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, opt->w, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 	a.NM = NM;
+	if (qb != 0 || qe != l_query) { // add clipping to CIGAR
+		int clip5, clip3;
+		clip5 = is_rev? l_query - qe : qb;
+		clip3 = is_rev? qb : l_query - qe;
+		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2));
+		if (clip5) {
+			memmove(a.cigar+1, a.cigar, a.n_cigar * 4);
+			a.cigar[0] = clip5<<4|3;
+			++a.n_cigar;
+		}
+		if (clip3) a.cigar[a.n_cigar++] = clip3<<4|3;
+	}
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
 	a.is_rev = is_rev;
 	a.rid = bns_pos2rid(bns, pos);
