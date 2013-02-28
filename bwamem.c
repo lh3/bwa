@@ -552,7 +552,10 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
 		if (p->flag&0x10000) sam_flag |= 0x100;
 		if (!copy_mate) {
-			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar, &NM);
+			int w2 = (int)((double)((p->qe - p->qb < p->re - p->rb? p->qe - p->qb : p->re - p->rb) * mat[0] - p->score - q) / r + 1.499);
+			w2 = w2 > 1? w2 : 1;
+			w2 = w2 < w? w2 : w;
+			cigar = bwa_gen_cigar(mat, q, r, w2, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar, &NM);
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
 		} else n_cigar = 0, cigar = 0;
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
@@ -715,13 +718,18 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
-	int qb = ar->qb, qe = ar->qe, NM, score, is_rev;
+	int w2, qb = ar->qb, qe = ar->qe, NM, score, is_rev;
 	int64_t pos, rb = ar->rb, re = ar->re;
 	memset(&a, 0, sizeof(mem_aln_t));
 	a.mapq = mem_approx_mapq_se(opt, ar);
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
-	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, opt->w, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
+	w2 = (int)((double)((qe - qb < re - rb? qe - qb : re - rb) * opt->a - ar->score - opt->q) / opt->r + 1.499);
+	w2 = w2 > 1? w2 : 1;
+	w2 = w2 < opt->w? w2 : opt->w;
+	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 	a.NM = NM;
+	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
+	a.is_rev = is_rev;
 	if (qb != 0 || qe != l_query) { // add clipping to CIGAR
 		int clip5, clip3;
 		clip5 = is_rev? l_query - qe : qb;
@@ -734,8 +742,6 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		}
 		if (clip3) a.cigar[a.n_cigar++] = clip3<<4|3;
 	}
-	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
-	a.is_rev = is_rev;
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;
 	return a;
