@@ -1449,7 +1449,7 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 	}
 
 	err_fseek(packedFile, -1, SEEK_END);
-	packedFileLen = ftell(packedFile);
+	packedFileLen = err_ftell(packedFile);
 	err_fread_noeof(&lastByteLength, sizeof(unsigned char), 1, packedFile);
 	totalTextLength = TextLengthFromBytePacked(packedFileLen, BIT_PER_CHAR, lastByteLength);
 

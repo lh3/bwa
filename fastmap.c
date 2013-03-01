@@ -2,115 +2,174 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "bntseq.h"
-#include "bwt.h"
+#include "bwa.h"
+#include "bwamem.h"
 #include "kvec.h"
+#include "utils.h"
 #include "kseq.h"
 #include "utils.h"
-KSEQ_INIT(gzFile, err_gzread)
+KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
 
-typedef struct {
-	const bwt_t *bwt;
-	const uint8_t *query;
-	int start, len;
-	bwtintv_v *tmpvec[2], *matches;
-} smem_i;
+void *kopen(const char *fn, int *_fd);
+int kclose(void *a);
 
-smem_i *smem_iter_init(const bwt_t *bwt)
+int main_mem(int argc, char *argv[])
 {
-	smem_i *iter;
-	iter = xcalloc(1, sizeof(smem_i));
-	iter->bwt = bwt;
-	iter->tmpvec[0] = xcalloc(1, sizeof(bwtintv_v));
-	iter->tmpvec[1] = xcalloc(1, sizeof(bwtintv_v));
-	iter->matches   = xcalloc(1, sizeof(bwtintv_v));
-	return iter;
-}
+	mem_opt_t *opt;
+	int fd, fd2, i, c, n, copy_comment = 0;
+	gzFile fp, fp2 = 0;
+	kseq_t *ks, *ks2 = 0;
+	bseq1_t *seqs;
+	bwaidx_t *idx;
+	char *rg_line = 0;
+	void *ko = 0, *ko2 = 0;
 
-void smem_iter_destroy(smem_i *iter)
-{
-	free(iter->tmpvec[0]->a);
-	free(iter->tmpvec[1]->a);
-	free(iter->matches->a);
-	free(iter);
-}
+	opt = mem_opt_init();
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:w:")) >= 0) {
+		if (c == 'k') opt->min_seed_len = atoi(optarg);
+		else if (c == 'w') opt->w = atoi(optarg);
+		else if (c == 'A') opt->a = atoi(optarg);
+		else if (c == 'B') opt->b = atoi(optarg);
+		else if (c == 'O') opt->q = atoi(optarg);
+		else if (c == 'E') opt->r = atoi(optarg);
+		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
+		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
+		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
+		else if (c == 'a') opt->flag |= MEM_F_ALL;
+		else if (c == 'p') opt->flag |= MEM_F_PE;
+		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
+		else if (c == 'c') opt->max_occ = atoi(optarg);
+		else if (c == 'v') bwa_verbose = atoi(optarg);
+		else if (c == 'r') opt->split_factor = atof(optarg);
+		else if (c == 'C') copy_comment = 1;
+		else if (c == 'R') {
+			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
+		} else if (c == 's') opt->split_width = atoi(optarg);
+	}
+	if (opt->n_threads < 1) opt->n_threads = 1;
+	if (optind + 1 >= argc) {
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
+		fprintf(stderr, "Algorithm options:\n\n");
+		fprintf(stderr, "       -t INT     number of threads [%d]\n", opt->n_threads);
+		fprintf(stderr, "       -k INT     minimum seed length [%d]\n", opt->min_seed_len);
+		fprintf(stderr, "       -w INT     band width for banded alignment [%d]\n", opt->w);
+		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
+		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
+		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
+		fprintf(stderr, "       -P         skip pairing; perform mate SW only\n");
+		fprintf(stderr, "       -A INT     score for a sequence match [%d]\n", opt->a);
+		fprintf(stderr, "       -B INT     penalty for a mismatch [%d]\n", opt->b);
+		fprintf(stderr, "       -O INT     gap open penalty [%d]\n", opt->q);
+		fprintf(stderr, "       -E INT     gap extension penalty; a gap of size k cost {-O} + {-E}*k [%d]\n", opt->r);
+		fprintf(stderr, "\nInput/output options:\n\n");
+		fprintf(stderr, "       -p         first query file consists of interleaved paired-end sequences\n");
+		fprintf(stderr, "       -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "       -v INT     verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
+		fprintf(stderr, "       -a         output all alignments for SE or unpaired PE\n");
+		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "       -H         hard clipping\n");
+		fprintf(stderr, "       -M         mark shorter split hits as secondary (for Picard/GATK compatibility)\n");
+		fprintf(stderr, "\n");
+		free(opt);
+		return 1;
+	}
 
-void smem_set_query(smem_i *iter, int len, const uint8_t *query)
-{
-	iter->query = query;
-	iter->start = 0;
-	iter->len = len;
-}
+	mem_fill_scmat(opt->a, opt->b, opt->mat);
+	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
+	bwa_print_sam_hdr(idx->bns, rg_line);
 
-int smem_next(smem_i *iter)
-{
-	iter->tmpvec[0]->n = iter->tmpvec[1]->n = iter->matches->n = 0;
-	if (iter->start >= iter->len || iter->start < 0) return -1;
-	while (iter->start < iter->len && iter->query[iter->start] > 3) ++iter->start; // skip ambiguous bases
-	if (iter->start == iter->len) return -1;
-	iter->start = bwt_smem1(iter->bwt, iter->len, iter->query, iter->start, iter->matches, iter->tmpvec);
-	return iter->start;
+	ko = kopen(argv[optind + 1], &fd);
+	fp = gzdopen(fd, "r");
+	ks = kseq_init(fp);
+	if (optind + 2 < argc) {
+		if (opt->flag&MEM_F_PE) {
+			if (bwa_verbose >= 2)
+				fprintf(stderr, "[W::%s] when '-p' is in use, the second query file will be ignored.\n", __func__);
+		} else {
+			ko2 = kopen(argv[optind + 2], &fd2);
+			fp2 = gzdopen(fd2, "r");
+			ks2 = kseq_init(fp2);
+			opt->flag |= MEM_F_PE;
+		}
+	}
+	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
+		int64_t size = 0;
+		if (!copy_comment)
+			for (i = 0; i < n; ++i) {
+				free(seqs[i].comment); seqs[i].comment = 0;
+			}
+		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
+		if (bwa_verbose >= 3)
+			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs);
+		free(seqs);
+	}
+
+	free(opt);
+	bwa_idx_destroy(idx);
+	kseq_destroy(ks);
+	err_gzclose(fp); kclose(ko);
+	if (ks2) {
+		kseq_destroy(ks2);
+		err_gzclose(fp2); kclose(ko2);
+	}
+	return 0;
 }
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, split_width = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
-	bwt_t *bwt;
-	bntseq_t *bns;
-	smem_i *iter;
+	smem_i *itr;
+	const bwtintv_v *a;
+	bwaidx_t *idx;
 
-	while ((c = getopt(argc, argv, "w:l:s")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:ps:")) >= 0) {
 		switch (c) {
-			case 's': print_seq = 1; break;
+			case 's': split_width = atoi(optarg); break;
+			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-s] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
+		fprintf(stderr, "Usage: bwa fastmap [-p] [-s splitWidth=%d] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", split_width, min_len, min_iwidth);
 		return 1;
 	}
 
 	fp = xzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
-	{ // load the packed sequences, BWT and SA
-		char *tmp = xcalloc(strlen(argv[optind]) + 5, 1);
-		strcat(strcpy(tmp, argv[optind]), ".bwt");
-		bwt = bwt_restore_bwt(tmp);
-		strcat(strcpy(tmp, argv[optind]), ".sa");
-		bwt_restore_sa(tmp, bwt);
-		free(tmp);
-		bns = bns_restore(argv[optind]);
-	}
-	iter = smem_iter_init(bwt);
+	idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS);
+	itr = smem_itr_init(idx->bwt);
 	while (kseq_read(seq) >= 0) {
-		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
+		err_printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {
 			err_putchar('\t');
 			err_puts(seq->seq.s);
 		} else err_putchar('\n');
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
-		smem_set_query(iter, seq->seq.l, (uint8_t*)seq->seq.s);
-		while (smem_next(iter) > 0) {
-			for (i = 0; i < iter->matches->n; ++i) {
-				bwtintv_t *p = &iter->matches->a[i];
+		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
+		while ((a = smem_next(itr, min_len<<1, split_width)) != 0) {
+			for (i = 0; i < a->n; ++i) {
+				bwtintv_t *p = &a->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;
-				printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
+				err_printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
 				if (p->x[2] <= min_iwidth) {
 					for (k = 0; k < p->x[2]; ++k) {
 						bwtint_t pos;
 						int len, is_rev, ref_id;
 						len  = (uint32_t)p->info - (p->info>>32);
-						pos = bns_depos(bns, bwt_sa(bwt, p->x[0] + k), &is_rev);
+						pos = bns_depos(idx->bns, bwt_sa(idx->bwt, p->x[0] + k), &is_rev);
 						if (is_rev) pos -= len - 1;
-						bns_cnt_ambi(bns, pos, len, &ref_id);
-						printf("\t%s:%c%ld", bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
+						bns_cnt_ambi(idx->bns, pos, len, &ref_id);
+						err_printf("\t%s:%c%ld", idx->bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - idx->bns->anns[ref_id].offset) + 1);
 					}
 				} else err_puts("\t*");
 				err_putchar('\n');
@@ -119,9 +178,8 @@ int main_fastmap(int argc, char *argv[])
 		err_puts("//");
 	}
 
-	smem_iter_destroy(iter);
-	bns_destroy(bns);
-	bwt_destroy(bwt);
+	smem_itr_destroy(itr);
+	bwa_idx_destroy(idx);
 	kseq_destroy(seq);
 	err_gzclose(fp);
 	return 0;

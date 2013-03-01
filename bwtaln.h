@@ -107,7 +107,6 @@ typedef struct {
 } gap_opt_t;
 
 #define BWA_PET_STD   1
-#define BWA_PET_SOLID 2
 
 typedef struct {
 	int max_isize, force_isize;

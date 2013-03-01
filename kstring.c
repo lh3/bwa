@@ -27,7 +27,7 @@ int ksprintf(kstring_t *s, const char *fmt, ...)
 int main()
 {
 	kstring_t *s;
-	s = (kstring_t*)calloc(1, sizeof(kstring_t));
+	s = (kstring_t*)xcalloc(1, sizeof(kstring_t));
 	ksprintf(s, "abcdefg: %d", 100);
 	printf("%s\n", s->s);
 	free(s);

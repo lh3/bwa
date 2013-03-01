@@ -5,7 +5,7 @@
 #include "bamlite.h"
 
 #include "kseq.h"
-KSEQ_INIT(gzFile, err_gzread)
+KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
 static char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };

@@ -41,6 +41,18 @@
 #include <sys/time.h>
 #include "utils.h"
 
+#include "ksort.h"
+#define pair64_lt(a, b) ((a).x < (b).x || ((a).x == (b).x && (a).y < (b).y))
+KSORT_INIT(128, pair64_t, pair64_lt)
+KSORT_INIT(64,  uint64_t, ks_lt_generic)
+
+#include "kseq.h"
+KSEQ_INIT2(, gzFile, err_gzread)
+
+/********************
+ * System utilities *
+ ********************/
+
 FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
 {
 	FILE *fp = 0;
@@ -51,6 +63,7 @@ FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
 	}
 	return fp;
 }
+
 FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE *fp)
 {
 	if (freopen(fn, mode, fp) == 0) {
@@ -58,6 +71,7 @@ FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE 
 	}
 	return fp;
 }
+
 gzFile err_xzopen_core(const char *func, const char *fn, const char *mode)
 {
 	gzFile fp;
@@ -109,12 +123,10 @@ void _err_fatal_simple_core(const char *func, const char *msg)
 
 size_t err_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-    size_t ret = fwrite(ptr, size, nmemb, stream);
-    if (ret != nmemb) 
-    {
-        _err_fatal_simple("fwrite", strerror(errno));
-    }
-    return ret;
+	size_t ret = fwrite(ptr, size, nmemb, stream);
+	if (ret != nmemb) 
+		_err_fatal_simple("fwrite", strerror(errno));
+	return ret;
 }
 
 size_t err_fread_noeof(void *ptr, size_t size, size_t nmemb, FILE *stream)
@@ -163,36 +175,26 @@ long err_ftell(FILE *stream)
 
 int err_printf(const char *format, ...) 
 {
-    va_list arg;
-    int done;
-
-    va_start(arg, format);
-    done = vfprintf(stdout, format, arg);
-    int saveErrno = errno;
-    va_end(arg);
-
-    if (done < 0) 
-    {
-        _err_fatal_simple("vfprintf(stdout)", strerror(saveErrno));
-    }
-    return done;
+	va_list arg;
+	int done;
+	va_start(arg, format);
+	done = vfprintf(stdout, format, arg);
+	int saveErrno = errno;
+	va_end(arg);
+	if (done < 0) _err_fatal_simple("vfprintf(stdout)", strerror(saveErrno));
+	return done;
 }
 
 int err_fprintf(FILE *stream, const char *format, ...) 
 {
-    va_list arg;
-    int done;
-
-    va_start(arg, format);
-    done = vfprintf(stream, format, arg);
-    int saveErrno = errno;
-    va_end(arg);
-
-    if (done < 0) 
-    {
-        _err_fatal_simple("vfprintf", strerror(saveErrno));
-    }
-    return done;
+	va_list arg;
+	int done;
+	va_start(arg, format);
+	done = vfprintf(stream, format, arg);
+	int saveErrno = errno;
+	va_end(arg);
+	if (done < 0) _err_fatal_simple("vfprintf", strerror(saveErrno));
+	return done;
 }
 
 int err_fputc(int c, FILE *stream)
@@ -220,10 +222,8 @@ int err_fputs(const char *s, FILE *stream)
 int err_fflush(FILE *stream) 
 {
     int ret = fflush(stream);
-    if (ret != 0) 
-    {
-        _err_fatal_simple("fflush", strerror(errno));
-    }
+    if (ret != 0) _err_fatal_simple("fflush", strerror(errno));
+
 #ifdef FSYNC_ON_FLUSH
 	/* Calling fflush() ensures that all the data has made it to the
 	   kernel buffers, but this may not be sufficient for remote filesystems
@@ -234,15 +234,12 @@ int err_fflush(FILE *stream)
 	{
 		struct stat sbuf;
 		if (0 != fstat(fileno(stream), &sbuf))
-		{
 			_err_fatal_simple("fstat", strerror(errno));
-		}
+		
 		if (S_ISREG(sbuf.st_mode))
 		{
 			if (0 != fsync(fileno(stream)))
-			{
 				_err_fatal_simple("fsync", strerror(errno));
-			}
 		}
 	}
 #endif
@@ -251,12 +248,9 @@ int err_fflush(FILE *stream)
 
 int err_fclose(FILE *stream) 
 {
-    int ret = fclose(stream);
-    if (ret != 0) 
-    {
-        _err_fatal_simple("fclose", strerror(errno));
-    }
-    return ret;
+	int ret = fclose(stream);
+	if (ret != 0) _err_fatal_simple("fclose", strerror(errno));
+	return ret;
 }
 
 int err_gzclose(gzFile file)
@@ -310,6 +304,10 @@ char *err_strdup(const char *s, const char *file, unsigned int line, const char 
 	}
 	return p;
 }
+
+/*********
+ * Timer *
+ *********/
 
 double cputime()
 {

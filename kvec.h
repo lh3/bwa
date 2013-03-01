@@ -1,6 +1,6 @@
 /* The MIT License
 
-   Copyright (c) 2008, by Attractive Chaos <attractivechaos@aol.co.uk>
+   Copyright (c) 2008, by Attractive Chaos <attractor@live.co.uk>
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -76,15 +76,15 @@ int main() {
 		(v).a[(v).n++] = (x);										\
 	} while (0)
 
-#define kv_pushp(type, v) (((v).n == (v).m)?							\
+#define kv_pushp(type, v) ((((v).n == (v).m)?							\
 						   ((v).m = ((v).m? (v).m<<1 : 2),				\
 							(v).a = (type*)xrealloc((v).a, sizeof(type) * (v).m), 0)	\
-						   : 0), ((v).a + ((v).n++))
+						   : 0), &(v).a[(v).n++])
 
-#define kv_a(type, v, i) ((v).m <= (size_t)(i)?						\
+#define kv_a(type, v, i) (((v).m <= (size_t)(i)? \
 						  ((v).m = (v).n = (i) + 1, kv_roundup32((v).m), \
 						   (v).a = (type*)xrealloc((v).a, sizeof(type) * (v).m), 0) \
-						  : (v).n <= (size_t)(i)? (v).n = (i)			\
-						  : 0), (v).a[(i)]
+						  : (v).n <= (size_t)(i)? (v).n = (i) + 1 \
+						  : 0), (v).a[(i)])
 
 #endif

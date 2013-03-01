@@ -14,7 +14,7 @@ extern "C" {
 	// Calculate the approximate position of the sequence from the specified bwt with loaded suffix array.
 	void bwa_cal_pac_pos_core(const bntseq_t *bns, const bwt_t* bwt, bwa_seq_t* seq, const int max_mm, const float fnr);
 	// Refine the approximate position of the sequence to an actual placement for the sequence.
-	void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, bntseq_t *ntbns);
+	void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq);
 	// Backfill certain alignment properties mainly centering around number of matches.
 	void bwa_aln2seq(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s);
 	// Calculate the end position of a read given a certain sequence.

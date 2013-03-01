@@ -36,7 +36,7 @@
 #include "utils.h"
 
 #include "kseq.h"
-KSEQ_INIT(gzFile, err_gzread)
+KSEQ_DECLARE(gzFile)
 
 unsigned char nst_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -310,21 +310,26 @@ int bwa_fa2pac(int argc, char *argv[])
 	return 0;
 }
 
+int bns_pos2rid(const bntseq_t *bns, int64_t pos_f)
+{
+	int left, mid, right;
+	if (pos_f >= bns->l_pac) return -1;
+	left = 0; mid = 0; right = bns->n_seqs;
+	while (left < right) { // binary search
+		mid = (left + right) >> 1;
+		if (pos_f >= bns->anns[mid].offset) {
+			if (mid == bns->n_seqs - 1) break;
+			if (pos_f < bns->anns[mid+1].offset) break; // bracketed
+			left = mid + 1;
+		} else right = mid;
+	}
+	return mid;
+}
+
 int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
 {
 	int left, mid, right, nn;
-	if (ref_id) {
-		left = 0; mid = 0; right = bns->n_seqs;
-		while (left < right) {
-			mid = (left + right) >> 1;
-			if (pos_f >= bns->anns[mid].offset) {
-				if (mid == bns->n_seqs - 1) break;
-				if (pos_f < bns->anns[mid+1].offset) break; // bracketed
-				left = mid + 1;
-			} else right = mid;
-		}
-		*ref_id = mid;
-	}
+	if (ref_id) *ref_id = bns_pos2rid(bns, pos_f);
 	left = 0; right = bns->n_holes; nn = 0;
 	while (left < right) {
 		mid = (left + right) >> 1;
@@ -342,4 +347,27 @@ int bns_cnt_ambi(const bntseq_t *bns, int64_t pos_f, int len, int *ref_id)
 		}
 	}
 	return nn;
+}
+
+uint8_t *bns_get_seq(int64_t l_pac, const uint8_t *pac, int64_t beg, int64_t end, int64_t *len)
+{
+	uint8_t *seq = 0;
+	if (end < beg) end ^= beg, beg ^= end, end ^= beg; // if end is smaller, swap
+	if (end > l_pac<<1) end = l_pac<<1;
+	if (beg < 0) beg = 0;
+	if (beg >= l_pac || end <= l_pac) {
+		int64_t k, l = 0;
+		*len = end - beg;
+		seq = xmalloc(end - beg);
+		if (beg >= l_pac) { // reverse strand
+			int64_t beg_f = (l_pac<<1) - 1 - end;
+			int64_t end_f = (l_pac<<1) - 1 - beg;
+			for (k = end_f; k > beg_f; --k)
+				seq[l++] = 3 - _get_pac(pac, k);
+		} else { // forward strand
+			for (k = beg; k < end; ++k)
+				seq[l++] = _get_pac(pac, k);
+		}
+	} else *len = 0; // if bridging the forward-reverse boundary, return nothing
+	return seq;
 }
