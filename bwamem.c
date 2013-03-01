@@ -715,20 +715,29 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	return regs;
 }
 
-mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
-{ // the difference from mem_align1_core() lies in that this routine calls mem_mark_primary_se()
+mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq_)
+{ // the difference from mem_align1_core() is that this routine: 1) calls mem_mark_primary_se(); 2) does not modify the input sequence
 	mem_alnreg_v ar;
+	char *seq;
+	seq = malloc(l_seq);
+	memcpy(seq, seq_, l_seq); // makes a copy of seq_
 	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
 	mem_mark_primary_se(opt, ar.n, ar.a);
+	free(seq);
 	return ar;
 }
 
 // This routine is only used for the API purpose
-mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar)
+mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
-	int w2, qb = ar->qb, qe = ar->qe, NM, score, is_rev;
+	int i, w2, qb = ar->qb, qe = ar->qe, NM, score, is_rev;
 	int64_t pos, rb = ar->rb, re = ar->re;
+	uint8_t *query;
+
+	query = malloc(l_query);
+	for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
+		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	memset(&a, 0, sizeof(mem_aln_t));
 	a.mapq = mem_approx_mapq_se(opt, ar);
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
@@ -752,6 +761,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	}
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;
+	free(query);
 	return a;
 }
 

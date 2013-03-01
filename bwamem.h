@@ -64,11 +64,11 @@ typedef struct { // TODO: This is an intermediate struct only. Better get rid of
 } bwahit_t;
 
 typedef struct { // This struct is only used for the convenience of API.
-	int rid;
-	int pos;
-	uint32_t is_rev:1, mapq:8, NM:23;
-	int n_cigar;
-	uint32_t *cigar;
+	int rid;         // reference sequence index in bntseq_t
+	int pos;         // forward strand 5'-end mapping position
+	uint32_t is_rev:1, mapq:8, NM:23; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
+	int n_cigar;     // number of CIGAR operations
+	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
 } mem_aln_t;
 
 #ifdef __cplusplus
@@ -116,13 +116,26 @@ extern "C" {
 	 * @param bns    Information of the reference
 	 * @param pac    2-bit encoded reference
 	 * @param l_seq  length of query sequence
-	 * @param seq    query sequence; conversion ACGTN/acgtn=>01234 to be applied
+	 * @param seq    query sequence
 	 *
 	 * @return       list of aligned regions.
 	 */
-	mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq);
+	mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq);
 
-	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar);
+	/**
+	 * Generate CIGAR and forward-strand position from alignment region
+	 *
+	 * @param opt    alignment parameters
+	 * @param bwt    FM-index of the reference sequence
+	 * @param bns    Information of the reference
+	 * @param pac    2-bit encoded reference
+	 * @param l_seq  length of query sequence
+	 * @param seq    query sequence
+	 * @param ar     one alignment region
+	 *
+	 * @return       CIGAR, strand, mapping quality and forward-strand position
+	 */
+	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar);
 
 	/**
 	 * Infer the insert size distribution from interleaved alignment regions

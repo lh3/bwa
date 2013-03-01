@@ -32,7 +32,7 @@ int main(int argc, char *argv[])
 		for (i = 0; i < ar.n; ++i) { // traverse each hit
 			mem_aln_t a;
 			if (ar.a[i].secondary >= 0) continue; // skip secondary alignments
-			a = mem_reg2aln(opt, idx->bns, idx->pac, ks->seq.l, (uint8_t*)ks->seq.s, &ar.a[i]); // get forward-strand position and CIGAR
+			a = mem_reg2aln(opt, idx->bns, idx->pac, ks->seq.l, ks->seq.s, &ar.a[i]); // get forward-strand position and CIGAR
 			// print alignment
 			printf("%s\t%c\t%s\t%d\t%d\t", ks->name.s, "+-"[a.is_rev], idx->bns->anns[a.rid].name, a.pos, a.mapq);
 			for (k = 0; k < a.n_cigar; ++k) // print CIGAR
