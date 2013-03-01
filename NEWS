@@ -1,3 +1,56 @@
+Beta Release 0.7.0 (28 Feburary, 2013)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This release comes with a new alignment algorithm, BWA-MEM, for 70bp-1Mbp query
+sequences. BWA-MEM essentially seeds alignments with a variant of the fastmap
+algorithm and extends seeds with banded affine-gap-penalty dynamic programming
+(i.e. the Smith-Waterman-Gotoh algorithm). For typical Illumina 100bp reads or
+longer low-divergence query sequences, BWA-MEM is about twice as fast as BWA
+and BWA-SW and is more accurate. It also supports split alignments like BWA-SW
+and may optionally output multiple hits like BWA. BWA-MEM does not guarantee
+to find hits within a certain edit distance, but BWA is not efficient for such
+task given longer reads anyway, and the edit-distance criterion is arguably
+not as important in long-read alignment.
+
+In addition to the algorithmic improvements, BWA-MEM also implements a few
+handy features in practical aspects:
+
+ 1. BWA-MEM automatically switches between local and glocal (global wrt reads;
+	local wrt reference) alignment. It reports the end-to-end glocal alignment
+	if the glocal alignment is not much worse than the optimal local alignment.
+	Glocal alignment reduces reference bias.
+
+ 2. BWA-MEM automatically infers pair orientation from a batch of single-end
+    alignments. It allows more than one orientations if there are sufficient
+	supporting reads. This feature has not been tested on reads from Illumina
+	jumping library yet. (EXPERIMENTAL)
+
+ 3. BWA-MEM optionally takes one interleaved fastq for paired-end mapping. It
+    is possible to convert a name-sorted BAM to an interleaved fastq on the fly
+    and feed the data stream to BWA-MEM for mapping.
+
+ 4. BWA-MEM optionally copies FASTA/Q comments to the final SAM output, which
+    helps to transfer individual read annotations to the output.
+
+ 5. BWA-MEM supports more advanced piping. Users can now run:
+    (bwa mem ref.fa '<bzcat r1.fq.bz2' '<bzcat r2.fq.bz2') to map bzip'd read
+    files without replying on bash features.
+
+ 6. BWA-MEM provides a few basic APIs for single-end mapping. The `example.c'
+	program in the source code directory implements a full single-end mapper in
+	50 lines of code.
+
+The BWA-MEM algorithm is in the beta phase. It is not advised to use BWA-MEM
+for production use yet. However, when the implementation becomes stable after a
+few release cycles, existing BWA users are recommended to migrate to BWA-MEM
+for 76bp or longer Illumina reads and long query sequences. The original BWA
+short-read algorithm will not deliver satisfactory results for 150bp+ Illumina
+reads. Change of mappers will be necessary sooner or later.
+
+(0.7.0 beta: 28 Feburary 2013, r313)
+
+
+
 Release 0.6.2 (19 June, 2012)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

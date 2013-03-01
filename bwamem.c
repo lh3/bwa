@@ -42,8 +42,10 @@ mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
 	o = xcalloc(1, sizeof(mem_opt_t));
-	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
 	o->flag = 0;
+	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
+	o->pen_unpaired = 9;
+	o->pen_clip = 5;
 	o->min_seed_len = 19;
 	o->split_width = 10;
 	o->max_occ = 10000;
@@ -54,7 +56,6 @@ mem_opt_t *mem_opt_init()
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
-	o->pen_unpaired = 9;
 	o->max_matesw = 100;
 	mem_fill_scmat(o->a, o->b, o->mat);
 	return o;
@@ -487,23 +488,27 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
-			int qle, tle;
+			int qle, tle, gtle, gscore;
 			qs = xmalloc(s->qbeg);
 			for (i = 0; i < s->qbeg; ++i) qs[i] = query[s->qbeg - 1 - i];
 			tmp = s->rbeg - rmax[0];
 			rs = xmalloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, &qle, &tle);
-			a->qb = s->qbeg - qle; a->rb = s->rbeg - tle;
+			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, &qle, &tle, &gtle, &gscore);
+			// check whether we prefer to reach the end of the query
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qb = s->qbeg - qle, a->rb = s->rbeg - tle; // local hits
+			else a->qb = 0, a->rb = s->rbeg - gtle; // reach the end
 			free(qs); free(rs);
 		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension
-			int qle, tle, qe, re;
+			int qle, tle, qe, re, gtle, gscore;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
-			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle);
-			a->qe = qe + qle; a->re = rmax[0] + re + tle;
+			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle, &gtle, &gscore);
+			// similar to the above
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
+			else a->qe = l_query, a->re = rmax[0] + re + gtle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) err_printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
 
@@ -520,6 +525,15 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 /*****************************
  * Basic hit->SAM conversion *
  *****************************/
+
+static inline int infer_bw(int l1, int l2, int score, int a, int q, int r)
+{
+	int w;
+	if (l1 == l2 && l1 * a - score < (q + r)<<1) return 0; // to get equal alignment length, we need at least two gaps
+	w = ((double)((l1 < l2? l1 : l2) * a - score - q) / r + 1.);
+	if (w < abs(l1 - l2)) w = abs(l1 - l2);
+	return w;
+}
 
 void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, const bwahit_t *p_, int is_hard, const bwahit_t *m)
 {
@@ -547,7 +561,10 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
 		if (p->flag&0x10000) sam_flag |= 0x100;
 		if (!copy_mate) {
-			cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar, &NM);
+			int w2;
+			w2 = infer_bw(p->qe - p->qb, p->re - p->rb, p->score, mat[0], q, r);
+			w2 = w2 < w? w2 : w;
+			cigar = bwa_gen_cigar(mat, q, r, w2, bns->l_pac, pac, p->qe - p->qb, (uint8_t*)&s->seq[p->qb], p->rb, p->re, &score, &n_cigar, &NM);
 			p->flag |= n_cigar == 0? 4 : 0; // FIXME: check why this may happen (this has already happened)
 		} else n_cigar = 0, cigar = 0;
 		pos = bns_depos(bns, p->rb < bns->l_pac? p->rb : p->re - 1, &is_rev);
@@ -674,7 +691,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	s->sam = str.s;
 }
 
-mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
+mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
 {
 	int i;
 	mem_chain_v chn;
@@ -698,6 +715,46 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	return regs;
 }
 
+mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
+{ // the difference from mem_align1_core() lies in that this routine calls mem_mark_primary_se()
+	mem_alnreg_v ar;
+	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
+	mem_mark_primary_se(opt, ar.n, ar.a);
+	return ar;
+}
+
+// This routine is only used for the API purpose
+mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar)
+{
+	mem_aln_t a;
+	int w2, qb = ar->qb, qe = ar->qe, NM, score, is_rev;
+	int64_t pos, rb = ar->rb, re = ar->re;
+	memset(&a, 0, sizeof(mem_aln_t));
+	a.mapq = mem_approx_mapq_se(opt, ar);
+	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
+	w2 = infer_bw(qe - qb, re - rb, ar->score, opt->a, opt->q, opt->r);
+	w2 = w2 < opt->w? w2 : opt->w;
+	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
+	a.NM = NM;
+	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
+	a.is_rev = is_rev;
+	if (qb != 0 || qe != l_query) { // add clipping to CIGAR
+		int clip5, clip3;
+		clip5 = is_rev? l_query - qe : qb;
+		clip3 = is_rev? qb : l_query - qe;
+		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2));
+		if (clip5) {
+			memmove(a.cigar+1, a.cigar, a.n_cigar * 4);
+			a.cigar[0] = clip5<<4|3;
+			++a.n_cigar;
+		}
+		if (clip3) a.cigar[a.n_cigar++] = clip3<<4|3;
+	}
+	a.rid = bns_pos2rid(bns, pos);
+	a.pos = pos - bns->anns[a.rid].offset;
+	return a;
+}
+
 typedef struct {
 	int start, step, n;
 	const mem_opt_t *opt;
@@ -715,11 +772,11 @@ static void *worker1(void *data)
 	int i;
 	if (!(w->opt->flag&MEM_F_PE)) {
 		for (i = w->start; i < w->n; i += w->step)
-			w->regs[i] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
+			w->regs[i] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq);
 	} else { // for PE we align the two ends in the same thread in case the 2nd read is of worse quality, in which case some threads may be faster/slower
 		for (i = w->start; i < w->n>>1; i += w->step) {
-			w->regs[i<<1|0] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq);
-			w->regs[i<<1|1] = mem_align1(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq);
+			w->regs[i<<1|0] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq);
+			w->regs[i<<1|1] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq);
 		}
 	}
 	return 0;

@@ -19,7 +19,10 @@ typedef struct __smem_i smem_i;
 
 typedef struct {
 	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
+	int pen_unpaired;       // phred-scaled penalty for unpaired reads
+	int pen_clip;           // clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
+
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
@@ -30,7 +33,6 @@ typedef struct {
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
-	int pen_unpaired;       // phred-scaled penalty for unpaired reads
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
@@ -47,19 +49,27 @@ typedef struct {
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
 } mem_alnreg_t;
 
+typedef struct { size_t n, m; mem_alnreg_t *a; } mem_alnreg_v;
+
 typedef struct {
 	int low, high, failed;
 	double avg, std;
 } mem_pestat_t;
 
-typedef struct {
+typedef struct { // TODO: This is an intermediate struct only. Better get rid of it.
 	int64_t rb, re;
 	int qb, qe, flag, qual;
 	// optional info
 	int score, sub;
 } bwahit_t;
 
-typedef struct { size_t n, m; mem_alnreg_t *a; } mem_alnreg_v;
+typedef struct { // This struct is only used for the convenience of API.
+	int rid;
+	int pos;
+	uint32_t is_rev:1, mapq:8, NM:23;
+	int n_cigar;
+	uint32_t *cigar;
+} mem_aln_t;
 
 #ifdef __cplusplus
 extern "C" {
@@ -111,6 +121,8 @@ extern "C" {
 	 * @return       list of aligned regions.
 	 */
 	mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq);
+
+	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, uint8_t *query, const mem_alnreg_t *ar);
 
 	/**
 	 * Infer the insert size distribution from interleaved alignment regions
