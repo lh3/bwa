@@ -109,7 +109,7 @@ extern "C" {
 	 * Find the aligned regions for one query sequence
 	 *
 	 * Note that this routine does not generate CIGAR. CIGAR should be
-	 * generated later by bwa_gen_cigar() defined in bwa.c.
+	 * generated later by mem_reg2aln() below.
 	 *
 	 * @param opt    alignment parameters
 	 * @param bwt    FM-index of the reference sequence
@@ -126,7 +126,6 @@ extern "C" {
 	 * Generate CIGAR and forward-strand position from alignment region
 	 *
 	 * @param opt    alignment parameters
-	 * @param bwt    FM-index of the reference sequence
 	 * @param bns    Information of the reference
 	 * @param pac    2-bit encoded reference
 	 * @param l_seq  length of query sequence
