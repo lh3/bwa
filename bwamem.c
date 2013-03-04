@@ -572,12 +572,12 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension
-			int qle, tle, qe, re, gtle, gscore, tmps = -1;
+			int qle, tle, qe, re, gtle, gscore, tmps = -1, sc0 = a->score;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
 			assert(re >= 0);
 			for (aw[1] = opt->w;; aw[1] <<= 1) {
-				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], a->score, &qle, &tle, &gtle, &gscore, &max_off[1]);
+				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
 				if (bwa_verbose >= 4) printf("R\t%d < %d; w=%d; max_off=%d\n", tmps, a->score, aw[1], max_off[1]); fflush(stdout);
 				if (a->score == tmps || aw[1]<<1 > opt->max_w || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 				tmps = a->score;
