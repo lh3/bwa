@@ -513,7 +513,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
 			else a->qe = l_query, a->re = rmax[0] + re + gtle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
-		if (bwa_verbose >= 4) printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re);
+		if (bwa_verbose >= 4) { printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re); fflush(stdout); }
 
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
