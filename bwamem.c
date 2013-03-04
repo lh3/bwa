@@ -421,6 +421,68 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORT
  * Construct the alignment from a chain *
  ****************************************/
 
+/* mem_chain2aln() vs mem_chain2aln_short()
+ *
+ * mem_chain2aln() covers all the functionality of mem_chain2aln_short().
+ * However, it may waste time on extracting the reference sequences given a
+ * very long query. mem_chain2aln_short() is faster for very short chains in a
+ * long query. It may fail when the matches are long or reach the end of the
+ * query. In this case, mem_chain2aln() will be called again.
+ * mem_chain2aln_short() is almost never used for short-read alignment.
+ */
+
+#define MEM_SHORT_EXT 50
+#define MEM_SHORT_LEN 200
+
+int mem_chain2aln_short(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
+{
+	int i, qb, qe, xtra;
+	int64_t rb, re, rlen;
+	uint8_t *rseq = 0;
+	mem_alnreg_t a;
+	kswr_t x;
+
+	if (c->n == 0) return -1;
+	qb = l_query;  qe = 0;
+	rb = l_pac<<1; re = 0;
+	memset(&a, 0, sizeof(mem_alnreg_t));
+	for (i = 0; i < c->n; ++i) {
+		const mem_seed_t *s = &c->seeds[i];
+		qb = qb < s->qbeg? qb : s->qbeg;
+		qe = qe > s->qbeg + s->len? qe : s->qbeg + s->len;
+		rb = rb < s->rbeg? rb : s->rbeg;
+		re = re > s->rbeg + s->len? re : s->rbeg + s->len;
+		a.seedcov += s->len;
+	}
+	qb -= MEM_SHORT_EXT; qe += MEM_SHORT_EXT;
+	if (qb <= 10 || qe >= l_query - 10) return 1; // because ksw_align() does not support end-to-end alignment
+	rb -= MEM_SHORT_EXT; re += MEM_SHORT_EXT;
+	rb = rb > 0? rb : 0;
+	re = re < l_pac<<1? re : l_pac<<1;
+	if (rb < l_pac && l_pac < re) {
+		if (c->seeds[0].rbeg < l_pac) re = l_pac;
+		else rb = l_pac;
+	}
+	if ((re - rb) - (qe - qb) > MEM_SHORT_EXT || (qe - qb) - (re - rb) > MEM_SHORT_EXT) return 1;
+	if (qe - qb >= opt->w * 4 || re - rb >= opt->w * 4) return 1;
+	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return 1;
+
+	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
+	assert(rlen == re - rb);
+	xtra = KSW_XSUBO | KSW_XSTART | ((qe - qb) * opt->a < 250? KSW_XBYTE : 0) | (opt->min_seed_len * opt->a);
+	x = ksw_align(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->q, opt->r, xtra, 0);
+	free(rseq);
+	if (x.tb < MEM_SHORT_EXT>>1 || x.te > re - rb - (MEM_SHORT_EXT>>1)) return 1;
+
+	a.rb = rb + x.tb; a.re = rb + x.te + 1;
+	a.qb = qb + x.qb; a.qe = qb + x.qe + 1;
+	a.score = x.score;
+	a.csub = x.score2;
+	kv_push(mem_alnreg_t, *av, a);
+	if (bwa_verbose >= 4) printf("SHORT: [%d,%d) <=> [%ld,%ld)\n", a.qb, a.qe, (long)a.rb, (long)a.re);
+	return 0;
+}
+
 static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 {
 	int l = (int)((double)(qlen * opt->a - opt->q) / opt->r + 1.);
@@ -429,7 +491,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 }
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
-{ // FIXME: in general, we SHOULD check funny seed patterns such as contained seeds. When that happens, we should use a SW or extend more seeds
+{
 	int i, k;
 	int64_t rlen, rmax[2], tmp, max = 0;
 	const mem_seed_t *s;
@@ -710,7 +772,9 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	kv_init(regs);
 	for (i = 0; i < chn.n; ++i) {
 		mem_chain_t *p = &chn.a[i];
-		mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
+		int ret;
+		ret = mem_chain2aln_short(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
+		if (ret > 0) mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
