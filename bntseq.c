@@ -124,7 +124,7 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 		fscanf(fp, "%lld%d%d", &xx, &n_seqs, &bns->n_holes);
 		l_pac = xx;
 		xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
-		bns->ambs = (bntamb1_t*)calloc(bns->n_holes, sizeof(bntamb1_t));
+		bns->ambs = bns->n_holes? (bntamb1_t*)calloc(bns->n_holes, sizeof(bntamb1_t)) : 0;
 		for (i = 0; i < bns->n_holes; ++i) {
 			bntamb1_t *p = bns->ambs + i;
 			fscanf(fp, "%lld%d%s", &xx, &p->len, str);
