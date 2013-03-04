@@ -43,7 +43,7 @@ mem_opt_t *mem_opt_init()
 	mem_opt_t *o;
 	o = calloc(1, sizeof(mem_opt_t));
 	o->flag = 0;
-	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
+	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 60; o->max_w = 500;
 	o->pen_unpaired = 9;
 	o->pen_clip = 5;
 	o->min_seed_len = 19;
@@ -492,7 +492,7 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 
 void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 {
-	int i, k;
+	int i, k, max_off[2], aw[2]; // aw: actual bandwidth used in extension
 	int64_t rlen, rmax[2], tmp, max = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
@@ -549,16 +549,22 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 
 		a = kv_pushp(mem_alnreg_t, *av);
 		memset(a, 0, sizeof(mem_alnreg_t));
+		a->w = aw[0] = aw[1] = opt->w;
 
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
-			int qle, tle, gtle, gscore;
+			int qle, tle, gtle, gscore, tmps = -1;
 			qs = malloc(s->qbeg);
 			for (i = 0; i < s->qbeg; ++i) qs[i] = query[s->qbeg - 1 - i];
 			tmp = s->rbeg - rmax[0];
 			rs = malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-			a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, opt->w, s->len * opt->a, &qle, &tle, &gtle, &gscore);
+			for (aw[0] = opt->w;; aw[0] <<= 1) {
+				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
+				if (bwa_verbose >= 4) printf("L\t%d < %d; w=%d; max_off=%d\n", tmps, a->score, aw[0], max_off[0]); fflush(stdout);
+				if (a->score == tmps || aw[0]<<1 > opt->max_w || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
+				tmps = a->score;
+			}
 			// check whether we prefer to reach the end of the query
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qb = s->qbeg - qle, a->rb = s->rbeg - tle; // local hits
 			else a->qb = 0, a->rb = s->rbeg - gtle; // reach the end
@@ -566,16 +572,21 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension
-			int qle, tle, qe, re, gtle, gscore;
+			int qle, tle, qe, re, gtle, gscore, tmps = -1;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
 			assert(re >= 0);
-			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle, &gtle, &gscore);
+			for (aw[1] = opt->w;; aw[1] <<= 1) {
+				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], a->score, &qle, &tle, &gtle, &gscore, &max_off[1]);
+				if (bwa_verbose >= 4) printf("R\t%d < %d; w=%d; max_off=%d\n", tmps, a->score, aw[1], max_off[1]); fflush(stdout);
+				if (a->score == tmps || aw[1]<<1 > opt->max_w || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
+				tmps = a->score;
+			}
 			// similar to the above
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
 			else a->qe = l_query, a->re = rmax[0] + re + gtle;
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
-		if (bwa_verbose >= 4) { printf("[%d] score=%d\t[%d,%d) <=> [%ld,%ld)\n", k, a->score, a->qb, a->qe, (long)a->rb, (long)a->re); fflush(stdout); }
+		if (bwa_verbose >= 4) { printf("[%d]\taw={%d,%d}\tscore=%d\t[%d,%d) <=> [%ld,%ld)\n", k, aw[0], aw[1], a->score, a->qb, a->qe, (long)a->rb, (long)a->re); fflush(stdout); }
 
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
@@ -583,6 +594,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			if (t->qbeg >= a->qb && t->qbeg + t->len <= a->qe && t->rbeg >= a->rb && t->rbeg + t->len <= a->re) // seed fully contained
 				a->seedcov += t->len; // this is not very accurate, but for approx. mapQ, this is good enough
 		}
+		a->w = aw[0] > aw[1]? aw[0] : aw[1];
 	}
 	free(srt); free(rseq);
 }
@@ -750,7 +762,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			h.qual = p->secondary >= 0? 0 : mem_approx_mapq_se(opt, p);
 			if (k == 0) mapq0 = h.qual;
 			else if (h.qual > mapq0) h.qual = mapq0;
-			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
+			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, p->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
 		}
 	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP, m);
 	s->sam = str.s;

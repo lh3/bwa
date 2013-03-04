@@ -22,6 +22,7 @@ typedef struct {
 	int pen_unpaired;       // phred-scaled penalty for unpaired reads
 	int pen_clip;           // clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
+	int max_w;              // max band width
 
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
@@ -45,6 +46,7 @@ typedef struct {
 	int sub;        // 2nd best SW score
 	int csub;       // SW score of a tandem hit
 	int sub_n;      // approximate number of suboptimal hits
+	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
 } mem_alnreg_t;

@@ -102,7 +102,7 @@ extern "C" {
 	 *
 	 * @return        best semi-local alignment score
 	 */
-	int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *qle, int *tle, int *gtle, int *gscore);
+	int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
 
 #ifdef __cplusplus
 }
