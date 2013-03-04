@@ -176,7 +176,7 @@ typedef struct { size_t n, m; mem_chain_t *a;  } mem_chain_v;
 #define chain_cmp(a, b) (((b).pos < (a).pos) - ((a).pos < (b).pos))
 KBTREE_INIT(chn, mem_chain_t, chain_cmp)
 
-static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t *p)
+static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, const mem_seed_t *p)
 {
 	int64_t qend, rend, x, y;
 	const mem_seed_t *last = &c->seeds[c->n-1];
@@ -184,6 +184,7 @@ static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t
 	rend = last->rbeg + last->len;
 	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
 		return 1; // contained seed; do nothing
+	if ((last->rbeg < l_pac || c->seeds[0].rbeg < l_pac) && p->rbeg >= l_pac) return 0; // don't chain if on different strand
 	x = p->qbeg - last->qbeg; // always non-negtive
 	y = p->rbeg - last->rbeg;
 	if (y >= 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
@@ -197,7 +198,7 @@ static int test_and_merge(const mem_opt_t *opt, mem_chain_t *c, const mem_seed_t
 	return 0; // request to add a new chain
 }
 
-static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *itr)
+static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *tree, smem_i *itr)
 {
 	const bwtintv_v *a;
 	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
@@ -216,9 +217,10 @@ static void mem_insert_seed(const mem_opt_t *opt, kbtree_t(chn) *tree, smem_i *i
 				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 				s.qbeg = p->info>>32;
 				s.len  = slen;
+				if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
 				if (kb_size(tree)) {
 					kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
-					if (!lower || !test_and_merge(opt, lower, &s)) to_add = 1;
+					if (!lower || !test_and_merge(opt, l_pac, lower, &s)) to_add = 1;
 				} else to_add = 1;
 				if (to_add) { // add the seed as a new chain
 					tmp.n = 1; tmp.m = 4;
@@ -249,7 +251,7 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 	}
 }
 
-mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq)
+mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int len, const uint8_t *seq)
 {
 	mem_chain_v chain;
 	smem_i *itr;
@@ -260,7 +262,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int len, const uin
 	tree = kb_init(chn, KB_DEFAULT_SIZE);
 	itr = smem_itr_init(bwt);
 	smem_set_query(itr, len, seq);
-	mem_insert_seed(opt, tree, itr);
+	mem_insert_seed(opt, l_pac, tree, itr);
 
 	kv_resize(mem_chain_t, chain, kb_size(tree));
 
@@ -449,12 +451,12 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	rmax[0] = rmax[0] > 0? rmax[0] : 0;
 	rmax[1] = rmax[1] < l_pac<<1? rmax[1] : l_pac<<1;
 	if (rmax[0] < l_pac && l_pac < rmax[1]) { // crossing the forward-reverse boundary; then choose one side
-		if (l_pac - rmax[0] > rmax[1] - l_pac) rmax[1] = l_pac;
+		if (c->seeds[0].rbeg < l_pac) rmax[1] = l_pac; // this works because all seeds are guaranteed to be on the same strand
 		else rmax[0] = l_pac;
 	}
 	// retrieve the reference sequence
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
-	if (rlen != rmax[1] - rmax[0]) return;
+	assert(rlen == rmax[1] - rmax[0]);
 
 	srt = malloc(c->n * 8);
 	for (i = 0; i < c->n; ++i)
@@ -505,6 +507,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			int qle, tle, qe, re, gtle, gscore;
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
+			assert(re >= 0);
 			a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, opt->w, a->score, &qle, &tle, &gtle, &gscore);
 			// similar to the above
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
@@ -700,7 +703,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	for (i = 0; i < l_seq; ++i) // convert to 2-bit encoding if we have not done so
 		seq[i] = seq[i] < 4? seq[i] : nst_nt4_table[(int)seq[i]];
 
-	chn = mem_chain(opt, bwt, l_seq, (uint8_t*)seq);
+	chn = mem_chain(opt, bwt, bns->l_pac, l_seq, (uint8_t*)seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 
