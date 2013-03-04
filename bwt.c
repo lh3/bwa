@@ -45,6 +45,14 @@ void bwt_gen_cnt_table(bwt_t *bwt)
 	}
 }
 
+static inline bwtint_t bwt_invPsi(const bwt_t *bwt, bwtint_t k) // compute inverse CSA
+{
+	bwtint_t x = k - (k > bwt->primary);
+	x = bwt_B0(bwt, x);
+	x = bwt->L2[x] + bwt_occ(bwt, k, x);
+	return k == bwt->primary? 0 : x;
+}
+
 // bwt->bwt and bwt->occ must be precalculated
 void bwt_cal_sa(bwt_t *bwt, int intv)
 {
@@ -97,21 +105,20 @@ static inline int __occ_aux(uint64_t y, int c)
 
 bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 {
-	bwtint_t n, l, j;
-	uint32_t *p;
+	bwtint_t n;
+	uint32_t *p, *end;
 
 	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];
 	if (k == (bwtint_t)(-1)) return 0;
-	if (k >= bwt->primary) --k; // because $ is not in bwt
+	k -= (k >= bwt->primary); // because $ is not in bwt
 
 	// retrieve Occ at k/OCC_INTERVAL
 	n = ((bwtint_t*)(p = bwt_occ_intv(bwt, k)))[c];
 	p += sizeof(bwtint_t); // jump to the start of the first BWT cell
 
 	// calculate Occ up to the last k/32
-	j = k >> 5 << 5;
-	for (l = k/OCC_INTERVAL*OCC_INTERVAL; l < j; l += 32, p += 2)
-		n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+	end = p + (((k>>5) - ((k&~OCC_INTV_MASK)>>5))<<1);
+	for (; p < end; p += 2) n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
 
 	// calculate Occ
 	n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
@@ -160,20 +167,20 @@ void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok,
 
 void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 {
-	bwtint_t l, j, x;
-	uint32_t *p;
+	bwtint_t x;
+	uint32_t *p, tmp, *end;
 	if (k == (bwtint_t)(-1)) {
 		memset(cnt, 0, 4 * sizeof(bwtint_t));
 		return;
 	}
-	if (k >= bwt->primary) --k; // because $ is not in bwt
+	k -= (k >= bwt->primary); // because $ is not in bwt
 	p = bwt_occ_intv(bwt, k);
 	memcpy(cnt, p, 4 * sizeof(bwtint_t));
-	p += sizeof(bwtint_t);
-	j = k >> 4 << 4;
-	for (l = k / OCC_INTERVAL * OCC_INTERVAL, x = 0; l < j; l += 16, ++p)
-		x += __occ_aux4(bwt, *p);
-	x += __occ_aux4(bwt, *p & ~((1U<<((~k&15)<<1)) - 1)) - (~k&15);
+	p += sizeof(bwtint_t); // sizeof(bwtint_t) = 4*(sizeof(bwtint_t)/sizeof(uint32_t))
+	end = p + ((k>>4) - ((k&~OCC_INTV_MASK)>>4)); // this is the end point of the following loop
+	for (x = 0; p < end; ++p) x += __occ_aux4(bwt, *p);
+	tmp = *p & ~((1U<<((~k&15)<<1)) - 1);
+	x += __occ_aux4(bwt, tmp) - (~k&15);
 	cnt[0] += x&0xff; cnt[1] += x>>8&0xff; cnt[2] += x>>16&0xff; cnt[3] += x>>24;
 }
 
@@ -181,29 +188,30 @@ void bwt_occ4(const bwt_t *bwt, bwtint_t k, bwtint_t cnt[4])
 void bwt_2occ4(const bwt_t *bwt, bwtint_t k, bwtint_t l, bwtint_t cntk[4], bwtint_t cntl[4])
 {
 	bwtint_t _k, _l;
-	_k = (k >= bwt->primary)? k-1 : k;
-	_l = (l >= bwt->primary)? l-1 : l;
-	if (_l/OCC_INTERVAL != _k/OCC_INTERVAL || k == (bwtint_t)(-1) || l == (bwtint_t)(-1)) {
+	_k = k - (k >= bwt->primary);
+	_l = l - (l >= bwt->primary);
+	if (_l>>OCC_INTV_SHIFT != _k>>OCC_INTV_SHIFT || k == (bwtint_t)(-1) || l == (bwtint_t)(-1)) {
 		bwt_occ4(bwt, k, cntk);
 		bwt_occ4(bwt, l, cntl);
 	} else {
-		bwtint_t i, j, x, y;
-		uint32_t *p;
-		if (k >= bwt->primary) --k; // because $ is not in bwt
-		if (l >= bwt->primary) --l;
+		bwtint_t x, y;
+		uint32_t *p, tmp, *endk, *endl;
+		k -= (k >= bwt->primary); // because $ is not in bwt
+		l -= (l >= bwt->primary);
 		p = bwt_occ_intv(bwt, k);
 		memcpy(cntk, p, 4 * sizeof(bwtint_t));
-		p += sizeof(bwtint_t);
+		p += sizeof(bwtint_t); // sizeof(bwtint_t) = 4*(sizeof(bwtint_t)/sizeof(uint32_t))
 		// prepare cntk[]
-		j = k >> 4 << 4;
-		for (i = k / OCC_INTERVAL * OCC_INTERVAL, x = 0; i < j; i += 16, ++p)
-			x += __occ_aux4(bwt, *p);
+		endk = p + ((k>>4) - ((k&~OCC_INTV_MASK)>>4));
+		endl = p + ((l>>4) - ((l&~OCC_INTV_MASK)>>4));
+		for (x = 0; p < endk; ++p) x += __occ_aux4(bwt, *p);
 		y = x;
-		x += __occ_aux4(bwt, *p & ~((1U<<((~k&15)<<1)) - 1)) - (~k&15);
+		tmp = *p & ~((1U<<((~k&15)<<1)) - 1);
+		x += __occ_aux4(bwt, tmp) - (~k&15);
 		// calculate cntl[] and finalize cntk[]
-		j = l >> 4 << 4;
-		for (; i < j; i += 16, ++p) y += __occ_aux4(bwt, *p);
-		y += __occ_aux4(bwt, *p & ~((1U<<((~l&15)<<1)) - 1)) - (~l&15);
+		for (; p < endl; ++p) y += __occ_aux4(bwt, *p);
+		tmp = *p & ~((1U<<((~l&15)<<1)) - 1);
+		y += __occ_aux4(bwt, tmp) - (~l&15);
 		memcpy(cntl, cntk, 4 * sizeof(bwtint_t));
 		cntk[0] += x&0xff; cntk[1] += x>>8&0xff; cntk[2] += x>>16&0xff; cntk[3] += x>>24;
 		cntl[0] += y&0xff; cntl[1] += y>>8&0xff; cntl[2] += y>>16&0xff; cntl[3] += y>>24;
@@ -277,7 +285,7 @@ static void bwt_reverse_intvs(bwtintv_v *p)
 	}
 }
 
-int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem, bwtintv_v *tmpvec[2])
+int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2])
 {
 	int i, j, c, ret;
 	bwtintv_t ik, ok[4];
@@ -285,45 +293,45 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 
 	mem->n = 0;
 	if (q[x] > 3) return x + 1;
+	if (min_intv < 1) min_intv = 1; // the interval size should be at least 1
 	kv_init(a[0]); kv_init(a[1]);
-	prev = tmpvec[0]? tmpvec[0] : &a[0];
-	curr = tmpvec[1]? tmpvec[1] : &a[1];
-	bwt_set_intv(bwt, q[x], ik);
+	prev = tmpvec && tmpvec[0]? tmpvec[0] : &a[0]; // use the temporary vector if provided
+	curr = tmpvec && tmpvec[1]? tmpvec[1] : &a[1];
+	bwt_set_intv(bwt, q[x], ik); // the initial interval of a single base
 	ik.info = x + 1;
 
 	for (i = x + 1, curr->n = 0; i < len; ++i) { // forward search
-		if (q[i] < 4) {
-			c = 3 - q[i];
+		if (q[i] < 4) { // an A/C/G/T base
+			c = 3 - q[i]; // complement of q[i]
 			bwt_extend(bwt, &ik, ok, 0);
-			if (ok[c].x[2] != ik.x[2]) // change of the interval size
+			if (ok[c].x[2] != ik.x[2]) { // change of the interval size
 				kv_push(bwtintv_t, *curr, ik);
-			if (ok[c].x[2] == 0) break; // cannot be extended
+				if (ok[c].x[2] < min_intv) break; // the interval size is too small to be extended further
+			}
 			ik = ok[c]; ik.info = i + 1;
 		} else { // an ambiguous base
 			kv_push(bwtintv_t, *curr, ik);
-			break; // cannot be extended; in this case, i<len always stands
+			break; // always terminate extension at an ambiguous base; in this case, i<len always stands
 		}
 	}
 	if (i == len) kv_push(bwtintv_t, *curr, ik); // push the last interval if we reach the end
-	bwt_reverse_intvs(curr); // s.t. smaller intervals visited first
+	bwt_reverse_intvs(curr); // s.t. smaller intervals (i.e. longer matches) visited first
 	ret = curr->a[0].info; // this will be the returned value
 	swap = curr; curr = prev; prev = swap;
 
 	for (i = x - 1; i >= -1; --i) { // backward search for MEMs
-		if (q[i] > 3) break;
-		c = i < 0? 0 : q[i];
+		c = i < 0? -1 : q[i] < 4? q[i] : -1; // c==-1 if i<0 or q[i] is an ambiguous base
 		for (j = 0, curr->n = 0; j < prev->n; ++j) {
 			bwtintv_t *p = &prev->a[j];
 			bwt_extend(bwt, p, ok, 1);
-			if (ok[c].x[2] == 0 || i == -1) { // keep the hit if reaching the beginning or not extended further
-				if (curr->n == 0) { // curr->n to make sure there is no longer matches
+			if (c < 0 || ok[c].x[2] < min_intv) { // keep the hit if reaching the beginning or an ambiguous base or the intv is small enough
+				if (curr->n == 0) { // test curr->n>0 to make sure there are no longer matches
 					if (mem->n == 0 || i + 1 < mem->a[mem->n-1].info>>32) { // skip contained matches
 						ik = *p; ik.info |= (uint64_t)(i + 1)<<32;
 						kv_push(bwtintv_t, *mem, ik);
 					}
 				} // otherwise the match is contained in another longer match
-			}
-			if (ok[c].x[2] && (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2])) {
+			} else if (curr->n == 0 || ok[c].x[2] != curr->a[curr->n-1].x[2]) {
 				ok[c].info = p->info;
 				kv_push(bwtintv_t, *curr, ok[c]);
 			}
@@ -333,7 +341,83 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, bwtintv_v *mem
 	}
 	bwt_reverse_intvs(mem); // s.t. sorted by the start coordinate
 
-	if (tmpvec[0] == 0) free(a[0].a);
-	if (tmpvec[1] == 0) free(a[1].a);
+	if (tmpvec == 0 || tmpvec[0] == 0) free(a[0].a);
+	if (tmpvec == 0 || tmpvec[1] == 0) free(a[1].a);
 	return ret;
+}
+
+/*************************
+ * Read/write BWT and SA *
+ *************************/
+
+void bwt_dump_bwt(const char *fn, const bwt_t *bwt)
+{
+	FILE *fp;
+	fp = xopen(fn, "wb");
+	fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
+	fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
+	fwrite(bwt->bwt, 4, bwt->bwt_size, fp);
+	fclose(fp);
+}
+
+void bwt_dump_sa(const char *fn, const bwt_t *bwt)
+{
+	FILE *fp;
+	fp = xopen(fn, "wb");
+	fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
+	fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
+	fwrite(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
+	fwrite(&bwt->seq_len, sizeof(bwtint_t), 1, fp);
+	fwrite(bwt->sa + 1, sizeof(bwtint_t), bwt->n_sa - 1, fp);
+	fclose(fp);
+}
+
+void bwt_restore_sa(const char *fn, bwt_t *bwt)
+{
+	char skipped[256];
+	FILE *fp;
+	bwtint_t primary;
+
+	fp = xopen(fn, "rb");
+	fread(&primary, sizeof(bwtint_t), 1, fp);
+	xassert(primary == bwt->primary, "SA-BWT inconsistency: primary is not the same.");
+	fread(skipped, sizeof(bwtint_t), 4, fp); // skip
+	fread(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
+	fread(&primary, sizeof(bwtint_t), 1, fp);
+	xassert(primary == bwt->seq_len, "SA-BWT inconsistency: seq_len is not the same.");
+
+	bwt->n_sa = (bwt->seq_len + bwt->sa_intv) / bwt->sa_intv;
+	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
+	bwt->sa[0] = -1;
+
+	fread(bwt->sa + 1, sizeof(bwtint_t), bwt->n_sa - 1, fp);
+	fclose(fp);
+}
+
+bwt_t *bwt_restore_bwt(const char *fn)
+{
+	bwt_t *bwt;
+	FILE *fp;
+
+	bwt = (bwt_t*)calloc(1, sizeof(bwt_t));
+	fp = xopen(fn, "rb");
+	fseek(fp, 0, SEEK_END);
+	bwt->bwt_size = (ftell(fp) - sizeof(bwtint_t) * 5) >> 2;
+	bwt->bwt = (uint32_t*)calloc(bwt->bwt_size, 4);
+	fseek(fp, 0, SEEK_SET);
+	fread(&bwt->primary, sizeof(bwtint_t), 1, fp);
+	fread(bwt->L2+1, sizeof(bwtint_t), 4, fp);
+	fread(bwt->bwt, 4, bwt->bwt_size, fp);
+	bwt->seq_len = bwt->L2[4];
+	fclose(fp);
+	bwt_gen_cnt_table(bwt);
+
+	return bwt;
+}
+
+void bwt_destroy(bwt_t *bwt)
+{
+	if (bwt == 0) return;
+	free(bwt->sa); free(bwt->bwt);
+	free(bwt);
 }

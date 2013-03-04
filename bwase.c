@@ -10,9 +10,9 @@
 #include "bntseq.h"
 #include "utils.h"
 #include "kstring.h"
+#include "bwa.h"
 
 int g_log_n[256];
-char *bwa_rg_line, *bwa_rg_id;
 
 void bwa_print_sam_PG();
 
@@ -71,8 +71,8 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 				}
 				rest -= q->l - q->k + 1;
 			} else { // Random sampling (http://code.activestate.com/recipes/272884/). In fact, we never come here. 
-				int j, i, k;
-				for (j = rest, i = q->l - q->k + 1, k = 0; j > 0; --j) {
+				int j, i;
+				for (j = rest, i = q->l - q->k + 1; j > 0; --j) {
 					double p = 1.0, x = drand48();
 					while (x < p) p -= p * j / (i--);
 					s->multi[z].pos = q->l - i;
@@ -296,17 +296,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 	s->len = s->full_len;
 }
 
-void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, bntseq_t *ntbns)
+void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq)
 {
-	ubyte_t *pacseq, *ntpac = 0;
+	ubyte_t *pacseq;
 	int i, j;
 	kstring_t *str;
-
-	if (ntbns) { // in color space
-		ntpac = (ubyte_t*)calloc(ntbns->l_pac/4+1, 1);
-		rewind(ntbns->fp_pac);
-		fread(ntpac, 1, ntbns->l_pac/4 + 1, ntbns->fp_pac);
-	}
 
 	if (!_pacseq) {
 		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
@@ -328,28 +322,6 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos,
 									  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 1);
 	}
-#if 0
-	if (ntbns) { // in color space
-		for (i = 0; i < n_seqs; ++i) {
-			bwa_seq_t *s = seqs + i;
-			bwa_cs2nt_core(s, bns->l_pac, ntpac);
-			for (j = 0; j < s->n_multi; ++j) {
-				bwt_multi1_t *q = s->multi + j;
-				int n_cigar;
-				if (q->gap == 0) continue;
-				free(q->cigar);
-				q->cigar = bwa_refine_gapped_core(bns->l_pac, ntpac, s->len, q->strand? s->rseq : s->seq, &q->pos,
-											  (q->strand? 1 : -1) * q->gap, &n_cigar, 0);
-				q->n_cigar = n_cigar;
-			}
-			if (s->type != BWA_TYPE_NO_MATCH && s->cigar) { // update cigar again
-				free(s->cigar);
-				s->cigar = bwa_refine_gapped_core(bns->l_pac, ntpac, s->len, s->strand? s->rseq : s->seq, &s->pos,
-											  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 0);
-			}
-		}
-	}
-#endif
 	// generate MD tag
 	str = (kstring_t*)calloc(1, sizeof(kstring_t));
 	for (i = 0; i != n_seqs; ++i) {
@@ -357,18 +329,16 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		if (s->type != BWA_TYPE_NO_MATCH) {
 			int nm;
 			s->md = bwa_cal_md1(s->n_cigar, s->cigar, s->len, s->pos, s->strand? s->rseq : s->seq,
-								bns->l_pac, ntbns? ntpac : pacseq, str, &nm);
+								bns->l_pac, pacseq, str, &nm);
 			s->nm = nm;
 		}
 	}
 	free(str->s); free(str);
 
 	// correct for trimmed reads
-	if (!ntbns) // trimming is only enabled for Illumina reads
-		for (i = 0; i < n_seqs; ++i) bwa_correct_trimmed(seqs + i);
+	for (i = 0; i < n_seqs; ++i) bwa_correct_trimmed(seqs + i);
 
 	if (!_pacseq) free(pacseq);
-	free(ntpac);
 }
 
 int64_t pos_end(const bwa_seq_t *p)
@@ -442,11 +412,11 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 
 		// print mate coordinate
 		if (mate && mate->type != BWA_TYPE_NO_MATCH) {
-			int m_seqid, m_is_N;
+			int m_seqid;
 			long long isize;
 			am = mate->seQ < p->seQ? mate->seQ : p->seQ; // smaller single-end mapping quality
 			// redundant calculation here, but should not matter too much
-			m_is_N = bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
+			bns_cnt_ambi(bns, mate->pos, mate->len, &m_seqid);
 			err_printf("\t%s\t", (seqid == m_seqid)? "=" : bns->anns[m_seqid].name);
 			isize = (seqid == m_seqid)? pos_5(mate) - pos_5(p) : 0;
 			if (p->type == BWA_TYPE_NO_MATCH) isize = 0;
@@ -464,7 +434,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			err_printf("%s", p->qual);
 		} else err_printf("*");
 
-		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
+		if (bwa_rg_id[0]) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
 		if (p->type != BWA_TYPE_NO_MATCH) {
@@ -512,30 +482,11 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			err_printf("%s", p->qual);
 		} else err_printf("*");
-		if (bwa_rg_id) err_printf("\tRG:Z:%s", bwa_rg_id);
+		if (bwa_rg_id[0]) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
 		putchar('\n');
 	}
-}
-
-bntseq_t *bwa_open_nt(const char *prefix)
-{
-	bntseq_t *ntbns;
-	char *str;
-	str = (char*)calloc(strlen(prefix) + 10, 1);
-	strcat(strcpy(str, prefix), ".nt");
-	ntbns = bns_restore(str);
-	free(str);
-	return ntbns;
-}
-
-void bwa_print_sam_SQ(const bntseq_t *bns)
-{
-	int i;
-	for (i = 0; i < bns->n_seqs; ++i)
-		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
-	if (bwa_rg_line) err_printf("%s\n", bwa_rg_line);
 }
 
 void bwase_initialize() 
@@ -544,42 +495,7 @@ void bwase_initialize()
 	for (i = 1; i != 256; ++i) g_log_n[i] = (int)(4.343 * log(i) + 0.5);
 }
 
-char *bwa_escape(char *s)
-{
-	char *p, *q;
-	for (p = q = s; *p; ++p) {
-		if (*p == '\\') {
-			++p;
-			if (*p == 't') *q++ = '\t';
-			else if (*p == 'n') *q++ = '\n';
-			else if (*p == 'r') *q++ = '\r';
-			else if (*p == '\\') *q++ = '\\';
-		} else *q++ = *p;
-	}
-	*q = '\0';
-	return s;
-}
-
-int bwa_set_rg(const char *s)
-{
-	char *p, *q, *r;
-	if (strstr(s, "@RG") != s) return -1;
-	if (bwa_rg_line) free(bwa_rg_line);
-	if (bwa_rg_id) free(bwa_rg_id);
-	bwa_rg_line = strdup(s);
-	bwa_rg_id = 0;
-	bwa_escape(bwa_rg_line);
-	p = strstr(bwa_rg_line, "\tID:");
-	if (p == 0) return -1;
-	p += 4;
-	for (q = p; *q && *q != '\t' && *q != '\n'; ++q);
-	bwa_rg_id = calloc(q - p + 1, 1);
-	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n'; ++q)
-		*r++ = *q;
-	return 0;
-}
-
-void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ)
+void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ, const char *rg_line)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
 	int i, n_seqs, tot_seqs = 0, m_aln;
@@ -587,7 +503,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
 	clock_t t;
-	bntseq_t *bns, *ntbns = 0;
+	bntseq_t *bns;
 	FILE *fp_sa;
 	gap_opt_t opt;
 
@@ -599,9 +515,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 	m_aln = 0;
 	fread(&opt, sizeof(gap_opt_t), 1, fp_sa);
-	if (!(opt.mode & BWA_MODE_COMPREAD)) // in color space; initialize ntpac
-		ntbns = bwa_open_nt(prefix);
-	bwa_print_sam_SQ(bns);
+	bwa_print_sam_hdr(bns, rg_line);
 	//bwa_print_sam_PG();
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
@@ -628,7 +542,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		fprintf(stderr, "[bwa_aln_core] refine gapped alignments... ");
-		bwa_refine_gapped(bns, n_seqs, seqs, 0, ntbns);
+		bwa_refine_gapped(bns, n_seqs, seqs, 0);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		fprintf(stderr, "[bwa_aln_core] print alignments... ");
@@ -642,7 +556,6 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 	// destroy
 	bwa_seq_close(ks);
-	if (ntbns) bns_destroy(ntbns);
 	bns_destroy(bns);
 	fclose(fp_sa);
 	free(aln);
@@ -650,17 +563,13 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 int bwa_sai2sam_se(int argc, char *argv[])
 {
-	extern char *bwa_infer_prefix(const char *hint);
 	int c, n_occ = 3;
-	char *prefix;
+	char *prefix, *rg_line = 0;
 	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
 		switch (c) {
 		case 'h': break;
 		case 'r':
-			if (bwa_set_rg(optarg) < 0) {
-				fprintf(stderr, "[%s] malformated @RG line\n", __func__);
-				return 1;
-			}
+			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
 			break;
 		case 'n': n_occ = atoi(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
@@ -672,12 +581,10 @@ int bwa_sai2sam_se(int argc, char *argv[])
 		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
 		return 1;
 	}
-	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		free(bwa_rg_line); free(bwa_rg_id);
 		return 0;
 	}
-	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ);
-	free(bwa_rg_line); free(bwa_rg_id);
+	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line);
 	return 0;
 }

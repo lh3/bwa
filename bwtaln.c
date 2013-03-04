@@ -11,6 +11,7 @@
 #include "bwtaln.h"
 #include "bwtgap.h"
 #include "utils.h"
+#include "bwa.h"
 
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
@@ -219,32 +220,6 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 	bwa_seq_close(ks);
 }
 
-char *bwa_infer_prefix(const char *hint)
-{
-	char *prefix;
-	int l_hint;
-	FILE *fp;
-	l_hint = strlen(hint);
-	prefix = malloc(l_hint + 3 + 4 + 1);
-	strcpy(prefix, hint);
-	strcpy(prefix + l_hint, ".64.bwt");
-	if ((fp = fopen(prefix, "rb")) != 0) {
-		fclose(fp);
-		prefix[l_hint + 3] = 0;
-		return prefix;
-	} else {
-		strcpy(prefix + l_hint, ".bwt");
-		if ((fp = fopen(prefix, "rb")) == 0) {
-			free(prefix);
-			return 0;
-		} else {
-			fclose(fp);
-			prefix[l_hint] = 0;
-			return prefix;
-		}
-	}
-}
-
 int bwa_aln(int argc, char *argv[])
 {
 	int c, opte = -1;
@@ -252,7 +227,7 @@ int bwa_aln(int argc, char *argv[])
 	char *prefix;
 
 	opt = gap_init_opt();
-	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:cLR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
+	while ((c = getopt(argc, argv, "n:o:e:i:d:l:k:LR:m:t:NM:O:E:q:f:b012IYB:")) >= 0) {
 		switch (c) {
 		case 'n':
 			if (strstr(optarg, ".")) opt->fnr = atof(optarg), opt->max_diff = -1;
@@ -272,7 +247,6 @@ int bwa_aln(int argc, char *argv[])
 		case 'L': opt->mode |= BWA_MODE_LOGGAP; break;
 		case 'R': opt->max_top2 = atoi(optarg); break;
 		case 'q': opt->trim_qual = atoi(optarg); break;
-		case 'c': opt->mode &= ~BWA_MODE_COMPREAD; break;
 		case 'N': opt->mode |= BWA_MODE_NONSTOP; opt->max_top2 = 0x7fffffff; break;
 		case 'f': xreopen(optarg, "wb", stdout); break;
 		case 'b': opt->mode |= BWA_MODE_BAM; break;
@@ -310,7 +284,6 @@ int bwa_aln(int argc, char *argv[])
 		fprintf(stderr, "         -q INT    quality threshold for read trimming down to %dbp [%d]\n", BWA_MIN_RDLEN, opt->trim_qual);
         fprintf(stderr, "         -f FILE   file to write output to instead of stdout\n");
 		fprintf(stderr, "         -B INT    length of barcode\n");
-//		fprintf(stderr, "         -c        input sequences are in the color space\n");
 		fprintf(stderr, "         -L        log-scaled gap penalty for long deletions\n");
 		fprintf(stderr, "         -N        non-iterative mode: search for all n-difference hits (slooow)\n");
 		fprintf(stderr, "         -I        the input is in the Illumina 1.3+ FASTQ-like format\n");
@@ -330,7 +303,7 @@ int bwa_aln(int argc, char *argv[])
 			k = l;
 		}
 	}
-	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
+	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
 		free(opt);
 		return 0;

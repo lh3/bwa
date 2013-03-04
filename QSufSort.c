@@ -59,12 +59,9 @@ void QSufSortSuffixSort(qsint_t* __restrict V, qsint_t* __restrict I, const qsin
 	qsint_t i, j;
 	qsint_t s, negatedSortedGroupLength;
 	qsint_t numSymbolAggregated;
-	qsint_t maxNumInputSymbol;
 	qsint_t numSortedPos = 1;
 	qsint_t newAlphabetSize;
    
-	maxNumInputSymbol = largestInputSymbol - smallestInputSymbol + 1;
-
 	if (!skipTransform) {
 		/* bucketing possible*/
 		newAlphabetSize = QSufSortTransform(V, I, numChar, largestInputSymbol, smallestInputSymbol, 

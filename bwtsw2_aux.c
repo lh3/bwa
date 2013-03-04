@@ -13,9 +13,10 @@
 #include "bwtsw2.h"
 #include "stdaln.h"
 #include "kstring.h"
+#include "bwa.h"
 
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_DECLARE(gzFile)
 
 #include "ksort.h"
 #define __left_lt(a, b) ((a).end > (b).end)
@@ -55,6 +56,7 @@ bsw2opt_t *bsw2_init_opt()
 	o->mask_level = 0.50f; o->coef = 5.5f;
 	o->qr = o->q + o->r; o->n_threads = 1; o->chunk_size = 10000000;
 	o->max_chain_gap = 10000;
+	o->cpy_cmt = 0;
 	return o;
 }
 
@@ -185,14 +187,14 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 		bsw2aux_t *q = b->aux + i;
 		uint8_t *query;
 		bwtint_t k;
-		int score, path_len, beg, end;
+		int path_len, beg, end;
 		if (p->l) continue;
 		beg = (p->flag & 0x10)? lq - p->end : p->beg;
 		end = (p->flag & 0x10)? lq - p->beg : p->end;
 		query = seq[(p->flag & 0x10)? 1 : 0] + beg;
 		for (k = p->k; k < p->k + p->len; ++k) // in principle, no out-of-boundary here
 			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
-		score = aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
+		aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
 		q->cigar = aln_path2cigar32(path, path_len, &q->n_cigar);
 #if 0
 		if (name && score != p->G) { // debugging only
@@ -551,7 +553,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 				if (p->flag&0x10) kputc(ks->qual[ks->l - 1 - j], &str);
 				else kputc(ks->qual[j], &str);
 			}
-		} else ksprintf(&str, "\t*");
+		} else kputs("\t*", &str);
 		// print optional tags
 		ksprintf(&str, "\tAS:i:%d\tXS:i:%d\tXF:i:%d\tXE:i:%d\tNM:i:%d", p->G, p->G2, p->flag>>16, p->n_seeds, q->nm);
 		if (q->nn) ksprintf(&str, "\tXN:i:%d", q->nn);
@@ -559,6 +561,12 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		if (p->flag&BSW2_FLAG_MATESW) type |= 1;
 		if (p->flag&BSW2_FLAG_TANDEM) type |= 2;
 		if (type) ksprintf(&str, "\tXT:i:%d", type);
+		if (opt->cpy_cmt && ks->comment) {
+			int l = strlen(ks->comment);
+			if (l >= 6 && ks->comment[2] == ':' && ks->comment[4] == ':') {
+				kputc('\t', &str); kputs(ks->comment, &str);
+			}
+		}
 		kputc('\n', &str);
 	}
 	ks->sam = str.s;
@@ -749,23 +757,14 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 	_seq->n = 0;
 }
 
-static void kseq_to_bsw2seq(const kseq_t *ks, bsw2seq1_t *p)
-{
-	p->tid = -1;
-	p->l = ks->seq.l;
-	p->name = strdup(ks->name.s);
-	p->seq = strdup(ks->seq.s);
-	p->qual = ks->qual.l? strdup(ks->qual.s) : 0;
-	p->sam = 0;
-}
-
 void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, const char *fn, const char *fn2)
 {
 	gzFile fp, fp2;
 	kseq_t *ks, *ks2;
-	int l, size = 0, is_pe = 0;
+	int l, is_pe = 0, i, n;
 	uint8_t *pac;
 	bsw2seq_t *_seq;
+	bseq1_t *bseq;
 
 	pac = calloc(bns->l_pac/4+1, 1);
 	if (pac == 0) {
@@ -783,34 +782,25 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 		ks2 = kseq_init(fp2);
 		is_pe = 1;
 	} else fp2 = 0, ks2 = 0, is_pe = 0;
-	while (kseq_read(ks) >= 0) {
-		if (ks->name.l > 2 && ks->name.s[ks->name.l-2] == '/')
-			ks->name.l -= 2, ks->name.s[ks->name.l] = 0;
-		if (_seq->n == _seq->max) {
-			_seq->max = _seq->max? _seq->max<<1 : 1024;
+	while ((bseq = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
+		int size = 0;
+		if (n > _seq->max) {
+			_seq->max = n;
+			kroundup32(_seq->max);
 			_seq->seq = realloc(_seq->seq, _seq->max * sizeof(bsw2seq1_t));
 		}
-		kseq_to_bsw2seq(ks, &_seq->seq[_seq->n++]);
-		size += ks->seq.l;
-		if (ks2) {
-			if (kseq_read(ks2) >= 0) {
-				if (ks2->name.l > 2 && ks2->name.s[ks2->name.l-2] == '/')
-					ks2->name.l -= 2, ks2->name.s[ks2->name.l] = 0;
-				kseq_to_bsw2seq(ks2, &_seq->seq[_seq->n++]); // for PE, _seq->n here must be odd and we do not need to enlarge
-				size += ks->seq.l;
-			} else {
-				fprintf(stderr, "[%s] The second query file has fewer reads. Switched to the single-end mode for the following batches.\n", __func__);
-				is_pe = 0;
-			}
+		_seq->n = n;
+		for (i = 0; i < n; ++i) {
+			bseq1_t *b = &bseq[i];
+			bsw2seq1_t *p = &_seq->seq[i];
+			p->tid = -1; p->l = b->l_seq;
+			p->name = b->name; p->seq = b->seq; p->qual = b->qual; p->comment = b->comment; p->sam = 0;
+			size += p->l;
 		}
-		if (size > opt->chunk_size * opt->n_threads) {
-			fprintf(stderr, "[bsw2_aln] read %d sequences/pairs (%d bp)...\n", _seq->n, size);
-			process_seqs(_seq, opt, bns, pac, target, is_pe);
-			size = 0;
-		}
+		fprintf(stderr, "[bsw2_aln] read %d sequences/pairs (%d bp) ...\n", n, size);
+		free(bseq);
+		process_seqs(_seq, opt, bns, pac, target, is_pe);
 	}
-	fprintf(stderr, "[bsw2_aln] read %d sequences/pairs (%d bp)...\n", _seq->n, size);
-	process_seqs(_seq, opt, bns, pac, target, is_pe);
 	// free
 	free(pac);
 	free(_seq->seq); free(_seq);

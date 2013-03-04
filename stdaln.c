@@ -542,13 +542,12 @@ int aln_local_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2,
 	int start, end, max_score;
 	int thres, *suba, *ss;
 
-	int gap_open, gap_ext, b;
+	int gap_open, gap_ext;
 	int *score_matrix, N_MATRIX_ROW;
 
 	/* initialize some align-related parameters. just for compatibility */
 	gap_open = ap->gap_open;
 	gap_ext = ap->gap_ext;
-	b = ap->band_width;
 	score_matrix = ap->matrix;
 	N_MATRIX_ROW = ap->row;
 	thres = _thres > 0? _thres : -_thres;
@@ -862,7 +861,7 @@ uint16_t *aln_path2cigar(const path_t *path, int path_len, int *n_cigar)
 int aln_extend_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2, const AlnParam *ap,
 					path_t *path, int *path_len, int G0, uint8_t *_mem)
 {
-	int q, r, qr, tmp_len;
+	int q, r, qr;
 	int32_t **s_array, *score_array;
 	int is_overflow, of_base;
 	uint32_t *eh;
@@ -889,7 +888,6 @@ int aln_extend_core(unsigned char *seq1, int len1, unsigned char *seq2, int len2
 		s_array[i] = (int32_t*)_p, _p += 4 * len1;
 	/* initialization */
 	aln_init_score_array(seq1, len1, N_MATRIX_ROW, score_matrix, s_array);
-	tmp_len = len1 + 1;
 	start = 1; end = 2;
 	end_i = end_j = 0;
 	score = 0;

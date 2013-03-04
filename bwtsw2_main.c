@@ -6,19 +6,17 @@
 #include "bwt.h"
 #include "bwtsw2.h"
 #include "utils.h"
+#include "bwa.h"
 
 int bwa_bwtsw2(int argc, char *argv[])
 {
-	extern char *bwa_infer_prefix(const char *hint);
 	bsw2opt_t *opt;
-	bwt_t *target;
-	char buf[1024], *prefix;
-	bntseq_t *bns;
+	bwaidx_t *idx;
 	int c;
 
 	opt = bsw2_init_opt();
 	srand48(11);
-	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:SG:")) >= 0) {
+	while ((c = getopt(argc, argv, "q:r:a:b:t:T:w:d:z:m:s:c:N:Hf:MI:SG:C")) >= 0) {
 		switch (c) {
 		case 'q': opt->q = atoi(optarg); break;
 		case 'r': opt->r = atoi(optarg); break;
@@ -37,6 +35,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'I': opt->max_ins = atoi(optarg); break;
 		case 'S': opt->skip_sw = 1; break;
+		case 'C': opt->cpy_cmt = 1; break;
 		case 'G': opt->max_chain_gap = atoi(optarg); break;
 		}
 	}
@@ -55,6 +54,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "         -f FILE  file to output results to instead of stdout\n");
 		fprintf(stderr, "         -H       in SAM output, use hard clipping instead of soft clipping\n");
+		fprintf(stderr, "         -C       copy FASTA/Q comment to SAM output\n");
 		fprintf(stderr, "         -M       mark multi-part alignments as secondary\n");
 		fprintf(stderr, "         -S       skip Smith-Waterman read pairing\n");
 		fprintf(stderr, "         -I INT   ignore pairs with insert >=INT for inferring the size distr [%d]\n", opt->max_ins);
@@ -79,19 +79,10 @@ int bwa_bwtsw2(int argc, char *argv[])
 	opt->t *= opt->a;
 	opt->coef *= opt->a;
 
-	if ((prefix = bwa_infer_prefix(argv[optind])) == 0) {
-		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		return 0;
-	}
-	strcpy(buf, prefix); target = bwt_restore_bwt(strcat(buf, ".bwt"));
-	strcpy(buf, prefix); bwt_restore_sa(strcat(buf, ".sa"), target);
-	bns = bns_restore(prefix);
-
-	bsw2_aln(opt, bns, target, argv[optind+1], optind+2 < argc? argv[optind+2] : 0);
-
-	bns_destroy(bns);
-	bwt_destroy(target);
-	free(opt); free(prefix);
+	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS)) == 0) return 0;
+	bsw2_aln(opt, idx->bns, idx->bwt, argv[optind+1], optind+2 < argc? argv[optind+2] : 0);
+	bwa_idx_destroy(idx);
+	free(opt);
 	
 	return 0;
 }

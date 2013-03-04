@@ -28,6 +28,7 @@
 #ifndef LH3_UTILS_H
 #define LH3_UTILS_H
 
+#include <stdint.h>
 #include <stdio.h>
 #include <zlib.h>
 
@@ -38,13 +39,18 @@
 #define ATTRIBUTE(list)
 #endif
 
-
-
 #define err_fatal_simple(msg) err_fatal_simple_core(__func__, msg)
 #define xopen(fn, mode) err_xopen_core(__func__, fn, mode)
 #define xreopen(fn, mode, fp) err_xreopen_core(__func__, fn, mode, fp)
 #define xzopen(fn, mode) err_xzopen_core(__func__, fn, mode)
 #define xassert(cond, msg) if ((cond) == 0) err_fatal_simple_core(__func__, msg)
+
+typedef struct {
+	uint64_t x, y;
+} pair64_t;
+
+typedef struct { size_t n, m; uint64_t *a; } uint64_v;
+typedef struct { size_t n, m; pair64_t *a; } pair64_v;
 
 #ifdef __cplusplus
 extern "C" {
@@ -66,8 +72,24 @@ extern "C" {
 	double cputime();
 	double realtime();
 
+	void ks_introsort_64 (size_t n, uint64_t *a);
+	void ks_introsort_128(size_t n, pair64_t *a);
+
 #ifdef __cplusplus
 }
 #endif
+
+static inline uint64_t hash_64(uint64_t key)
+{
+	key += ~(key << 32);
+	key ^= (key >> 22);
+	key += ~(key << 13);
+	key ^= (key >> 8);
+	key += (key << 3);
+	key ^= (key >> 15);
+	key += ~(key << 27);
+	key ^= (key >> 31);
+	return key;
+}
 
 #endif
