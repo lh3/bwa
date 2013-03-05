@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "kstring.h"
 #include "bwa.h"
+#include "ksw.h"
 
 int g_log_n[256];
 
@@ -164,12 +165,13 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 									int ext, int *n_cigar, int is_end_correct)
 {
 	bwa_cigar_t *cigar = 0;
+	uint32_t *cigar32 = 0;
 	ubyte_t *ref_seq;
-	int l = 0, path_len, ref_len;
-	AlnParam ap = aln_param_bwa;
-	path_t *path;
+	int l = 0, ref_len;
 	int64_t k, __pos = *_pos;
+	int8_t mat[25];
 
+	bwa_fill_scmat(1, 3, mat);
 	ref_len = len + abs(ext);
 	if (ext > 0) {
 		ref_seq = (ubyte_t*)calloc(ref_len, 1);
@@ -181,10 +183,11 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		for (l = 0, k = x - ref_len > 0? x - ref_len : 0; k < x && k < l_pac; ++k)
 			ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
 	}
-	path = (path_t*)calloc(l+len, sizeof(path_t));
 
-	aln_global_core(ref_seq, l, (ubyte_t*)seq, len, &ap, path, &path_len);
-	cigar = bwa_aln_path2cigar(path, path_len, n_cigar);
+	ksw_global(len, seq, l, ref_seq, 5, mat, 5, 1, 50, n_cigar, &cigar32);
+	cigar = (bwa_cigar_t*)cigar32;
+	for (k = 0; k < *n_cigar; ++k)
+		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
 	
 	if (ext < 0 && is_end_correct) { // fix coordinate for reads mapped to the forward strand
 		for (l = k = 0; k < *n_cigar; ++k) {
@@ -206,7 +209,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 	if (__cigar_op(cigar[0]) == FROM_I) cigar[0] = __cigar_create(3, (__cigar_len(cigar[0])));
 
 	*_pos = (bwtint_t)__pos;
-	free(ref_seq); free(path);
+	free(ref_seq);
 	return cigar;
 }
 
