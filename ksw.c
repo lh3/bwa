@@ -359,7 +359,7 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
@@ -426,7 +426,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			max_ie = gscore > h1? max_ie : i;
 			gscore = gscore > h1? gscore : h1;
 		}
-		if (m == 0) break;
+		if (m == 0 || max - m - abs((i - max_i) - (j - max_j)) * gape > zdrop) break; // drop to zero, or below Z-dropoff
 		if (m > max) {
 			max = m, max_i = i, max_j = mj;
 			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);

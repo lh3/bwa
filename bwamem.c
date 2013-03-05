@@ -44,6 +44,7 @@ mem_opt_t *mem_opt_init()
 	o = calloc(1, sizeof(mem_opt_t));
 	o->flag = 0;
 	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 60; o->max_w = 500;
+	o->zdrop = 100;
 	o->pen_unpaired = 9;
 	o->pen_clip = 5;
 	o->min_seed_len = 19;
@@ -560,7 +561,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			rs = malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
 			for (aw[0] = opt->w;; aw[0] <<= 1) {
-				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
+				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
 				if (bwa_verbose >= 4) printf("L\t%d < %d; w=%d; max_off=%d\n", tmps, a->score, aw[0], max_off[0]); fflush(stdout);
 				if (a->score == tmps || aw[0]<<1 > opt->max_w || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 				tmps = a->score;
@@ -577,7 +578,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			re = s->rbeg + s->len - rmax[0];
 			assert(re >= 0);
 			for (aw[1] = opt->w;; aw[1] <<= 1) {
-				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
+				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
 				if (bwa_verbose >= 4) printf("R\t%d < %d; w=%d; max_off=%d\n", tmps, a->score, aw[1], max_off[1]); fflush(stdout);
 				if (a->score == tmps || aw[1]<<1 > opt->max_w || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 				tmps = a->score;

@@ -23,6 +23,7 @@ typedef struct {
 	int pen_clip;           // clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
 	int max_w;              // max band width
+	int zdrop;              // Z-dropoff
 
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
