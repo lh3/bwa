@@ -69,6 +69,17 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
  * CIGAR related *
  *****************/
 
+void bwa_fill_scmat(int a, int b, int8_t mat[25])
+{
+	int i, j, k;
+	for (i = k = 0; i < 4; ++i) {
+		for (j = 0; j < 4; ++j)
+			mat[k++] = i == j? a : -b;
+		mat[k++] = 0; // ambiguous base
+	}
+	for (j = 0; j < 5; ++j) mat[k++] = 0;
+}
+
 // Generate CIGAR when the alignment end points are known
 uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
 {

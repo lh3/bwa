@@ -84,7 +84,7 @@ int main_mem(int argc, char *argv[])
 		return 1;
 	}
 
-	mem_fill_scmat(opt->a, opt->b, opt->mat);
+	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
 	bwa_print_sam_hdr(idx->bns, rg_line);
 

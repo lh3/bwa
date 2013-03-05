@@ -58,19 +58,8 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_matesw = 100;
-	mem_fill_scmat(o->a, o->b, o->mat);
+	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
-}
-
-void mem_fill_scmat(int a, int b, int8_t mat[25])
-{
-	int i, j, k;
-	for (i = k = 0; i < 4; ++i) {
-		for (j = 0; j < 4; ++j)
-			mat[k++] = i == j? a : -b;
-		mat[k++] = 0; // ambiguous base
-	}
-	for (j = 0; j < 5; ++j) mat[k++] = 0;
 }
 
 /***************************
