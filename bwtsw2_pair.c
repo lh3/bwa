@@ -8,11 +8,7 @@
 #include "bwtsw2.h"
 #include "kstring.h"
 #include "utils.h"
-#ifndef _NO_SSE2
 #include "ksw.h"
-#else
-#include "stdaln.h"
-#endif
 
 #define MIN_RATIO     0.8
 #define OUTLIER_BOUND 2.0
@@ -127,8 +123,7 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 		for (i = 0; i < l_mseq; ++i) // on the forward strand
 			seq[i] = nst_nt4_table[(int)mseq[i]];
 	}
-#ifndef _NO_SSE2
-	{ // FIXME!!! The following block has not been tested since the update of the ksw library
+	{
 		int flag = KSW_XSUBO | KSW_XSTART | (l_mseq * g_mat[0] < 250? KSW_XBYTE : 0) | opt->t;
 		kswr_t aln;
 		aln = ksw_align(l_mseq, seq, end - beg, ref, 5, g_mat, opt->q, opt->r, flag, 0);
@@ -147,24 +142,6 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 		printf("G=%d,G2=%d,beg=%d,end=%d,k=%lld,len=%d\n", a->G, a->G2, a->beg, a->end, a->k, a->len);
 		*/
 	}
-#else
-	{
-		AlnParam ap;
-		path_t path[2];
-		int matrix[25];
-		for (i = 0; i < 25; ++i) matrix[i] = g_mat[i];
-		ap.gap_open = opt->q; ap.gap_ext = opt->r; ap.gap_end = opt->r;
-		ap.matrix = matrix; ap.row = 5; ap.band_width = 50;
-		a->G = aln_local_core(ref, end - beg, seq, l_mseq, &ap, path, 0, opt->t, &a->G2);
-		if (a->G < opt->t) a->G = 0;
-		if (a->G2 < opt->t) a->G2 = 0;
-		if (a->G2) a->flag |= BSW2_FLAG_TANDEM;
-		a->k = beg + path[0].i - 1;
-		a->len = path[1].i - path[0].i + 1;
-		a->beg = path[0].j - 1;
-		a->end = path[1].j;
-	}
-#endif
 	if (a->is_rev) i = a->beg, a->beg = l_mseq - a->end, a->end = l_mseq - i;
 	free(seq);
 }

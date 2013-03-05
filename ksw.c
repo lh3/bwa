@@ -360,11 +360,11 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap, max_ie, gscore;
+	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap, max_ie, gscore, max_off;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
 	qp = xmalloc(qlen * m);
@@ -387,6 +387,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	w = w < max_gap? w : max_gap;
 	// DP loop
 	max = h0, max_i = max_j = -1; max_ie = -1, gscore = -1;
+	max_off = 0;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int f = 0, h1, m = 0, mj = -1;
@@ -411,7 +412,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			h = h > e? h : e;
 			h = h > f? h : f;
 			h1 = h;             // save H(i,j) to h1 for the next column
-			mj = m > h? mj : j;
+			mj = m > h? mj : j; // record the position where max score is achieved
 			m = m > h? m : h;   // m is stored at eh[mj+1]
 			h -= gapoe;
 			h = h > 0? h : 0;
@@ -426,8 +427,11 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			max_ie = gscore > h1? max_ie : i;
 			gscore = gscore > h1? gscore : h1;
 		}
-		if (m == 0) break;
-		if (m > max) max = m, max_i = i, max_j = mj;
+		if (m == 0 || max - m - abs((i - max_i) - (j - max_j)) * gape > zdrop) break; // drop to zero, or below Z-dropoff
+		if (m > max) {
+			max = m, max_i = i, max_j = mj;
+			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);
+		}
 		// update beg and end for the next round
 		for (j = mj; j >= beg && eh[j].h; --j);
 		beg = j + 1;
@@ -440,6 +444,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	if (_tle) *_tle = max_i + 1;
 	if (_gtle) *_gtle = max_ie + 1;
 	if (_gscore) *_gscore = gscore;
+	if (_max_off) *_max_off = max_off;
 	return max;
 }
 

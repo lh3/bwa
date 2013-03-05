@@ -138,7 +138,7 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 		if (scanres != 3) goto badread;
 		l_pac = xx;
 		xassert(l_pac == bns->l_pac && n_seqs == bns->n_seqs, "inconsistent .ann and .amb files.");
-		bns->ambs = (bntamb1_t*)xcalloc(bns->n_holes, sizeof(bntamb1_t));
+		bns->ambs = bns->n_holes? (bntamb1_t*)xcalloc(bns->n_holes, sizeof(bntamb1_t)) : 0;
 		for (i = 0; i < bns->n_holes; ++i) {
 			bntamb1_t *p = bns->ambs + i;
 			scanres = fscanf(fp, "%lld%d%s", &xx, &p->len, str);
