@@ -312,18 +312,3 @@ int bwa_aln(int argc, char *argv[])
 	free(opt); free(prefix);
 	return 0;
 }
-
-/* rgoya: Temporary clone of aln_path2cigar to accomodate for bwa_cigar_t,
-__cigar_op and __cigar_len while keeping stdaln stand alone */
-bwa_cigar_t *bwa_aln_path2cigar(const path_t *path, int path_len, int *n_cigar)
-{
-	uint32_t *cigar32;
-	bwa_cigar_t *cigar;
-	int i;
-	cigar32 = aln_path2cigar32((path_t*) path, path_len, n_cigar);
-	cigar = (bwa_cigar_t*)cigar32;
-	for (i = 0; i < *n_cigar; ++i)
-                cigar[i] = __cigar_create( (cigar32[i]&0xf), (cigar32[i]>>4) );
-	return cigar;
-}
-

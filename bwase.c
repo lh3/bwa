@@ -4,7 +4,6 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include "stdaln.h"
 #include "bwase.h"
 #include "bwtaln.h"
 #include "bntseq.h"
@@ -205,8 +204,8 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 	if (__cigar_op(cigar[*n_cigar-1]) == FROM_D) --(*n_cigar); // deletion at the 3'-end
 
 	// change "I" at either end of the read to S. just in case. This should rarely happen...
-	if (__cigar_op(cigar[*n_cigar-1]) == FROM_I) cigar[*n_cigar-1] = __cigar_create(3, (__cigar_len(cigar[*n_cigar-1])));
-	if (__cigar_op(cigar[0]) == FROM_I) cigar[0] = __cigar_create(3, (__cigar_len(cigar[0])));
+	if (__cigar_op(cigar[*n_cigar-1]) == FROM_I) cigar[*n_cigar-1] = __cigar_create(FROM_S, (__cigar_len(cigar[*n_cigar-1])));
+	if (__cigar_op(cigar[0]) == FROM_I) cigar[0] = __cigar_create(FROM_S, (__cigar_len(cigar[0])));
 
 	*_pos = (bwtint_t)__pos;
 	free(ref_seq);
@@ -589,5 +588,6 @@ int bwa_sai2sam_se(int argc, char *argv[])
 		return 0;
 	}
 	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line);
+	free(prefix);
 	return 0;
 }

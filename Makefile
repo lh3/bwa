@@ -4,7 +4,7 @@ CXXFLAGS=	$(CFLAGS)
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
 LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o
-AOBJS=		QSufSort.o bwt_gen.o stdaln.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
+AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o kopen.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
 			bwtsw2_chain.o fastmap.o bwtsw2_pair.o
@@ -48,8 +48,8 @@ fastmap.o:bwt.h bwamem.h
 bwtaln.o:bwt.h bwtaln.h kseq.h
 bwtgap.o:bwtgap.h bwtaln.h bwt.h
 
-bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
-bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h stdaln.h
+bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h
+bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h
 bwtsw2_main.o:bwtsw2.h
 
 clean:
