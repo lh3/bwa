@@ -11,9 +11,9 @@
 #include "bwt_lite.h"
 #include "utils.h"
 #include "bwtsw2.h"
-#include "stdaln.h"
 #include "kstring.h"
 #include "bwa.h"
+#include "ksw.h"
 
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
@@ -94,13 +94,12 @@ bwtsw2_t *bsw2_dup_no_cigar(const bwtsw2_t *b)
 
 void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq, uint8_t *pac, bwtint_t l_pac, uint8_t *_mem)
 {
-	int i, matrix[25];
+	int i;
 	bwtint_t k;
 	uint8_t *target = 0, *query;
-	AlnParam par;
+	int8_t mat[25];
 
-	par.matrix = matrix;
-	__gen_ap(par, opt);
+	bwa_fill_scmat(opt->a, opt->b, mat);
 	query = calloc(lq, 1);
 	// sort according to the descending order of query end
 	ks_introsort(hit, b->n, b->hits);
@@ -111,8 +110,7 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		int lt = ((p->beg + 1) / 2 * opt->a + opt->r) / opt->r + lq;
-		int score, j;
-		path_t path;
+		int score, j, qle, tle;
 		p->n_seeds = 1;
 		if (p->l || p->k == 0) continue;
 		for (j = score = 0; j < i; ++j) {
@@ -127,12 +125,12 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 		for (k = p->k - 1, j = 0; k > 0 && j < lt; --k) // FIXME: k=0 not considered!
 			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
-		score = aln_extend_core(target, lt, query + lq - p->beg, p->beg, &par, &path, 0, p->G, _mem);
+		score = ksw_extend(p->beg, &query[lq - p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, -1, p->G, &qle, &tle, 0, 0, 0);
 		if (score > p->G) { // extensible
 			p->G = score;
-			p->len += path.i;
-			p->beg -= path.j;
-			p->k -= path.i;
+			p->k -= tle;
+			p->len += tle;
+			p->beg -= qle;
 		}
 	}
 	free(query); free(target);
@@ -140,29 +138,27 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 
 void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq, uint8_t *pac, bwtint_t l_pac, uint8_t *_mem)
 {
-	int i, matrix[25];
+	int i;
 	bwtint_t k;
 	uint8_t *target;
-	AlnParam par;
-	
-	par.matrix = matrix;
-	__gen_ap(par, opt);
+	int8_t mat[25];
+
+	bwa_fill_scmat(opt->a, opt->b, mat);
 	target = calloc(((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, 1);
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		int lt = ((lq - p->beg + 1) / 2 * opt->a + opt->r) / opt->r + lq;
-		int j, score;
-		path_t path;
+		int j, score, qle, tle;
 		if (p->l) continue;
 		for (k = p->k, j = 0; k < p->k + lt && k < l_pac; ++k)
 			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
-		score = aln_extend_core(target, lt, query + p->beg, lq - p->beg, &par, &path, 0, 1, _mem);
+		score = ksw_extend(lq - p->beg, &query[p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, -1, 1, &qle, &tle, 0, 0, 0);
 //		if (score < p->G) fprintf(stderr, "[bsw2_extend_hits] %d < %d\n", score, p->G);
 		if (score >= p->G) {
 			p->G = score;
-			p->len = path.i;
-			p->end = path.j + p->beg;
+			p->len = tle;
+			p->end = p->beg + qle;
 		}
 	}
 	free(target);

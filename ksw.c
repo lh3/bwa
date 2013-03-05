@@ -426,7 +426,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			max_ie = gscore > h1? max_ie : i;
 			gscore = gscore > h1? gscore : h1;
 		}
-		if (m == 0 || max - m - abs((i - max_i) - (j - max_j)) * gape > zdrop) break; // drop to zero, or below Z-dropoff
+		if (m == 0 || (zdrop > 0 && max - m - abs((i - max_i) - (j - max_j)) * gape > zdrop)) break; // drop to zero, or below Z-dropoff
 		if (m > max) {
 			max = m, max_i = i, max_j = mj;
 			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);
