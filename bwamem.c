@@ -44,6 +44,7 @@ mem_opt_t *mem_opt_init()
 	o = calloc(1, sizeof(mem_opt_t));
 	o->flag = 0;
 	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
+	o->T = 30;
 	o->zdrop = 100;
 	o->pen_unpaired = 9;
 	o->pen_clip = 5;
@@ -742,11 +743,12 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	int k;
 	kstring_t str;
 	str.l = str.m = 0; str.s = 0;
-	if (a->n > 0) {
+	if (a->n > 0 && a->a[0].score >= opt->T) {
 		int mapq0 = -1;
 		for (k = 0; k < a->n; ++k) {
 			bwahit_t h;
 			mem_alnreg_t *p = &a->a[k];
+			if (p->score < opt->T) continue;
 			if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
 			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 			mem_alnreg2hit(p, &h);

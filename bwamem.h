@@ -24,6 +24,7 @@ typedef struct {
 	int w;                  // band width
 	int zdrop;              // Z-dropoff
 
+	int T;                  // output score threshold; only affecting output
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor

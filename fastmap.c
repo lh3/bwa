@@ -26,13 +26,14 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
 		else if (c == 'B') opt->b = atoi(optarg);
 		else if (c == 'O') opt->q = atoi(optarg);
 		else if (c == 'E') opt->r = atoi(optarg);
+		else if (c == 'T') opt->T = atoi(optarg);
 		else if (c == 'L') opt->pen_clip = atoi(optarg);
 		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
@@ -74,6 +75,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT     verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
+		fprintf(stderr, "       -T INT     minimum score to output [%d]\n", opt->T);
 		fprintf(stderr, "       -a         output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -H         hard clipping\n");
