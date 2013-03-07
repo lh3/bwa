@@ -18,7 +18,7 @@ static const char *err_msg[MAX_ERR+1] = {
 	"pairs where the best SW alignment is not an overlap (long right end)",
 	"pairs with large 2nd best SW score",
 	"pairs with gapped overlap",
-	"pairs where the end-to-end ungapped alignment score is not high enough",
+	"pairs where the end-to-end alignment is inconsistent with SW",
 	"pairs potentially with tandem overlaps",
 	"pairs with high sum of errors"
 };
@@ -81,18 +81,18 @@ int bwa_pemerge(const pem_opt_t *opt, mseq_t x[2], uint8_t **seq_, uint8_t **qua
 		int max_m, max_m2, min_l, max_l, max_l2;
 		max_m = max_m2 = 0; max_l = max_l2 = 0;
 		min_l = x[0].s.l < x[1].s.l? x[0].s.l : x[1].s.l;
-		for (l = 0; l < min_l; ++l) {
+		for (l = 1; l < min_l; ++l) {
 			int m = 0, o = x[0].s.l - l;
-			int a = opt->a, b = -opt->b;
-			for (i = 0; i < l; ++i)
-				m += (s[0][o + i] == s[1][i])? a : b;
+			uint8_t *s0o = &s[0][o], *s1 = s[1];
+			for (i = 0; i < l; ++i) // TODO: in principle, this can be done with SSE2. It is the bottleneck!
+				m += opt->mat[(s1[i]<<2) + s1[i] + s0o[i]]; // equivalent to s[1][i]*5 + s[0][o+i]
 			if (m > max_m) max_m2 = max_m, max_m = m, max_l2 = max_l, max_l = l;
 			else if (m > max_m2) max_m2 = m, max_l2 = l;
 		}
-		if (max_m < opt->T) return -6;
+		if (max_m < opt->T || max_l != x[0].s.l - (r.tb - r.qb)) return -6;
 		if (max_l2 < max_l && max_m2 >= opt->T && (double)(max_m2 + (max_l - max_l2) * opt->a) / max_m >= MAX_SCORE_RATIO)
 			return -7;
-		//printf("*** %d,%d; %d,%d\n", max_m, max_m2, max_l, max_l2);
+		if (max_l2 > max_l && (double)max_m2 / max_m >= MAX_SCORE_RATIO) return -7;
 	}
 
 	l = x[0].s.l - (r.tb - r.qb); // length to merge
