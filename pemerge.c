@@ -5,35 +5,8 @@
 #include <zlib.h>
 #include "ksw.h"
 #include "kseq.h"
-
-#ifdef _PEM_MAIN
-KSEQ_INIT(gzFile, gzread)
-
-unsigned char nst_nt4_table[128] = {
-	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 5 /*'-'*/, 4, 4,
-	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 0, 4, 1,  4, 4, 4, 2,  4, 4, 4, 4,  4, 4, 4, 4, 
-	4, 4, 4, 4,  3, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4
-};
-
-void bwa_fill_scmat(int a, int b, int8_t mat[25])
-{
-	int i, j, k;
-	for (i = k = 0; i < 4; ++i) {
-		for (j = 0; j < 4; ++j)
-			mat[k++] = i == j? a : -b;
-		mat[k++] = 0; // ambiguous base
-	}
-	for (j = 0; j < 5; ++j) mat[k++] = 0;
-}
-#else
 #include "bwa.h"
 KSEQ_DECLARE(gzFile)
-#endif
 
 #define MAX_SCORE_RATIO 0.9f
 #define MAX_ERR 8
@@ -183,11 +156,7 @@ static inline void print_seq(const char *n, const char *s, const char *q)
 	}
 }
 
-#ifdef _PEM_MAIN
-int main(int argc, char *argv[])
-#else
 int main_pemerge(int argc, char *argv[])
-#endif
 {
 	int c, flag = 0, i;
 	int64_t cnt[MAX_ERR+1];
@@ -246,7 +215,6 @@ int main_pemerge(int argc, char *argv[])
 		} else {
 			++cnt[-l_seq];
 			if (flag & 2) {
-				printf("*** %d\n", l_seq);
 				print_seq(r[0].n.s, r[0].s.s, r[0].q.l? r[0].q.s : 0);
 				print_seq(r[1].n.s, r[1].s.s, r[1].q.l? r[1].q.s : 0);
 			}

@@ -31,7 +31,6 @@
 #include <zlib.h>
 #include <unistd.h>
 #include "bntseq.h"
-#include "main.h"
 #include "utils.h"
 
 #include "kseq.h"
