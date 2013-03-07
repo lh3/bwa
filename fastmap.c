@@ -59,7 +59,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -t INT     number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "       -k INT     minimum seed length [%d]\n", opt->min_seed_len);
 		fprintf(stderr, "       -w INT     band width for banded alignment [%d]\n", opt->w);
-		fprintf(stderr, "       -d INT     off-diagnal X-dropoff [%d]\n", opt->zdrop);
+		fprintf(stderr, "       -d INT     off-diagonal X-dropoff [%d]\n", opt->zdrop);
 		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 //		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);

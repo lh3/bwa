@@ -3,7 +3,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.0-r339-beta"
+#define PACKAGE_VERSION "0.7.0-r340-beta"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -34,7 +34,7 @@ static int usage()
 	fprintf(stderr, "Command: index         index sequences in the FASTA format\n");
 	fprintf(stderr, "         mem           BWA-MEM algorithm\n");
 	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
-	fprintf(stderr, "         pemerge       merge overlapping paired ends\n");
+	fprintf(stderr, "         pemerge       merge overlapping paired ends (EXPERIMENTAL)\n");
 	fprintf(stderr, "         aln           gapped/ungapped alignment\n");
 	fprintf(stderr, "         samse         generate alignment (single ended)\n");
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
