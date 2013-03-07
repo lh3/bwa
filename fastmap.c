@@ -106,6 +106,11 @@ int main_mem(int argc, char *argv[])
 	}
 	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
+		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
+			if (bwa_verbose >= 2)
+				fprintf(stderr, "[W::%s] odd number of reads in the PE mode; last read dropped\n", __func__);
+			n = n>>1<<1;
+		}
 		if (!copy_comment)
 			for (i = 0; i < n; ++i) {
 				free(seqs[i].comment); seqs[i].comment = 0;

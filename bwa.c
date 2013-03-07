@@ -55,7 +55,7 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 			kseq2bseq1(ks2, &seqs[n]);
 			size += seqs[n++].l_seq;
 		}
-		if (size >= chunk_size) break;
+		if (size >= chunk_size && (n&1) == 0) break;
 	}
 	if (size == 0) { // test if the 2nd file is finished
 		if (ks2 && kseq_read(ks2) >= 0)
