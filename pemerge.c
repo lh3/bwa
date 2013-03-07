@@ -210,7 +210,7 @@ static void process_seqs(const pem_opt_t *opt, int n_, bseq1_t *seqs, int64_t cn
 
 int main_pemerge(int argc, char *argv[])
 {
-	int c, flag = 0, i, n;
+	int c, flag = 0, i, n, min_ovlp = 10;
 	int64_t cnt[MAX_ERR+1];
 	bseq1_t *bseq;
 	gzFile fp, fp2 = 0;
@@ -218,19 +218,24 @@ int main_pemerge(int argc, char *argv[])
 	pem_opt_t *opt;
 
 	opt = pem_opt_init();
-	while ((c = getopt(argc, argv, "muQ:")) >= 0) {
+	while ((c = getopt(argc, argv, "muQ:t:T:")) >= 0) {
 		if (c == 'm') flag |= 1;
 		else if (c == 'u') flag |= 2;
 		else if (c == 'Q') opt->q_thres = atoi(optarg);
+		else if (c == 't') opt->n_threads = atoi(optarg);
+		else if (c == 'T') min_ovlp = atoi(optarg);
 	}
 	if (flag == 0) flag = 3;
 	opt->flag = flag;
+	opt->T = opt->a * min_ovlp;
 
 	if (optind == argc) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Usage:   bwa pemerge [-mu] <read1.fq> [read2.fq]\n\n");
 		fprintf(stderr, "Options: -m       output merged reads only\n");
 		fprintf(stderr, "         -u       output unmerged reads only\n");
+		fprintf(stderr, "         -t INT   number of threads [%d]\n", opt->n_threads);
+		fprintf(stderr, "         -T INT   minimum end overlap [%d]\n", min_ovlp);
 		fprintf(stderr, "         -Q INT   max sum of errors [%d]\n", opt->q_thres);
 		fprintf(stderr, "\n");
 		free(opt);
