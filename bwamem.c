@@ -612,7 +612,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 #define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)
 	int score, n_cigar, is_rev = 0, rid, mid, copy_mate = 0, NM = -1;
 	uint32_t *cigar = 0;
-	int64_t pos;
+	int64_t pos = -1;
 	bwahit_t ptmp, *p = &ptmp;
 
 	if (!p_) { // in this case, generate an unmapped alignment
