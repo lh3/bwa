@@ -28,6 +28,11 @@
 #define bns_pac(pac, k) ((pac)[(k)>>2] >> ((~(k)&3)<<1) & 3)
 #endif
 
+#define FROM_M 0
+#define FROM_I 1
+#define FROM_D 2
+#define FROM_S 3
+
 typedef struct {
 	bwtint_t w;
 	int bid;
@@ -137,13 +142,6 @@ extern "C" {
 	void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt);
 
 	void bwa_cs2nt_core(bwa_seq_t *p, bwtint_t l_pac, ubyte_t *pac);
-
-
-	/* rgoya: Temporary clone of aln_path2cigar to accomodate for bwa_cigar_t,
-	__cigar_op and __cigar_len while keeping stdaln stand alone */
-#include "stdaln.h"
-
-	bwa_cigar_t *bwa_aln_path2cigar(const path_t *path, int path_len, int *n_cigar);
 
 #ifdef __cplusplus
 }

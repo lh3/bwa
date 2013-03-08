@@ -303,7 +303,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 
 no_pairing:
 	for (i = 0; i < 2; ++i) {
-		if (a[i].n) {
+		if (a[i].n && a[i].a[0].score >= opt->T) {
 			mem_alnreg2hit(&a[i].a[0], &h[i]);
 			bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)s[i].seq, &h[i].qb, &h[i].qe, &h[i].rb, &h[i].re);
 		} else h[i].rb = h[i].re = -1;

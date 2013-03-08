@@ -32,7 +32,6 @@
 #include <unistd.h>
 #include <errno.h>
 #include "bntseq.h"
-#include "main.h"
 #include "utils.h"
 
 #include "kseq.h"

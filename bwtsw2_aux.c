@@ -11,9 +11,9 @@
 #include "bwt_lite.h"
 #include "utils.h"
 #include "bwtsw2.h"
-#include "stdaln.h"
 #include "kstring.h"
 #include "bwa.h"
+#include "ksw.h"
 
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
@@ -94,13 +94,12 @@ bwtsw2_t *bsw2_dup_no_cigar(const bwtsw2_t *b)
 
 void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq, uint8_t *pac, bwtint_t l_pac, uint8_t *_mem)
 {
-	int i, matrix[25];
+	int i;
 	bwtint_t k;
 	uint8_t *target = 0, *query;
-	AlnParam par;
+	int8_t mat[25];
 
-	par.matrix = matrix;
-	__gen_ap(par, opt);
+	bwa_fill_scmat(opt->a, opt->b, mat);
 	query = xcalloc(lq, 1);
 	// sort according to the descending order of query end
 	ks_introsort(hit, b->n, b->hits);
@@ -111,8 +110,7 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		int lt = ((p->beg + 1) / 2 * opt->a + opt->r) / opt->r + lq;
-		int score, j;
-		path_t path;
+		int score, j, qle, tle;
 		p->n_seeds = 1;
 		if (p->l || p->k == 0) continue;
 		for (j = score = 0; j < i; ++j) {
@@ -127,12 +125,12 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 		for (k = p->k - 1, j = 0; k > 0 && j < lt; --k) // FIXME: k=0 not considered!
 			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
-		score = aln_extend_core(target, lt, query + lq - p->beg, p->beg, &par, &path, 0, p->G, _mem);
+		score = ksw_extend(p->beg, &query[lq - p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, -1, p->G, &qle, &tle, 0, 0, 0);
 		if (score > p->G) { // extensible
 			p->G = score;
-			p->len += path.i;
-			p->beg -= path.j;
-			p->k -= path.i;
+			p->k -= tle;
+			p->len += tle;
+			p->beg -= qle;
 		}
 	}
 	free(query); free(target);
@@ -140,62 +138,49 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 
 void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq, uint8_t *pac, bwtint_t l_pac, uint8_t *_mem)
 {
-	int i, matrix[25];
+	int i;
 	bwtint_t k;
 	uint8_t *target;
-	AlnParam par;
-	
-	par.matrix = matrix;
-	__gen_ap(par, opt);
+	int8_t mat[25];
+
+	bwa_fill_scmat(opt->a, opt->b, mat);
 	target = xcalloc(((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, 1);
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		int lt = ((lq - p->beg + 1) / 2 * opt->a + opt->r) / opt->r + lq;
-		int j, score;
-		path_t path;
+		int j, score, qle, tle;
 		if (p->l) continue;
 		for (k = p->k, j = 0; k < p->k + lt && k < l_pac; ++k)
 			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
-		score = aln_extend_core(target, lt, query + p->beg, lq - p->beg, &par, &path, 0, 1, _mem);
+		score = ksw_extend(lq - p->beg, &query[p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, -1, 1, &qle, &tle, 0, 0, 0);
 //		if (score < p->G) fprintf(stderr, "[bsw2_extend_hits] %d < %d\n", score, p->G);
 		if (score >= p->G) {
 			p->G = score;
-			p->len = path.i;
-			p->end = path.j + p->beg;
+			p->len = tle;
+			p->end = p->beg + qle;
 		}
 	}
 	free(target);
 }
 
 /* generate CIGAR array(s) in b->cigar[] */
-static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b, const char *name)
+static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], int64_t l_pac, const uint8_t *pac, bwtsw2_t *b, const char *name)
 {
-	uint8_t *target;
-	int i, matrix[25];
-	AlnParam par;
-	path_t *path;
+	int i;
+	int8_t mat[25];
 
-	par.matrix = matrix;
-	__gen_ap(par, opt);
-	i = ((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq; // maximum possible target length
-	target = xcalloc(i, 1);
-	path = xcalloc(i + lq, sizeof(path_t));
-	// generate CIGAR
+	bwa_fill_scmat(opt->a, opt->b, mat);
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		bsw2aux_t *q = b->aux + i;
 		uint8_t *query;
-		bwtint_t k;
-		int path_len, beg, end;
+		int beg, end, score;
 		if (p->l) continue;
 		beg = (p->flag & 0x10)? lq - p->end : p->beg;
 		end = (p->flag & 0x10)? lq - p->beg : p->end;
 		query = seq[(p->flag & 0x10)? 1 : 0] + beg;
-		for (k = p->k; k < p->k + p->len; ++k) // in principle, no out-of-boundary here
-			target[k - p->k] = pac[k>>2] >> (~k&3)*2 & 0x3;
-		aln_global_core(target, p->len, query, end - beg, &par, path, &path_len);
-		q->cigar = aln_path2cigar32(path, path_len, &q->n_cigar);
+		q->cigar = bwa_gen_cigar(mat, opt->q, opt->r, opt->bw, l_pac, pac, end - beg, query, p->k, p->k + p->len, &score, &q->n_cigar, &q->nm);
 #if 0
 		if (name && score != p->G) { // debugging only
 			int j, glen = 0;
@@ -206,7 +191,7 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 					__func__, name, score, p->G, lq, end - beg, p->len, glen, opt->bw);
 		}
 #endif
-		if (beg != 0 || end < lq) { // write soft clipping
+		if (q->cigar && (beg != 0 || end < lq)) { // write soft clipping
 			q->cigar = xrealloc(q->cigar, 4 * (q->n_cigar + 2));
 			if (beg != 0) {
 				memmove(q->cigar + 1, q->cigar, q->n_cigar * 4);
@@ -219,7 +204,6 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], const uint8
 			}
 		}
 	}
-	free(target); free(path);
 }
 
 /* this is for the debugging purpose only */
@@ -407,27 +391,6 @@ static int fix_cigar(const bntseq_t *bns, bsw2hit_t *p, int n_cigar, uint32_t *c
 	return n_cigar;
 }
 
-static int compute_nm(bsw2hit_t *p, int n_cigar, const uint32_t *cigar, const uint8_t *pac, const uint8_t *seq)
-{
-	int k, x, n_mm = 0, i, n_gap = 0;
-	bwtint_t y;
-	x = 0; y = p->k;
-	for (k = 0; k < n_cigar; ++k) {
-		int op  = cigar[k]&0xf;
-		int len = cigar[k]>>4;
-		if (op == 0) { // match
-			for (i = 0; i < len; ++i) {
-				int ref = pac[(y+i)>>2] >> (~(y+i)&3)*2 & 0x3;
-				if (seq[x + i] != ref) ++n_mm;
-			}
-			x += len; y += len;
-		} else if (op == 1) x += len, n_gap += len;
-		else if (op == 2) y += len, n_gap += len;
-		else if (op == 4) x += len;
-	}
-	return n_mm + n_gap;
-}
-
 static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8_t *seq[2], const uint8_t *pac, bwtsw2_t *b, const char *name)
 {
 	int i;
@@ -439,7 +402,7 @@ static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8
 	}
 	b->aux = xcalloc(b->n, sizeof(bsw2aux_t));
 	// generate CIGAR
-	gen_cigar(opt, qlen, seq, pac, b, name);
+	gen_cigar(opt, qlen, seq, bns->l_pac, pac, b, name);
 	// fix CIGAR, generate mapQ, and write chromosomal position
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = &b->hits[i];
@@ -451,8 +414,6 @@ static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8
 			int subo;
 			// fix out-of-boundary CIGAR
 			q->n_cigar = fix_cigar(bns, p, q->n_cigar, q->cigar);
-			// compute the NM tag
-			q->nm = compute_nm(p, q->n_cigar, q->cigar, pac, seq[p->is_rev]);
 			// compute mapQ
 			subo = p->G2 > opt->t? p->G2 : opt->t;
 			if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
@@ -527,9 +488,10 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		bsw2aux_t *q = b->aux + i;
 		int j, beg, end, type = 0;
 		// print mandatory fields before SEQ
+		if (q->cigar == 0) q->flag |= 0x4;
 		ksprintf(&str, "%s\t%d", ks->name, q->flag | (opt->multi_2nd && i? 0x100 : 0));
 		ksprintf(&str, "\t%s\t%ld", q->chr>=0? bns->anns[q->chr].name : "*", (long)q->pos + 1);
-		if (p->l == 0) { // not a repetitive hit
+		if (p->l == 0 && q->cigar) { // not a repetitive hit
 			ksprintf(&str, "\t%d\t", q->pqual);
 			for (k = 0; k < q->n_cigar; ++k)
 				ksprintf(&str, "%d%c", q->cigar[k]>>4, (opt->hard_clip? "MIDNHHP" : "MIDNSHP")[q->cigar[k]&0xf]);
@@ -538,7 +500,7 @@ static void print_hits(const bntseq_t *bns, const bsw2opt_t *opt, bsw2seq1_t *ks
 		else ksprintf(&str, "\t%s\t%d\t%d\t", q->mchr==q->chr? "=" : (q->mchr<0? "*" : bns->anns[q->mchr].name), q->mpos+1, q->isize);
 		// get the sequence begin and end
 		beg = 0; end = ks->l;
-		if (opt->hard_clip) {
+		if (opt->hard_clip && q->cigar) {
 			if ((q->cigar[0]&0xf) == 4) beg += q->cigar[0]>>4;
 			if ((q->cigar[q->n_cigar-1]&0xf) == 4) end -= q->cigar[q->n_cigar-1]>>4;
 		}

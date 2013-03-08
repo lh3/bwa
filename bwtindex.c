@@ -33,7 +33,6 @@
 #include <zlib.h>
 #include "bntseq.h"
 #include "bwt.h"
-#include "main.h"
 #include "utils.h"
 
 #ifdef _DIVBWT

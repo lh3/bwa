@@ -27,13 +27,14 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
 		else if (c == 'B') opt->b = atoi(optarg);
 		else if (c == 'O') opt->q = atoi(optarg);
 		else if (c == 'E') opt->r = atoi(optarg);
+		else if (c == 'T') opt->T = atoi(optarg);
 		else if (c == 'L') opt->pen_clip = atoi(optarg);
 		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
@@ -59,7 +60,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -t INT     number of threads [%d]\n", opt->n_threads);
 		fprintf(stderr, "       -k INT     minimum seed length [%d]\n", opt->min_seed_len);
 		fprintf(stderr, "       -w INT     band width for banded alignment [%d]\n", opt->w);
-		fprintf(stderr, "       -d INT     off-diagnal X-dropoff [%d]\n", opt->zdrop);
+		fprintf(stderr, "       -d INT     off-diagonal X-dropoff [%d]\n", opt->zdrop);
 		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 //		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
@@ -75,6 +76,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -R STR     read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT     verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
+		fprintf(stderr, "       -T INT     minimum score to output [%d]\n", opt->T);
 		fprintf(stderr, "       -a         output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -H         hard clipping\n");
@@ -85,7 +87,7 @@ int main_mem(int argc, char *argv[])
 		return 1;
 	}
 
-	mem_fill_scmat(opt->a, opt->b, opt->mat);
+	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
 	bwa_print_sam_hdr(idx->bns, rg_line);
 
@@ -105,6 +107,11 @@ int main_mem(int argc, char *argv[])
 	}
 	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
+		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
+			if (bwa_verbose >= 2)
+				fprintf(stderr, "[W::%s] odd number of reads in the PE mode; last read dropped\n", __func__);
+			n = n>>1<<1;
+		}
 		if (!copy_comment)
 			for (i = 0; i < n; ++i) {
 				free(seqs[i].comment); seqs[i].comment = 0;

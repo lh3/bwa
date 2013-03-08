@@ -1,11 +1,28 @@
 #include <stdio.h>
 #include <string.h>
-#include "main.h"
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.0-r324-beta"
+#define PACKAGE_VERSION "0.7.0-r341-beta"
 #endif
+
+int bwa_fa2pac(int argc, char *argv[]);
+int bwa_pac2bwt(int argc, char *argv[]);
+int bwa_bwtupdate(int argc, char *argv[]);
+int bwa_bwt2sa(int argc, char *argv[]);
+int bwa_index(int argc, char *argv[]);
+int bwt_bwtgen_main(int argc, char *argv[]);
+
+int bwa_aln(int argc, char *argv[]);
+int bwa_sai2sam_se(int argc, char *argv[]);
+int bwa_sai2sam_pe(int argc, char *argv[]);
+
+int bwa_bwtsw2(int argc, char *argv[]);
+
+int main_fastmap(int argc, char *argv[]);
+int main_mem(int argc, char *argv[]);
+
+int main_pemerge(int argc, char *argv[]);
 
 static int usage()
 {
@@ -15,12 +32,13 @@ static int usage()
 	fprintf(stderr, "Contact: Heng Li <lh3@sanger.ac.uk>\n\n");
 	fprintf(stderr, "Usage:   bwa <command> [options]\n\n");
 	fprintf(stderr, "Command: index         index sequences in the FASTA format\n");
+	fprintf(stderr, "         mem           BWA-MEM algorithm\n");
+	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
+	fprintf(stderr, "         pemerge       merge overlapping paired ends (EXPERIMENTAL)\n");
 	fprintf(stderr, "         aln           gapped/ungapped alignment\n");
 	fprintf(stderr, "         samse         generate alignment (single ended)\n");
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
 	fprintf(stderr, "         bwasw         BWA-SW for long queries\n");
-	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
-	fprintf(stderr, "         mem           BWA-MEM algorithm\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
@@ -56,6 +74,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "bwasw") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "fastmap") == 0) ret = main_fastmap(argc-1, argv+1);
 	else if (strcmp(argv[1], "mem") == 0) ret = main_mem(argc-1, argv+1);
+	else if (strcmp(argv[1], "pemerge") == 0) ret = main_pemerge(argc-1, argv+1);
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;

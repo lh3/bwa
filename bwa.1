@@ -1,4 +1,4 @@
-.TH bwa 1 "27 Feburary 2013" "bwa-0.7.0" "Bioinformatics tools"
+.TH bwa 1 "10 March 2013" "bwa-0.7.1" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -81,6 +81,8 @@ genome.
 .IR minSeedLen ]
 .RB [ -w
 .IR bandWidth ]
+.RB [ -d
+.IR zDropoff ]
 .RB [ -r
 .IR seedSplitRatio ]
 .RB [ -c
@@ -163,6 +165,21 @@ Band width. Essentially, gaps longer than
 will not be found. Note that the maximum gap length is also affected by the
 scoring matrix and the hit length, not solely determined by this option. [100]
 .TP
+.BI -d \ INT
+Off-diagonal X-dropoff (Z-dropoff). Stop extension when the difference between
+the best and the current extension score is above
+.RI | i - j |* A + INT ,
+where
+.I i
+and
+.I j
+are the current positions of the query and reference, respectively, and
+.I A
+is the matching score. Z-dropoff is similar to BLAST's X-dropoff except that it
+doesn't penalize gaps in one of the sequences in the alignment. Z-dropoff not
+only avoids unnecessary extension, but also reduces poor alignments inside a
+long good alignment. [100]
+.TP
 .BI -r \ FLOAT
 Trigger re-seeding for a MEM longer than
 .IR minSeedLen * FLOAT .
@@ -214,6 +231,11 @@ Complete read group header line. '\\t' can be used in
 and will be converted to a TAB in the output SAM. The read group ID will be
 attached to every read in the output. An example is '@RG\\tID:foo\\tSM:bar'.
 [null]
+.TP
+.BI -T \ INT
+Don't output alignment with score lower than
+.IR INT .
+This option only affects output. [30]
 .TP
 .B -a
 Output all found alignments for single-end or unpaired paired-end reads. These

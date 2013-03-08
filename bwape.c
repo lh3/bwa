@@ -8,9 +8,9 @@
 #include "kvec.h"
 #include "bntseq.h"
 #include "utils.h"
-#include "stdaln.h"
 #include "bwase.h"
 #include "bwa.h"
+#include "ksw.h"
 
 typedef struct {
 	int n;
@@ -397,16 +397,17 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 #define SW_MIN_MAPQ 17
 
 // cnt = n_mm<<16 | n_gapo<<8 | n_gape
-bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const ubyte_t *seq, int64_t *beg, int reglen,
-					  int *n_cigar, uint32_t *_cnt)
+bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const ubyte_t *seq, int64_t *beg, int reglen, int *n_cigar, uint32_t *_cnt)
 {
+	kswr_t r;
+	uint32_t *cigar32 = 0;
 	bwa_cigar_t *cigar = 0;
 	ubyte_t *ref_seq;
 	bwtint_t k, x, y, l;
-	int path_len, ret, subo;
-	AlnParam ap = aln_param_bwa;
-	path_t *path, *p;
+	int xtra;
+	int8_t mat[25];
 
+	bwa_fill_scmat(1, 3, mat);
 	// check whether there are too many N's
 	if (reglen < SW_MIN_MATCH_LEN || (int64_t)l_pac - *beg < len) return 0;
 	for (k = 0, x = 0; k < len; ++k)
@@ -417,15 +418,19 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	ref_seq = (ubyte_t*)xcalloc(reglen, 1);
 	for (k = *beg, l = 0; l < reglen && k < l_pac; ++k)
 		ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
-	path = (path_t*)xcalloc(l+len, sizeof(path_t));
 
 	// do alignment
-	ret = aln_local_core(ref_seq, l, (ubyte_t*)seq, len, &ap, path, &path_len, 1, &subo);
-	if (ret < 0 || subo == ret) { // no hit or tandem hits
-		free(path); free(cigar); free(ref_seq); *n_cigar = 0;
+	xtra = KSW_XSUBO | KSW_XSTART | (len < 250? KSW_XBYTE : 0);
+	r = ksw_align(len, (uint8_t*)seq, l, ref_seq, 5, mat, 5, 1, xtra, 0);
+	ksw_global(r.qe - r.qb + 1, &seq[r.qb], r.te - r.tb + 1, &ref_seq[r.tb], 5, mat, 5, 1, 50, n_cigar, &cigar32);
+	cigar = (bwa_cigar_t*)cigar32;
+	for (k = 0; k < *n_cigar; ++k)
+		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
+
+	if (r.score < SW_MIN_MATCH_LEN || r.score2 == r.score) { // poor hit or tandem hits
+		free(cigar); free(ref_seq); *n_cigar = 0;
 		return 0;
 	}
-	cigar = bwa_aln_path2cigar(path, path_len, n_cigar);
 
 	// check whether the alignment is good enough
 	for (k = 0, x = y = 0; k < *n_cigar; ++k) {
@@ -435,17 +440,14 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 		else y += __cigar_len(c);
 	}
 	if (x < SW_MIN_MATCH_LEN || y < SW_MIN_MATCH_LEN) { // not good enough
-		free(path); free(cigar); free(ref_seq);
+		free(cigar); free(ref_seq);
 		*n_cigar = 0;
 		return 0;
 	}
 
 	{ // update cigar and coordinate;
-		int start, end;
-		p = path + path_len - 1;
-		*beg += (p->i? p->i : 1) - 1;
-		start = (p->j? p->j : 1) - 1;
-		end = path->j;
+		int start = r.qb, end = r.qe + 1;
+		*beg += r.tb;
 		cigar = (bwa_cigar_t*)xrealloc(cigar, sizeof(bwa_cigar_t) * (*n_cigar + 2));
 		if (start) {
 			memmove(cigar + 1, cigar, sizeof(bwa_cigar_t) * (*n_cigar));
@@ -462,8 +464,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	{ // set *cnt
 		int n_mm, n_gapo, n_gape;
 		n_mm = n_gapo = n_gape = 0;
-		p = path + path_len - 1;
-		x = p->i? p->i - 1 : 0; y = p->j? p->j - 1 : 0;
+		x = r.tb; y = r.qb;
 		for (k = 0; k < *n_cigar; ++k) {
 			bwa_cigar_t c = cigar[k];
 			if (__cigar_op(c) == FROM_M) {
@@ -479,7 +480,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 		*_cnt = (uint32_t)n_mm<<16 | n_gapo<<8 | n_gape;
 	}
 	
-	free(ref_seq); free(path);
+	free(ref_seq);
 	return cigar;
 }
 

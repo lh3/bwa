@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
-#include "stdaln.h"
 #include "bwase.h"
 #include "bwtaln.h"
 #include "bntseq.h"
 #include "utils.h"
 #include "kstring.h"
 #include "bwa.h"
+#include "ksw.h"
 
 int g_log_n[256];
 
@@ -156,57 +156,58 @@ void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_se
 	bwt_destroy(bwt);
 }
 
-/* is_end_correct == 1 if (*pos+len) gives the correct coordinate on
- * forward strand. This happens when p->pos is calculated by
- * bwa_cal_pac_pos(). is_end_correct==0 if (*pos) gives the correct
- * coordinate. This happens only for color-converted alignment. */
-bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const ubyte_t *seq, bwtint_t *_pos,
-									int ext, int *n_cigar, int is_end_correct)
+#define SW_BW 50
+
+bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, ubyte_t *seq, bwtint_t *_pos, int *n_cigar, int is_rev)
 {
 	bwa_cigar_t *cigar = 0;
-	ubyte_t *ref_seq;
-	int l = 0, path_len, ref_len;
-	AlnParam ap = aln_param_bwa;
-	path_t *path;
-	int64_t k, __pos = *_pos;
+	uint32_t *cigar32 = 0;
+	ubyte_t *rseq;
+	int tle, qle, gtle, gscore;
+	int64_t k, rb, re, rlen;
+	int8_t mat[25];
 
-	ref_len = len + abs(ext);
-	if (ext > 0) {
-		ref_seq = (ubyte_t*)xcalloc(ref_len, 1);
-		for (k = __pos; k < __pos + ref_len && k < l_pac; ++k)
-			ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
-	} else {
-		int64_t x = __pos + (is_end_correct? len : ref_len);
-		ref_seq = (ubyte_t*)xcalloc(ref_len, 1);
-		for (l = 0, k = x - ref_len > 0? x - ref_len : 0; k < x && k < l_pac; ++k)
-			ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
-	}
-	path = (path_t*)xcalloc(l+len, sizeof(path_t));
-
-	aln_global_core(ref_seq, l, (ubyte_t*)seq, len, &ap, path, &path_len);
-	cigar = bwa_aln_path2cigar(path, path_len, n_cigar);
-	
-	if (ext < 0 && is_end_correct) { // fix coordinate for reads mapped to the forward strand
-		for (l = k = 0; k < *n_cigar; ++k) {
-			if (__cigar_op(cigar[k]) == FROM_D) l -= __cigar_len(cigar[k]);
-			else if (__cigar_op(cigar[k]) == FROM_I) l += __cigar_len(cigar[k]);
+	bwa_fill_scmat(1, 3, mat);
+	if (!is_rev) { // forward strand, the end position is correct
+		re = *_pos + len;
+		if (re > l_pac) re = l_pac;
+		rb = re - (len + SW_BW);
+		if (rb < 0) rb = 0;
+		rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
+		seq_reverse(len, seq, 0); // as we need to do left extension, we have to reverse both query and reference sequences
+		seq_reverse(rlen, rseq, 0);
+		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
+		if (gscore > 0) tle = gtle, qle = len;
+		rb = re - tle; rlen = tle;
+		seq_reverse(len, seq, 0);
+		seq_reverse(rlen, rseq, 0);
+		ksw_global(qle, &seq[len-qle], rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32);
+		if (qle < len) { // write soft clip
+			cigar = xrealloc(cigar, (*n_cigar + 1) * 4);
+			memmove(cigar + 1, cigar, *n_cigar * 4);
+			cigar[0] = (len - qle)<<4 | FROM_S;
+			++(*n_cigar);
 		}
-		__pos += l;
+	} else { // reverse strand, the start position is correct
+		rb = *_pos; re = rb + len + SW_BW;
+		if (re > l_pac) re = l_pac;
+		rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
+		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
+		if (gscore > 0) tle = gtle, qle = len;
+		re = rb + tle; rlen = tle;
+		ksw_global(qle, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension
+		if (qle < len) {
+			cigar = xrealloc(cigar, (*n_cigar + 1) * 4);
+			cigar[*n_cigar - 1] = (len - qle)<<4 | FROM_S;
+			++(*n_cigar);
+		}
 	}
+	*_pos = rb;
 
-	if (__cigar_op(cigar[0]) == FROM_D) { // deletion at the 5'-end
-		__pos += __cigar_len(cigar[0]);
-		for (k = 0; k < *n_cigar - 1; ++k) cigar[k] = cigar[k+1];
-		--(*n_cigar);
-	}
-	if (__cigar_op(cigar[*n_cigar-1]) == FROM_D) --(*n_cigar); // deletion at the 3'-end
-
-	// change "I" at either end of the read to S. just in case. This should rarely happen...
-	if (__cigar_op(cigar[*n_cigar-1]) == FROM_I) cigar[*n_cigar-1] = __cigar_create(3, (__cigar_len(cigar[*n_cigar-1])));
-	if (__cigar_op(cigar[0]) == FROM_I) cigar[0] = __cigar_create(3, (__cigar_len(cigar[0])));
-
-	*_pos = (bwtint_t)__pos;
-	free(ref_seq); free(path);
+	cigar = (bwa_cigar_t*)cigar32;
+	for (k = 0; k < *n_cigar; ++k)
+		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
+	free(rseq);
 	return cigar;
 }
 
@@ -314,13 +315,11 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 			bwt_multi1_t *q = s->multi + j;
 			int n_cigar;
 			if (q->gap == 0) continue;
-			q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, &q->pos,
-										  (q->strand? 1 : -1) * q->gap, &n_cigar, 1);
+			q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, &q->pos, &n_cigar, q->strand);
 			q->n_cigar = n_cigar;
 		}
 		if (s->type == BWA_TYPE_NO_MATCH || s->type == BWA_TYPE_MATESW || s->n_gapo == 0) continue;
-		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos,
-									  (s->strand? 1 : -1) * (s->n_gapo + s->n_gape), &s->n_cigar, 1);
+		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos, &s->n_cigar, s->strand);
 	}
 	// generate MD tag
 	str = (kstring_t*)xcalloc(1, sizeof(kstring_t));
@@ -606,5 +605,6 @@ int bwa_sai2sam_se(int argc, char *argv[])
 		return 0;
 	}
 	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line);
+	free(prefix);
 	return 0;
 }
