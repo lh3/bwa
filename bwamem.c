@@ -628,6 +628,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	}
 	p->flag |= p->rb >= bns->l_pac? 0x10 : 0; // is reverse strand
 	p->flag |= m && m->rb >= bns->l_pac? 0x20 : 0; // is mate on reverse strand
+	if (is_mapped(p) && m && !is_mapped(m) && (p->flag&0x10)) p->flag |= 0x20; // if mate is unmapped, it takes the strand of the current read
 	kputs(s->name, str); kputc('\t', str);
 	if (is_mapped(p)) { // has a coordinate, no matter whether it is mapped or copied from the mate
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
