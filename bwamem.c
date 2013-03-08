@@ -670,9 +670,13 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		if (mid == rid) {
 			int64_t p0 = p->rb < bns->l_pac? p->rb : (bns->l_pac<<1) - 1 - p->rb;
 			int64_t p1 = m->rb < bns->l_pac? m->rb : (bns->l_pac<<1) - 1 - m->rb;
-			kputw(p0 - p1 + (p0 > p1? 1 : -1), str);
+			kputw(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0), str);
 		} else kputw(0, str);
 		kputc('\t', str);
+	} else if (m && is_mapped(p)) { // then copy the position
+		kputsn("\t=\t", 3, str);
+		kputuw(pos - bns->anns[rid].offset + 1, str);
+		kputsn("\t0\t", 3, str);
 	} else kputsn("\t*\t0\t0\t", 7, str);
 	if (p->flag&0x100) { // for secondary alignments, don't write SEQ and QUAL
 		kputsn("*\t*", 3, str);
@@ -760,7 +764,12 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			else if (h.qual > mapq0) h.qual = mapq0;
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, p->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
 		}
-	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP, m);
+	} else {
+		bwahit_t h;
+		memset(&h, 0, sizeof(bwahit_t));
+		h.rb = h.re = -1; h.flag = extra_flag;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
+	}
 	s->sam = str.s;
 }
 

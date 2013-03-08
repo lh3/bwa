@@ -306,7 +306,11 @@ no_pairing:
 		if (a[i].n && a[i].a[0].score >= opt->T) {
 			mem_alnreg2hit(&a[i].a[0], &h[i]);
 			bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)s[i].seq, &h[i].qb, &h[i].qe, &h[i].rb, &h[i].re);
-		} else h[i].rb = h[i].re = -1;
+		} else {
+			memset(&h[i], 0, sizeof(bwahit_t));
+			h[i].rb = h[i].re = -1;
+			h[i].flag = 1<<(6+i) | 1;
+		}
 	}
 	mem_sam_se(opt, bns, pac, &s[0], &a[0], 0x41, &h[1]);
 	mem_sam_se(opt, bns, pac, &s[1], &a[1], 0x81, &h[0]);
