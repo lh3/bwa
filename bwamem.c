@@ -671,7 +671,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		if (mid == rid) {
 			int64_t p0 = p->rb < bns->l_pac? p->rb : (bns->l_pac<<1) - 1 - p->rb;
 			int64_t p1 = m->rb < bns->l_pac? m->rb : (bns->l_pac<<1) - 1 - m->rb;
-			kputw(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0), str);
+			kputw(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str);
 		} else kputw(0, str);
 		kputc('\t', str);
 	} else if (m && is_mapped(p)) { // then copy the position
