@@ -260,7 +260,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
 			for (j = 1; j < a[i].n; ++j)
-				if (a[i].a[j].secondary < 0) break;
+				if (a[i].a[j].secondary < 0 && a[i].a[j].score >= opt->T) break;
 			is_multi[i] = j < a[i].n? 1 : 0;
 		}
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
