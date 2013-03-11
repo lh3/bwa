@@ -75,9 +75,9 @@ void bwa_fill_scmat(int a, int b, int8_t mat[25])
 	for (i = k = 0; i < 4; ++i) {
 		for (j = 0; j < 4; ++j)
 			mat[k++] = i == j? a : -b;
-		mat[k++] = 0; // ambiguous base
+		mat[k++] = -1; // ambiguous base
 	}
-	for (j = 0; j < 5; ++j) mat[k++] = 0;
+	for (j = 0; j < 5; ++j) mat[k++] = -1;
 }
 
 // Generate CIGAR when the alignment end points are known

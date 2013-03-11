@@ -1,8 +1,7 @@
 CC=			gcc
-CFLAGS=		-g -Wall -O2 -msse2
-CXXFLAGS=	$(CFLAGS)
+CFLAGS=		-g -Wall -O2
 AR=			ar
-DFLAGS=		-DHAVE_PTHREAD #-D_NO_SSE2 #-D_FILE_OFFSET_BITS=64
+DFLAGS=		-DHAVE_PTHREAD
 LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o
 AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o kopen.o pemerge.o \
@@ -17,8 +16,6 @@ SUBDIRS=	.
 
 .c.o:
 		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
-.cc.o:
-		$(CXX) -c $(CXXFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
 
 all:$(PROG)
 

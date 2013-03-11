@@ -612,7 +612,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 #define is_mapped(x) ((x)->rb >= 0 && (x)->rb < (x)->re && (x)->re <= bns->l_pac<<1)
 	int score, n_cigar, is_rev = 0, rid, mid, copy_mate = 0, NM = -1;
 	uint32_t *cigar = 0;
-	int64_t pos;
+	int64_t pos = -1;
 	bwahit_t ptmp, *p = &ptmp;
 
 	if (!p_) { // in this case, generate an unmapped alignment
@@ -628,6 +628,7 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 	}
 	p->flag |= p->rb >= bns->l_pac? 0x10 : 0; // is reverse strand
 	p->flag |= m && m->rb >= bns->l_pac? 0x20 : 0; // is mate on reverse strand
+	if (is_mapped(p) && m && !is_mapped(m) && (p->flag&0x10)) p->flag |= 0x20; // if mate is unmapped, it takes the strand of the current read
 	kputs(s->name, str); kputc('\t', str);
 	if (is_mapped(p)) { // has a coordinate, no matter whether it is mapped or copied from the mate
 		int sam_flag = p->flag&0xff; // the flag that will be outputed to SAM; it is not always the same as p->flag
@@ -670,9 +671,13 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 		if (mid == rid) {
 			int64_t p0 = p->rb < bns->l_pac? p->rb : (bns->l_pac<<1) - 1 - p->rb;
 			int64_t p1 = m->rb < bns->l_pac? m->rb : (bns->l_pac<<1) - 1 - m->rb;
-			kputw(p0 - p1 + (p0 > p1? 1 : -1), str);
+			kputw(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str);
 		} else kputw(0, str);
 		kputc('\t', str);
+	} else if (m && is_mapped(p)) { // then copy the position
+		kputsn("\t=\t", 3, str);
+		kputuw(pos - bns->anns[rid].offset + 1, str);
+		kputsn("\t0\t", 3, str);
 	} else kputsn("\t*\t0\t0\t", 7, str);
 	if (p->flag&0x100) { // for secondary alignments, don't write SEQ and QUAL
 		kputsn("*\t*", 3, str);
@@ -760,7 +765,12 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 			else if (h.qual > mapq0) h.qual = mapq0;
 			bwa_hit2sam(&str, opt->mat, opt->q, opt->r, p->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
 		}
-	} else bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, 0, opt->flag&MEM_F_HARDCLIP, m);
+	} else {
+		bwahit_t h;
+		memset(&h, 0, sizeof(bwahit_t));
+		h.rb = h.re = -1; h.flag = extra_flag;
+		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
+	}
 	s->sam = str.s;
 }
 
