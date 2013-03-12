@@ -837,7 +837,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	}
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;
-	a.score = ar->score; a.sub = ar->sub;
+	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
 	free(query);
 	return a;
 }
