@@ -702,6 +702,22 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
+	if (n > 1) { // output multiple primary hits
+		kputsn("\tXA:Z:", 6, str);
+		for (i = 0; i < n; ++i) {
+			const mem_aln_t *r = &list[i];
+			int k;
+			if (i == which) continue;
+			kputs(bns->anns[r->rid].name, str); kputc(',', str);
+			kputc("+-"[r->is_rev], str);
+			kputl(r->pos+1, str); kputc(',', str);
+			for (k = 0; k < r->n_cigar; ++k) {
+				kputw(r->cigar[k]>>4, str); kputc("MIDSH"[r->cigar[k]&0xf], str);
+			}
+			kputc(',', str);
+			kputw(r->NM, str); kputc(';', str);
+		}
+	}
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
 	kputc('\n', str);
 }
@@ -742,7 +758,8 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 			q = kv_pushp(mem_aln_t, aa);
 			*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
-			q->flag |= extra_flag;
+			q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
+			if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 			if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
 			if (k && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
 		}
