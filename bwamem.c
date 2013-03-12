@@ -874,7 +874,7 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 	s->sam = str.s;
 }
 
-void mem_aln2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
+void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
 {
 	kstring_t str;
 	str.l = str.m = 0; str.s = 0;
@@ -1024,7 +1024,8 @@ static void *worker2(void *data)
 	if (!(w->opt->flag&MEM_F_PE)) {
 		for (i = w->start; i < w->n; i += w->step) {
 			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
-			mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+			//mem_sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+			mem_reg2sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 			free(w->regs[i].a);
 		}
 	} else {
