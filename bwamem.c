@@ -618,20 +618,22 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 	return l;
 }
 
-void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m)
+void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
 {
-	int i, copy_mate = 0;
-	mem_aln_t ptmp = list[which], *p = &ptmp; // make a copy of the alignment to convert
+	int i;
+	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
 
+	if (m_) mtmp = *m_, m = &mtmp;
 	// set flag
 	p->flag |= m? 0x1 : 0; // is paired in sequencing
-	p->flag |= p->rid < 0? 4 : 0; // is mapped
-	p->flag |= m && m->rid < 0? 8 : 0; // is mate mapped
-	if (p->rid < 0 && m && m->rid >= 0)
-		p->rid = m->rid, p->pos = m->pos, p->is_rev = m->is_rev, p->n_cigar = 0, copy_mate = 1;
+	p->flag |= p->rid < 0? 0x4 : 0; // is mapped
+	p->flag |= m && m->rid < 0? 0x8 : 0; // is mate mapped
+	if (p->rid < 0 && m && m->rid >= 0) // copy mate to alignment
+		p->rid = m->rid, p->pos = m->pos, p->is_rev = m->is_rev, p->n_cigar = 0;
+	if (m && m->rid < 0 && p->rid >= 0) // copy alignment to mate
+		m->rid = p->rid, m->pos = p->pos, m->is_rev = p->is_rev, m->n_cigar = 0;
 	p->flag |= p->is_rev? 0x10 : 0; // is on the reverse strand
 	p->flag |= m && m->is_rev? 0x20 : 0; // is mate on the reverse strand
-	if (p->rid >= 0 && m && m->rid <= 0 && p->is_rev) p->flag |= 0x20; // if mate is unmapped, it takes the strand of the current read
 
 	// print up to CIGAR
 	kputs(s->name, str); kputc('\t', str); // QNAME
@@ -649,21 +651,18 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	kputc('\t', str);
 
 	// print the mate position if applicable
-	if (m && m->rid) {
+	if (m && m->rid >= 0) {
 		if (p->rid == m->rid) kputc('=', str);
 		else kputs(bns->anns[m->rid].name, str);
 		kputc('\t', str);
-		kputl(m->pos + 1, str);
+		kputl(m->pos + 1, str); kputc('\t', str);
 		if (p->rid == m->rid) {
 			int64_t p0 = p->pos + (p->is_rev? get_rlen(p->n_cigar, p->cigar) : 0);
 			int64_t p1 = m->pos + (m->is_rev? get_rlen(m->n_cigar, m->cigar) : 0);
-			kputw(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str);
+			kputw(m->n_cigar && p->n_cigar? p1 - p0 : 0, str); // compute TLEN if both ends mapped; otherwise, set to zero
 		} else kputc('0', str);
-	} else if (m && p->rid) {
-		kputsn("\t=\t", 3, str);
-		kputl(p->pos + 1, str);
-		kputsn("\t0\t", 3, str);
-	} else kputsn("*\t0\t0\t", 6, str);
+	} else kputsn("*\t0\t0", 5, str);
+	kputc('\t', str);
 
 	// print SEQ and QUAL
 	if (p->flag & 0x100) { // for secondary alignments, don't write SEQ and QUAL
@@ -754,6 +753,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 	} else {
 		mem_aln_t t;
 		t = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, 0);
+		t.flag |= extra_flag;
 		mem_aln2sam(bns, &str, s, 1, &t, 0, m);
 	}
 	s->sam = str.s;
