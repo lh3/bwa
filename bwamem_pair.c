@@ -169,7 +169,6 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 
 int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2])
 {
-	extern void mem_alnreg2hit(const mem_alnreg_t *a, bwahit_t *h);
 	pair64_v v, u;
 	int r, i, k, y[4], ret; // y[] keeps the last hit
 	kv_init(v); kv_init(u);

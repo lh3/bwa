@@ -59,13 +59,6 @@ typedef struct {
 	double avg, std;
 } mem_pestat_t;
 
-typedef struct { // TODO: This is an intermediate struct only. Better get rid of it.
-	int64_t rb, re;
-	int qb, qe, flag, qual;
-	// optional info
-	int score, sub;
-} bwahit_t;
-
 typedef struct { // This struct is only used for the convenience of API.
 	int64_t pos;     // forward strand 5'-end mapping position
 	int rid;         // reference sequence index in bntseq_t; <0 for unmapped
