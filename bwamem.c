@@ -742,7 +742,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 
 	// print up to CIGAR
 	kputs(s->name, str); kputc('\t', str); // QNAME
-	kputw(p->flag, str); kputc('\t', str); // FLAG
+	kputw((p->flag&0xffff) | (p->flag&0x10000? 0x100 : 0), str); kputc('\t', str); // FLAG
 	if (p->rid >= 0) { // with coordinate
 		kputs(bns->anns[p->rid].name, str); kputc('\t', str); // RNAME
 		kputl(p->pos + 1, str); kputc('\t', str); // POS
@@ -870,6 +870,38 @@ void mem_sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, b
 		memset(&h, 0, sizeof(bwahit_t));
 		h.rb = h.re = -1; h.flag = extra_flag;
 		bwa_hit2sam(&str, opt->mat, opt->q, opt->r, opt->w, bns, pac, s, &h, opt->flag&MEM_F_HARDCLIP, m);
+	}
+	s->sam = str.s;
+}
+
+void mem_aln2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
+{
+	kstring_t str;
+	str.l = str.m = 0; str.s = 0;
+	if (a->n > 0 && a->a[0].score >= opt->T) {
+		int k;
+		kvec_t(mem_aln_t) aa;
+		kv_init(aa);
+		for (k = 0; k < a->n; ++k) {
+			mem_alnreg_t *p = &a->a[k];
+			mem_aln_t *q;
+			if (p->score < opt->T) continue;
+			if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
+			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
+			q = kv_pushp(mem_aln_t, aa);
+			*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
+			q->flag |= extra_flag;
+			if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
+			if (k && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		}
+		for (k = 0; k < aa.n; ++k)
+			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m);
+		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
+		free(aa.a);
+	} else {
+		mem_aln_t t;
+		t = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, 0);
+		mem_aln2sam(bns, &str, s, 1, &t, 0, m);
 	}
 	s->sam = str.s;
 }
