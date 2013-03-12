@@ -703,20 +703,23 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
-	if (n > 1) { // output multiple primary hits
-		kputsn("\tXA:Z:", 6, str);
+	for (i = 0; i < n; ++i)
+		if (i != which && !(list[i].flag&0x20000)) break; // 0x20000: shadowed multi hit
+	if (i < n) { // there are other primary hits; output them
+		kputsn("\tXP:Z:", 6, str);
 		for (i = 0; i < n; ++i) {
 			const mem_aln_t *r = &list[i];
 			int k;
-			if (i == which) continue;
+			if (i == which || (list[i].flag&0x20000)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
 			kputs(bns->anns[r->rid].name, str); kputc(',', str);
 			kputc("+-"[r->is_rev], str);
 			kputl(r->pos+1, str); kputc(',', str);
 			for (k = 0; k < r->n_cigar; ++k) {
 				kputw(r->cigar[k]>>4, str); kputc("MIDSH"[r->cigar[k]&0xf], str);
 			}
-			kputc(',', str);
-			kputw(r->NM, str); kputc(';', str);
+			kputc(',', str); kputw(r->mapq, str);
+			kputc(',', str); kputw(r->NM, str);
+			kputc(';', str);
 		}
 	}
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
@@ -833,7 +836,8 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	query = malloc(l_query);
 	for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
-	a.mapq = mem_approx_mapq_se(opt, ar);
+	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
+	if (ar->secondary >= 0) a.flag |= 0x20000;
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
 	w2 = infer_bw(qe - qb, re - rb, ar->score, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;

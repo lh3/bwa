@@ -1,4 +1,4 @@
-.TH bwa 1 "9 March 2013" "bwa-0.7.2" "Bioinformatics tools"
+.TH bwa 1 "13 March 2013" "bwa-0.7.3" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -574,11 +574,13 @@ XM	Number of mismatches in the alignment
 XO	Number of gap opens
 XG	Number of gap extentions
 XT	Type: Unique/Repeat/N/Mate-sw
-XA	Alternative hits; format: (chr,pos,CIGAR,NM;)*
+XA	Alternative hits; format: /(chr,pos,CIGAR,NM;)*/
 _
 XS	Suboptimal alignment score
 XF	Support from forward/reverse alignment
 XE	Number of supporting seeds
+_
+XP	Alt primary hits; format: /(chr,pos,CIGAR;mapQ,NM;)+/
 .TE
 
 .PP
