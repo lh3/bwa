@@ -74,7 +74,6 @@ typedef struct { // This struct is only used for the convenience of API.
 	int n_cigar;     // number of CIGAR operations
 	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
 
-	int64_t r5;      // position of the 5'-end of read (for computing TLEN)
 	int score, sub;
 } mem_aln_t;
 

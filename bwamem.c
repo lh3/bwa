@@ -714,6 +714,17 @@ void bwa_hit2sam(kstring_t *str, const int8_t mat[25], int q, int r, int w, cons
 #undef is_mapped
 }
 
+static inline int get_rlen(int n_cigar, const uint32_t *cigar)
+{
+	int k, l;
+	for (k = l = 0; k < n_cigar; ++k) {
+		int op = cigar[k]&0xf;
+		if (op == 0 || op == 2)
+			l += cigar[k]>>4;
+	}
+	return l;
+}
+
 void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m)
 {
 	int i, copy_mate = 0;
@@ -751,8 +762,8 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		kputc('\t', str);
 		kputl(m->pos + 1, str);
 		if (p->rid == m->rid) {
-			int64_t p0 = p->r5 < bns->l_pac? p->r5 : (bns->l_pac<<1) - 1 - p->r5;
-			int64_t p1 = m->r5 < bns->l_pac? m->r5 : (bns->l_pac<<1) - 1 - m->r5;
+			int64_t p0 = p->pos + (p->is_rev? get_rlen(p->n_cigar, p->cigar) : 0);
+			int64_t p1 = m->pos + (m->is_rev? get_rlen(m->n_cigar, m->cigar) : 0);
 			kputw(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str);
 		} else kputc('0', str);
 	} else if (m && p->rid) {
@@ -941,7 +952,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	}
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;
-	a.r5 = rb; a.score = ar->score; a.sub = ar->sub;
+	a.score = ar->score; a.sub = ar->sub;
 	free(query);
 	return a;
 }
