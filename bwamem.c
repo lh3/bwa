@@ -657,9 +657,10 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		kputc('\t', str);
 		kputl(m->pos + 1, str); kputc('\t', str);
 		if (p->rid == m->rid) {
-			int64_t p0 = p->pos + (p->is_rev? get_rlen(p->n_cigar, p->cigar) : 0);
-			int64_t p1 = m->pos + (m->is_rev? get_rlen(m->n_cigar, m->cigar) : 0);
-			kputw(m->n_cigar && p->n_cigar? p1 - p0 : 0, str); // compute TLEN if both ends mapped; otherwise, set to zero
+			int64_t p0 = p->pos + (p->is_rev? get_rlen(p->n_cigar, p->cigar) - 1 : 0);
+			int64_t p1 = m->pos + (m->is_rev? get_rlen(m->n_cigar, m->cigar) - 1 : 0);
+			if (m->n_cigar == 0 || p->n_cigar == 0) kputc('0', str);
+			else kputl(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str);
 		} else kputc('0', str);
 	} else kputsn("*\t0\t0", 5, str);
 	kputc('\t', str);
