@@ -67,11 +67,15 @@ typedef struct { // TODO: This is an intermediate struct only. Better get rid of
 } bwahit_t;
 
 typedef struct { // This struct is only used for the convenience of API.
-	int rid;         // reference sequence index in bntseq_t
-	int pos;         // forward strand 5'-end mapping position
+	int64_t pos;     // forward strand 5'-end mapping position
+	int rid;         // reference sequence index in bntseq_t; <0 for unmapped
+	int flag;        // extra flag
 	uint32_t is_rev:1, mapq:8, NM:23; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
 	int n_cigar;     // number of CIGAR operations
 	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
+
+	int64_t r5;      // position of the 5'-end of read (for computing TLEN)
+	int score, sub;
 } mem_aln_t;
 
 #ifdef __cplusplus
