@@ -1,3 +1,34 @@
+Release 0.7.3 (15 March, 2013)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Changes to BWA-MEM:
+
+ * Bugfix: pairing score is inaccurate when option -A does not take the default
+   value. This is a very minor issue even if it happens.
+
+ * Bugfix: occasionally wrong CIGAR. This happens when in the alignment there
+   is a 1bp deletion and a 1bp insertion which are close to the end of the
+   reads, and there are no other substitutions or indels. BWA-MEM would not do
+   a gapped alignment due to the bug.
+
+ * New feature: output other non-overlapping alignments in the XP tag such that
+   we can see the entire picture of alignment from one SAM line. XP gives the
+   position, CIGAR, NM and mapQ of each aligned subsequence of the query.
+
+BWA-MEM has been used to align ~300Gbp 100-700bp SE/PE reads. SNP/indel calling
+has also been evaluated on part of these data. BWA-MEM generally gives better
+pre-filtered SNP calls than BWA. No significant issues have been observed since
+0.7.2, though minor improvements or bugs (e.g. the bug fixed in this release)
+are still possible. If you find potential issues, please send bug reports to
+<bio-bwa-help@lists.sourceforge.net> (free registration required).
+
+In addition, more detailed description of the BWA-MEM algorithm can be found at
+<https://github.com/lh3/mem-paper>.
+
+(0.7.3: 15 March 2013, r366)
+
+
+
 Release 0.7.2 (9 March, 2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
