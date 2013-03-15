@@ -556,7 +556,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				int prev = a->score;
 				aw[0] = opt->w << i;
 				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
-				if (bwa_verbose >= 4) printf("L\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout);
+				if (bwa_verbose >= 4) { printf("L\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout); }
 				if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 			}
 			// check whether we prefer to reach the end of the query
@@ -574,7 +574,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				int prev = a->score;
 				aw[1] = opt->w << i;
 				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
-				if (bwa_verbose >= 4) printf("R\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout);
+				if (bwa_verbose >= 4) { printf("R\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout); }
 				if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 			}
 			// similar to the above
@@ -601,7 +601,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 static inline int infer_bw(int l1, int l2, int score, int a, int q, int r)
 {
 	int w;
-	if (l1 == l2 && l1 * a - score < (q + r)<<1) return 0; // to get equal alignment length, we need at least two gaps
+	if (l1 == l2 && l1 * a - score < (q + r - a)<<1) return 0; // to get equal alignment length, we need at least two gaps
 	w = ((double)((l1 < l2? l1 : l2) * a - score - q) / r + 1.);
 	if (w < abs(l1 - l2)) w = abs(l1 - l2);
 	return w;
