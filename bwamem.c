@@ -542,7 +542,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		a = kv_pushp(mem_alnreg_t, *av);
 		memset(a, 0, sizeof(mem_alnreg_t));
 		a->w = aw[0] = aw[1] = opt->w;
-		a->score = -1;
+		a->score = a->truesc = -1;
 
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
@@ -560,10 +560,15 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 			}
 			// check whether we prefer to reach the end of the query
-			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qb = s->qbeg - qle, a->rb = s->rbeg - tle; // local hits
-			else a->qb = 0, a->rb = s->rbeg - gtle; // reach the end
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) { // local extension
+				a->qb = s->qbeg - qle, a->rb = s->rbeg - tle;
+				a->truesc = a->score;
+			} else { // to-end extension
+				a->qb = 0, a->rb = s->rbeg - gtle;
+				a->truesc = gscore;
+			}
 			free(qs); free(rs);
-		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
+		} else a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension
 			int qle, tle, qe, re, gtle, gscore, sc0 = a->score;
@@ -578,8 +583,13 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 			}
 			// similar to the above
-			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
-			else a->qe = l_query, a->re = rmax[0] + re + gtle;
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) { // local extension
+				a->qe = qe + qle, a->re = rmax[0] + re + tle;
+				a->truesc += a->score - sc0;
+			} else { // to-end extension
+				a->qe = l_query, a->re = rmax[0] + re + gtle;
+				a->truesc += gscore - sc0;
+			}
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) { printf("[%d]\taw={%d,%d}\tscore=%d\t[%d,%d) <=> [%ld,%ld)\n", k, aw[0], aw[1], a->score, a->qb, a->qe, (long)a->rb, (long)a->re); fflush(stdout); }
 
@@ -839,7 +849,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x20000;
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
-	w2 = infer_bw(qe - qb, re - rb, ar->score, opt->a, opt->q, opt->r);
+	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 	a.NM = NM;

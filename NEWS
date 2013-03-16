@@ -1,3 +1,13 @@
+Release 0.7.3a (15 March, 2013)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In 0.7.3, the wrong CIGAR bug was only fixed in one scenario, but not fixed
+in another corner case.
+
+(0.7.3a: 15 March 2013, r367)
+
+
+
 Release 0.7.3 (15 March, 2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
