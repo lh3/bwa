@@ -542,7 +542,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		a = kv_pushp(mem_alnreg_t, *av);
 		memset(a, 0, sizeof(mem_alnreg_t));
 		a->w = aw[0] = aw[1] = opt->w;
-		a->score = -1;
+		a->score = a->truesc = -1;
 
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
@@ -556,14 +556,19 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				int prev = a->score;
 				aw[0] = opt->w << i;
 				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
-				if (bwa_verbose >= 4) printf("L\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout);
+				if (bwa_verbose >= 4) { printf("L\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout); }
 				if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 			}
 			// check whether we prefer to reach the end of the query
-			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qb = s->qbeg - qle, a->rb = s->rbeg - tle; // local hits
-			else a->qb = 0, a->rb = s->rbeg - gtle; // reach the end
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) { // local extension
+				a->qb = s->qbeg - qle, a->rb = s->rbeg - tle;
+				a->truesc = a->score;
+			} else { // to-end extension
+				a->qb = 0, a->rb = s->rbeg - gtle;
+				a->truesc = gscore;
+			}
 			free(qs); free(rs);
-		} else a->score = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
+		} else a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
 		if (s->qbeg + s->len != l_query) { // right extension
 			int qle, tle, qe, re, gtle, gscore, sc0 = a->score;
@@ -574,12 +579,17 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				int prev = a->score;
 				aw[1] = opt->w << i;
 				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
-				if (bwa_verbose >= 4) printf("R\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout);
+				if (bwa_verbose >= 4) { printf("R\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout); }
 				if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 			}
 			// similar to the above
-			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) a->qe = qe + qle, a->re = rmax[0] + re + tle;
-			else a->qe = l_query, a->re = rmax[0] + re + gtle;
+			if (gscore <= 0 || gscore <= a->score - opt->pen_clip) { // local extension
+				a->qe = qe + qle, a->re = rmax[0] + re + tle;
+				a->truesc += a->score - sc0;
+			} else { // to-end extension
+				a->qe = l_query, a->re = rmax[0] + re + gtle;
+				a->truesc += gscore - sc0;
+			}
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) { printf("[%d]\taw={%d,%d}\tscore=%d\t[%d,%d) <=> [%ld,%ld)\n", k, aw[0], aw[1], a->score, a->qb, a->qe, (long)a->rb, (long)a->re); fflush(stdout); }
 
@@ -601,7 +611,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 static inline int infer_bw(int l1, int l2, int score, int a, int q, int r)
 {
 	int w;
-	if (l1 == l2 && l1 * a - score < (q + r)<<1) return 0; // to get equal alignment length, we need at least two gaps
+	if (l1 == l2 && l1 * a - score < (q + r - a)<<1) return 0; // to get equal alignment length, we need at least two gaps
 	w = ((double)((l1 < l2? l1 : l2) * a - score - q) / r + 1.);
 	if (w < abs(l1 - l2)) w = abs(l1 - l2);
 	return w;
@@ -839,7 +849,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x20000;
 	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
-	w2 = infer_bw(qe - qb, re - rb, ar->score, opt->a, opt->q, opt->r);
+	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 	a.NM = NM;

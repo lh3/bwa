@@ -43,7 +43,8 @@ typedef struct {
 typedef struct {
 	int64_t rb, re; // [rb,re): reference sequence in the alignment
 	int qb, qe;     // [qb,qe): query sequence in the alignment
-	int score;      // best SW score
+	int score;      // best local SW score
+	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
 	int csub;       // SW score of a tandem hit
 	int sub_n;      // approximate number of suboptimal hits
