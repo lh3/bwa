@@ -772,6 +772,10 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 			q = kv_pushp(mem_aln_t, aa);
 			*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
+			if (q->rid < 0) { // unfixable cross-reference alignment
+				--aa.n;
+				continue;
+			}
 			q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
 			if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 			if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
@@ -848,7 +852,10 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x20000;
-	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
+	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) { // unfixable cross-reference alignment
+		a.rid = -1; a.pos = -1; a.flag |= 0x4;
+		return a;
+	}
 	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);

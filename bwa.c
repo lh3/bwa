@@ -144,7 +144,7 @@ int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns,
 {
 	int ib, ie, is_rev;
 	int64_t fb, fe, mid = -1;
-	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary
+	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary; actually with BWA-MEM, we should never come to here
 		*qb = *qe = *rb = *re = -1;
 		return -1; // unable to fix
 	} else {
