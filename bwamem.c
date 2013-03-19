@@ -759,33 +759,38 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
 {
 	kstring_t str;
+	kvec_t(mem_aln_t) aa;
+	int k;
+
+	kv_init(aa);
 	str.l = str.m = 0; str.s = 0;
-	if (a->n > 0 && a->a[0].score >= opt->T) {
-		int k;
-		kvec_t(mem_aln_t) aa;
-		kv_init(aa);
-		for (k = 0; k < a->n; ++k) {
-			mem_alnreg_t *p = &a->a[k];
-			mem_aln_t *q;
-			if (p->score < opt->T) continue;
-			if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
-			if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
-			q = kv_pushp(mem_aln_t, aa);
-			*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
-			q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
-			if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
-			if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
-			if (k && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+	for (k = 0; k < a->n; ++k) {
+		mem_alnreg_t *p = &a->a[k];
+		mem_aln_t *q;
+		if (p->score < opt->T) continue;
+		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
+		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
+		q = kv_pushp(mem_aln_t, aa);
+		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
+		if (q->rid < 0) { // unfixable cross-reference alignment
+			--aa.n;
+			continue;
 		}
-		for (k = 0; k < aa.n; ++k)
-			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m);
-		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
-		free(aa.a);
-	} else {
+		q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
+		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
+		if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
+		if (k && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+	}
+	if (aa.n == 0) { // no alignments good enough; then write an unaligned record
 		mem_aln_t t;
 		t = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, 0);
 		t.flag |= extra_flag;
 		mem_aln2sam(bns, &str, s, 1, &t, 0, m);
+	} else {
+		for (k = 0; k < aa.n; ++k)
+			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m);
+		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
+		free(aa.a);
 	}
 	s->sam = str.s;
 }
@@ -848,7 +853,10 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x20000;
-	bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re);
+	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) { // unfixable cross-reference alignment
+		a.rid = -1; a.pos = -1; a.flag |= 0x4;
+		return a;
+	}
 	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
