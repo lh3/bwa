@@ -537,7 +537,20 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			w = max_gap < opt->w? max_gap : opt->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
-		if (i < av->n) continue;
+		if (i < av->n) { // the seed is (almost) contained in an existing alignment
+			for (i = k + 1; i < c->n; ++i) { // check overlapping seeds in the same chain
+				const mem_seed_t *t;
+				if (srt[i] == 0) continue;
+				t = &c->seeds[(uint32_t)srt[i]];
+				if (t->len < s->len * .95) continue; // only check overlapping if t is long enough; TODO: more efficient by early stopping
+				if (s->qbeg <= t->qbeg && s->qbeg + s->len >= t->qbeg && t->qbeg - s->qbeg != t->rbeg - s->rbeg) break;
+				if (t->qbeg <= s->qbeg && t->qbeg + t->len >= s->qbeg && s->qbeg - t->qbeg != s->rbeg - t->rbeg) break;
+			}
+			if (i == c->n) { // no overlapping seeds; then skip extension
+				srt[k] = 0; // mark that seed extension has not been performed
+				continue;
+			}
+		}
 
 		a = kv_pushp(mem_alnreg_t, *av);
 		memset(a, 0, sizeof(mem_alnreg_t));
