@@ -863,6 +863,13 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.NM = NM;
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
 	a.is_rev = is_rev;
+	if (a.n_cigar > 0) {
+		if ((a.cigar[0]&0xf) == 2) {
+			pos += a.cigar[0]>>4;
+			--a.n_cigar;
+			memmove(a.cigar, a.cigar + 1, a.n_cigar * 4);
+		} else if ((a.cigar[a.n_cigar-1]&0xf) == 2) --a.n_cigar;
+	}
 	if (qb != 0 || qe != l_query) { // add clipping to CIGAR
 		int clip5, clip3;
 		clip5 = is_rev? l_query - qe : qb;
