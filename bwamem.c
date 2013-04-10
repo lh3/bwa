@@ -543,8 +543,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 				if (srt[i] == 0) continue;
 				t = &c->seeds[(uint32_t)srt[i]];
 				if (t->len < s->len * .95) continue; // only check overlapping if t is long enough; TODO: more efficient by early stopping
-				if (s->qbeg <= t->qbeg && s->qbeg + s->len >= t->qbeg && t->qbeg - s->qbeg != t->rbeg - s->rbeg) break;
-				if (t->qbeg <= s->qbeg && t->qbeg + t->len >= s->qbeg && s->qbeg - t->qbeg != s->rbeg - t->rbeg) break;
+				if (s->qbeg <= t->qbeg && s->qbeg + s->len - t->qbeg >= s->len>>2 && t->qbeg - s->qbeg != t->rbeg - s->rbeg) break;
+				if (t->qbeg <= s->qbeg && t->qbeg + t->len - s->qbeg >= s->len>>2 && s->qbeg - t->qbeg != s->rbeg - t->rbeg) break;
 			}
 			if (i == c->n) { // no overlapping seeds; then skip extension
 				srt[k] = 0; // mark that seed extension has not been performed
