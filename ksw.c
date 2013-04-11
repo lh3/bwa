@@ -360,7 +360,7 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
@@ -382,7 +382,7 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	k = m * m;
 	for (i = 0, max = 0; i < k; ++i) // get the max score
 		max = max > mat[i]? max : mat[i];
-	max_gap = (int)((double)(qlen * max - gapo) / gape + 1.);
+	max_gap = (int)((double)(qlen * max + end_bonus - gapo) / gape + 1.);
 	max_gap = max_gap > 1? max_gap : 1;
 	w = w < max_gap? w : max_gap;
 	// DP loop

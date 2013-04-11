@@ -235,20 +235,21 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 
 	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1;
 	kstring_t str;
-	mem_alnreg_v b[2];
 	mem_aln_t h[2];
 
 	str.l = str.m = 0; str.s = 0;
-	// perform SW for the best alignment
-	kv_init(b[0]); kv_init(b[1]);
-	for (i = 0; i < 2; ++i)
-		for (j = 0; j < a[i].n; ++j)
-			if (a[i].a[j].score >= a[i].a[0].score  - opt->pen_unpaired)
-				kv_push(mem_alnreg_t, b[i], a[i].a[j]);
-	for (i = 0; i < 2; ++i)
-		for (j = 0; j < b[i].n && j < opt->max_matesw; ++j)
-			n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
-	free(b[0].a); free(b[1].a);
+	if (!(opt->flag & MEM_F_NO_RESCUE)) { // then perform SW for the best alignment
+		mem_alnreg_v b[2];
+		kv_init(b[0]); kv_init(b[1]);
+		for (i = 0; i < 2; ++i)
+			for (j = 0; j < a[i].n; ++j)
+				if (a[i].a[j].score >= a[i].a[0].score  - opt->pen_unpaired)
+					kv_push(mem_alnreg_t, b[i], a[i].a[j]);
+		for (i = 0; i < 2; ++i)
+			for (j = 0; j < b[i].n && j < opt->max_matesw; ++j)
+				n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
+		free(b[0].a); free(b[1].a);
+	}
 	mem_mark_primary_se(opt, a[0].n, a[0].a);
 	mem_mark_primary_se(opt, a[1].n, a[1].a);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
@@ -305,7 +306,7 @@ no_pairing:
 			h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[0]);
 		else h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, 0);
 	}
-	if (h[0].rid == h[1].rid && h[0].rid >= 0) { // if the top hits from the two ends constitute a proper pair, flag it.
+	if (!(opt->flag & MEM_F_NOPAIRING) && h[0].rid == h[1].rid && h[0].rid >= 0) { // if the top hits from the two ends constitute a proper pair, flag it.
 		int64_t dist;
 		int d;
 		d = mem_infer_dir(bns->l_pac, a[0].a[0].rb, a[1].a[0].rb, &dist);

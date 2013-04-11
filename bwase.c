@@ -176,7 +176,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
 		seq_reverse(len, seq, 0); // as we need to do left extension, we have to reverse both query and reference sequences
 		seq_reverse(rlen, rseq, 0);
-		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
+		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, 0, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
 		if (gscore > 0) tle = gtle, qle = len;
 		rb = re - tle; rlen = tle;
 		seq_reverse(len, seq, 0);
@@ -192,7 +192,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		rb = *_pos; re = rb + len + SW_BW;
 		if (re > l_pac) re = l_pac;
 		rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
-		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
+		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, 0, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
 		if (gscore > 0) tle = gtle, qle = len;
 		re = rb + tle; rlen = tle;
 		ksw_global(qle, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension

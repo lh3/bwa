@@ -27,7 +27,7 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
@@ -43,6 +43,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'a') opt->flag |= MEM_F_ALL;
 		else if (c == 'p') opt->flag |= MEM_F_PE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
+		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'd') opt->zdrop = atoi(optarg);
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -64,7 +65,8 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 //		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
-		fprintf(stderr, "       -P         skip pairing; perform mate SW only\n");
+		fprintf(stderr, "       -S         skip mate rescue\n");
+		fprintf(stderr, "       -P         skip pairing; mate rescue performed unless -S also in use\n");
 		fprintf(stderr, "       -A INT     score for a sequence match [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT     penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT     gap open penalty [%d]\n", opt->q);

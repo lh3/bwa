@@ -370,6 +370,18 @@ void bwt_dump_sa(const char *fn, const bwt_t *bwt)
 	err_fclose(fp);
 }
 
+static bwtint_t fread_fix(FILE *fp, bwtint_t size, void *a)
+{ // Mac/Darwin has a bug when reading data longer than 2GB. This function fixes this issue by reading data in small chunks
+	const int bufsize = 0x1000000; // 16M block
+	bwtint_t offset = 0;
+	while (size) {
+		int x = bufsize < size? bufsize : size;
+		if ((x = err_fread_noeof(a + offset, 1, x, fp)) == 0) break;
+		size -= x; offset += x;
+	}
+	return offset;
+}
+
 void bwt_restore_sa(const char *fn, bwt_t *bwt)
 {
 	char skipped[256];
@@ -388,7 +400,7 @@ void bwt_restore_sa(const char *fn, bwt_t *bwt)
 	bwt->sa = (bwtint_t*)xcalloc(bwt->n_sa, sizeof(bwtint_t));
 	bwt->sa[0] = -1;
 
-	err_fread_noeof(bwt->sa + 1, sizeof(bwtint_t), bwt->n_sa - 1, fp);
+	fread_fix(fp, sizeof(bwtint_t) * (bwt->n_sa - 1), bwt->sa + 1);
 	err_fclose(fp);
 }
 
@@ -405,7 +417,7 @@ bwt_t *bwt_restore_bwt(const char *fn)
 	err_fseek(fp, 0, SEEK_SET);
 	err_fread_noeof(&bwt->primary, sizeof(bwtint_t), 1, fp);
 	err_fread_noeof(bwt->L2+1, sizeof(bwtint_t), 4, fp);
-	err_fread_noeof(bwt->bwt, 4, bwt->bwt_size, fp);
+	fread_fix(fp, bwt->bwt_size<<2, bwt->bwt);
 	bwt->seq_len = bwt->L2[4];
 	err_fclose(fp);
 	bwt_gen_cnt_table(bwt);

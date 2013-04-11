@@ -125,7 +125,7 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 		for (k = p->k - 1, j = 0; k > 0 && j < lt; --k) // FIXME: k=0 not considered!
 			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
-		score = ksw_extend(p->beg, &query[lq - p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, -1, p->G, &qle, &tle, 0, 0, 0);
+		score = ksw_extend(p->beg, &query[lq - p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, 0, -1, p->G, &qle, &tle, 0, 0, 0);
 		if (score > p->G) { // extensible
 			p->G = score;
 			p->k -= tle;
@@ -153,7 +153,7 @@ void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq,
 		for (k = p->k, j = 0; k < p->k + lt && k < l_pac; ++k)
 			target[j++] = pac[k>>2] >> (~k&3)*2 & 0x3;
 		lt = j;
-		score = ksw_extend(lq - p->beg, &query[p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, -1, 1, &qle, &tle, 0, 0, 0) - 1;
+		score = ksw_extend(lq - p->beg, &query[p->beg], lt, target, 5, mat, opt->q, opt->r, opt->bw, 0, -1, 1, &qle, &tle, 0, 0, 0) - 1;
 //		if (score < p->G) fprintf(stderr, "[bsw2_extend_hits] %d < %d\n", score, p->G);
 		if (score >= p->G) {
 			p->G = score;

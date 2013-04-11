@@ -537,7 +537,20 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			w = max_gap < opt->w? max_gap : opt->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
-		if (i < av->n) continue;
+		if (i < av->n) { // the seed is (almost) contained in an existing alignment
+			for (i = k + 1; i < c->n; ++i) { // check overlapping seeds in the same chain
+				const mem_seed_t *t;
+				if (srt[i] == 0) continue;
+				t = &c->seeds[(uint32_t)srt[i]];
+				if (t->len < s->len * .95) continue; // only check overlapping if t is long enough; TODO: more efficient by early stopping
+				if (s->qbeg <= t->qbeg && s->qbeg + s->len >= t->qbeg && t->qbeg - s->qbeg != t->rbeg - s->rbeg) break;
+				if (t->qbeg <= s->qbeg && t->qbeg + t->len >= s->qbeg && s->qbeg - t->qbeg != s->rbeg - t->rbeg) break;
+			}
+			if (i == c->n) { // no overlapping seeds; then skip extension
+				srt[k] = 0; // mark that seed extension has not been performed
+				continue;
+			}
+		}
 
 		a = kv_pushp(mem_alnreg_t, *av);
 		memset(a, 0, sizeof(mem_alnreg_t));
@@ -555,7 +568,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
 				aw[0] = opt->w << i;
-				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
+				a->score = ksw_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->q, opt->r, aw[0], opt->pen_clip, opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
 				if (bwa_verbose >= 4) { printf("L\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout); }
 				if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 			}
@@ -578,7 +591,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
 				aw[1] = opt->w << i;
-				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
+				a->score = ksw_extend(l_query - qe, query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->q, opt->r, aw[1], opt->pen_clip, opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
 				if (bwa_verbose >= 4) { printf("R\t%d < %d; w=%d; max_off=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout); }
 				if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 			}
@@ -863,6 +876,13 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.NM = NM;
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
 	a.is_rev = is_rev;
+	if (a.n_cigar > 0) {
+		if ((a.cigar[0]&0xf) == 2) {
+			pos += a.cigar[0]>>4;
+			--a.n_cigar;
+			memmove(a.cigar, a.cigar + 1, a.n_cigar * 4);
+		} else if ((a.cigar[a.n_cigar-1]&0xf) == 2) --a.n_cigar;
+	}
 	if (qb != 0 || qe != l_query) { // add clipping to CIGAR
 		int clip5, clip3;
 		clip5 = is_rev? l_query - qe : qb;
