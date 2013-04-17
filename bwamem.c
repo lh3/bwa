@@ -46,7 +46,7 @@ mem_opt_t *mem_opt_init()
 	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
 	o->T = 30;
 	o->zdrop = 100;
-	o->pen_unpaired = 9;
+	o->pen_unpaired = 17;
 	o->pen_clip = 5;
 	o->min_seed_len = 19;
 	o->split_width = 10;
