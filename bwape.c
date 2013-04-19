@@ -106,6 +106,11 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	tmp  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
 	ii->low = tmp > max_len? tmp : max_len; // ii->low is unsigned
 	ii->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+	if (ii->low > ii->high) {
+		fprintf(stderr, "[infer_isize] fail to infer insert size: upper bound is smaller than read length\n");
+		free(isizes);
+		return -1;
+	}
 	for (i = 0, x = n = 0; i < tot; ++i)
 		if (isizes[i] >= ii->low && isizes[i] <= ii->high)
 			++n, x += isizes[i];
