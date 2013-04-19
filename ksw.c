@@ -303,7 +303,7 @@ end_loop8:
 	}
 	r.score = gmax; r.te = te;
 	{
-		int max = -1, low, high, qlen = slen * 8;
+		int max = -1, tmp, low, high, qlen = slen * 8;
 		uint16_t *t = (uint16_t*)Hmax;
 		for (i = 0, r.qe = -1; i < qlen; ++i, ++t)
 			if ((int)*t > max) max = *t, r.qe = i / 8 + i % 8 * slen;
