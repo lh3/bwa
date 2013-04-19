@@ -205,7 +205,7 @@ end_loop16:
 		uint8_t *t = (uint8_t*)Hmax;
 		for (i = 0; i < qlen; ++i, ++t)
 			if ((int)*t > max) max = *t, r.qe = i / 16 + i % 16 * slen;
-			else ((int)*t == max && (tmp = i / 16 + i % 16 * slen) < r.qe) r.qe = tmp; 
+			else if ((int)*t == max && (tmp = i / 16 + i % 16 * slen) < r.qe) r.qe = tmp; 
 		//printf("%d,%d\n", max, gmax);
 		if (b) {
 			i = (r.score + q->max - 1) / q->max;
@@ -307,7 +307,7 @@ end_loop8:
 		uint16_t *t = (uint16_t*)Hmax;
 		for (i = 0, r.qe = -1; i < qlen; ++i, ++t)
 			if ((int)*t > max) max = *t, r.qe = i / 8 + i % 8 * slen;
-			else ((int)*t == max && (tmp = i / 8 + i % 8 * slen) < r.qe) r.qe = tmp; 
+			else if ((int)*t == max && (tmp = i / 8 + i % 8 * slen) < r.qe) r.qe = tmp; 
 		if (b) {
 			i = (r.score + q->max - 1) / q->max;
 			low = te - i; high = te + i;
