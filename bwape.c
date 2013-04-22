@@ -106,6 +106,11 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	tmp  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
 	ii->low = tmp > max_len? tmp : max_len; // ii->low is unsigned
 	ii->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+	if (ii->low > ii->high) {
+		fprintf(stderr, "[infer_isize] fail to infer insert size: upper bound is smaller than read length\n");
+		free(isizes);
+		return -1;
+	}
 	for (i = 0, x = n = 0; i < tot; ++i)
 		if (isizes[i] >= ii->low && isizes[i] <= ii->high)
 			++n, x += isizes[i];
@@ -404,7 +409,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	bwa_cigar_t *cigar = 0;
 	ubyte_t *ref_seq;
 	bwtint_t k, x, y, l;
-	int xtra;
+	int xtra, gscore;
 	int8_t mat[25];
 
 	bwa_fill_scmat(1, 3, mat);
@@ -422,12 +427,12 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	// do alignment
 	xtra = KSW_XSUBO | KSW_XSTART | (len < 250? KSW_XBYTE : 0);
 	r = ksw_align(len, (uint8_t*)seq, l, ref_seq, 5, mat, 5, 1, xtra, 0);
-	ksw_global(r.qe - r.qb + 1, &seq[r.qb], r.te - r.tb + 1, &ref_seq[r.tb], 5, mat, 5, 1, 50, n_cigar, &cigar32);
+	gscore = ksw_global(r.qe - r.qb + 1, &seq[r.qb], r.te - r.tb + 1, &ref_seq[r.tb], 5, mat, 5, 1, 50, n_cigar, &cigar32);
 	cigar = (bwa_cigar_t*)cigar32;
 	for (k = 0; k < *n_cigar; ++k)
 		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
 
-	if (r.score < SW_MIN_MATCH_LEN || r.score2 == r.score) { // poor hit or tandem hits
+	if (r.score < SW_MIN_MATCH_LEN || r.score2 == r.score || gscore != r.score) { // poor hit or tandem hits or weird alignment
 		free(cigar); free(ref_seq); *n_cigar = 0;
 		return 0;
 	}
