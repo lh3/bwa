@@ -1,3 +1,36 @@
+Release 0.7.4 (23 April, 2013)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This is a bugfix release. Most of bugs are considered to be minor which only
+ very rarely.
+ ccur
+
+ * Bugfix: wrong CIGAR when a query sequence bridges three or more target
+   sequences. This only happens when aligning reads to short assembly contigs.
+
+ * Bugfix: leading "D" operator in CIGAR.
+
+ * Extend more seeds for better alignment around tandem repeats. This is also
+   a cause of the leading "D" operator in CIGAR.
+
+ * Bugfix: SSE2-SSW may occasionally find incorrect query starting position
+   around tandem repeat. This will lead to a suboptimal CIGAR in BWA-MEM and
+   a wrong CIGAR in BWA.
+
+ * Bugfix: clipping penalty does not work as is intended when there is a gap
+   towards the end of a read.
+
+ * Fixed an issue caused by a bug in the libc from Mac/Darwin. In Darwin,
+   fread() is unable to read a data block longer than 2GB due to an integer
+   overflow bug in its implementation.
+
+Since version 0.7.4, BWA-MEM is considered to reach similar stability to
+BWA-backtrack for short-read mapping.
+
+(0.7.4: 23 April, r385)
+
+
+
 Release 0.7.3a (15 March, 2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
