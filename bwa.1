@@ -1,4 +1,4 @@
-.TH bwa 1 "15 March 2013" "bwa-0.7.4" "Bioinformatics tools"
+.TH bwa 1 "23 April 2013" "bwa-0.7.4" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -44,7 +44,12 @@ for the BWA-MEM algorithm.
 .SH COMMANDS AND OPTIONS
 .TP
 .B index
-bwa index [-p prefix] [-a algoType] <in.db.fasta>
+.B bwa index
+.RB [ -p
+.IR prefix ]
+.RB [ -a
+.IR algoType ]
+.I db.fa
 
 Index database sequences in the FASTA format.
 
@@ -55,20 +60,16 @@ Index database sequences in the FASTA format.
 Prefix of the output database [same as db filename]
 .TP
 .BI -a \ STR
-Algorithm for constructing BWT index. Available options are:
-.RS
-.TP
+Algorithm for constructing BWT index. BWA implements two algorithms for BWT
+construction:
 .B is
-IS linear-time algorithm for constructing suffix array. It requires
-5.37N memory where N is the size of the database. IS is moderately fast,
-but does not work with database larger than 2GB. IS is the default
-algorithm due to its simplicity. The current codes for IS algorithm are
-reimplemented by Yuta Mori.
-.TP
-.B bwtsw
-Algorithm implemented in BWT-SW. This method works with the whole human
-genome.
-.RE
+and
+.BR bwtsw .
+The first algorithm is a little faster for small database but requires large
+RAM and does not work for databases with total length longer than 2GB. The
+second algorithm is adapted from the BWT-SW source code. It in theory works
+with database with trillions of bases. When this option is not specified, the
+appropriate algorithm will be chosen automatically.
 .RE
 
 .TP
@@ -220,10 +221,12 @@ deducted. [5]
 Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
 .RI scoreRead1+scoreRead2- INT
 and scores a paired as scoreRead1+scoreRead2-insertPenalty. It compares these
-two scores to determine whether we should force pairing. [17]
+two scores to determine whether we should force pairing. A larger value leads to
+more aggressive read pair. [17]
 .TP
 .B -p
-Assume the first input query file is interleaved paired-end FASTA/Q. See the command description for details.
+Assume the first input query file is interleaved paired-end FASTA/Q. See the
+command description for details.
 .TP
 .BI -R \ STR
 Complete read group header line. '\\t' can be used in
