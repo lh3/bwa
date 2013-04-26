@@ -120,7 +120,11 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs, 0);
+		for (i = 0; i < n; ++i) {
+			fputs(seqs[i].sam, stdout);
+			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
+		}
 		free(seqs);
 	}
 
