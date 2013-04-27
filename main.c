@@ -3,7 +3,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.4-r388-beta"
+#define PACKAGE_VERSION "0.7.4-r389-beta"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -92,5 +92,5 @@ int main(int argc, char *argv[])
 			fprintf(stderr, " %s", argv[i]);
 		fprintf(stderr, "\n[%s] Real time: %.3f sec; CPU: %.3f sec\n", __func__, realtime() - t_real, cputime());
 	}
-	return 0;
+	return ret;
 }

@@ -292,14 +292,14 @@ void *kopen(const char *fn, int *_fd)
 #else
 			*_fd = open(fn, O_RDONLY);
 #endif
-			if (*_fd) {
+			if (*_fd >= 0) {
 				aux = calloc(1, sizeof(koaux_t));
 				aux->type = KO_FILE;
 				aux->fd = *_fd;
 			}
 		}
 	}
-	*_fd = aux->fd;
+	if (aux) *_fd = aux->fd;
 	return aux;
 }
 
