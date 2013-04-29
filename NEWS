@@ -2,8 +2,7 @@ Release 0.7.4 (23 April, 2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 This is a bugfix release. Most of bugs are considered to be minor which only
- very rarely.
- ccur
+occur very rarely.
 
  * Bugfix: wrong CIGAR when a query sequence bridges three or more target
    sequences. This only happens when aligning reads to short assembly contigs.

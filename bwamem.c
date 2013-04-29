@@ -951,7 +951,7 @@ static void *worker2(void *data)
 	return 0;
 }
 
-void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs)
+void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs, const mem_pestat_t *pes0)
 {
 	int i;
 	worker_t *w;
@@ -967,29 +967,30 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 		p->seqs = seqs; p->regs = regs;
 		p->pes = &pes[0];
 	}
+
 #ifdef HAVE_PTHREAD
 	if (opt->n_threads == 1) {
+#endif
 		worker1(w);
-		if (opt->flag&MEM_F_PE) mem_pestat(opt, bns->l_pac, n, regs, pes);
+		if (opt->flag&MEM_F_PE) { // paired-end mode
+			if (pes0) memcpy(pes, pes0, 4 * sizeof(mem_pestat_t)); // if pes0 != NULL, set the insert-size distribution as pes0
+			else mem_pestat(opt, bns->l_pac, n, regs, pes); // otherwise, infer the insert size distribution from data
+		}
 		worker2(w);
+#ifdef HAVE_PTHREAD
 	} else {
 		pthread_t *tid;
 		tid = (pthread_t*)xcalloc(opt->n_threads, sizeof(pthread_t));
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
-		if (opt->flag&MEM_F_PE) mem_pestat(opt, bns->l_pac, n, regs, pes);
+		if (opt->flag&MEM_F_PE) {
+			if (pes0) memcpy(pes, pes0, 4 * sizeof(mem_pestat_t));
+			else mem_pestat(opt, bns->l_pac, n, regs, pes);
+		}
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker2, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		free(tid);
 	}
-#else
-	worker1(w);
-	if (opt->flag&MEM_F_PE) mem_pestat(opt, bns->l_pac, n, regs, pes);
-	worker2(w);
 #endif
-	for (i = 0; i < n; ++i) {
-		err_fputs(seqs[i].sam, stdout);
-		free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
-	}
 	free(regs); free(w);
 }

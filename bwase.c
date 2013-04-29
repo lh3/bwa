@@ -181,6 +181,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		rb = re - tle; rlen = tle;
 		seq_reverse(len, seq, 0);
 		seq_reverse(rlen, rseq, 0);
+		if (rlen == 0) goto refine_gapped_err;
 		ksw_global(qle, &seq[len-qle], rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32);
 		if (qle < len) { // write soft clip
 			cigar = xrealloc(cigar, (*n_cigar + 1) * 4);
@@ -195,6 +196,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, 0, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
 		if (gscore > 0) tle = gtle, qle = len;
 		re = rb + tle; rlen = tle;
+		if (rlen == 0) goto refine_gapped_err;
 		ksw_global(qle, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension
 		if (qle < len) {
 			cigar = xrealloc(cigar, (*n_cigar + 1) * 4);
@@ -209,6 +211,11 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
 	free(rseq);
 	return cigar;
+
+refine_gapped_err:
+	free(rseq);
+	*n_cigar = 0;
+	return 0;
 }
 
 char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_t *seq,
@@ -320,6 +327,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		}
 		if (s->type == BWA_TYPE_NO_MATCH || s->type == BWA_TYPE_MATESW || s->n_gapo == 0) continue;
 		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos, &s->n_cigar, s->strand);
+		if (s->cigar == 0) s->type = BWA_TYPE_NO_MATCH;
 	}
 	// generate MD tag
 	str = (kstring_t*)xcalloc(1, sizeof(kstring_t));
@@ -475,6 +483,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				for (i = 0; i < p->n_multi; ++i) {
 					bwt_multi1_t *q = p->multi + i;
 					int k;
+					if (q->cigar == 0) continue;
 					j = pos_end_multi(q, p->len) - q->pos;
 					nn = bns_cnt_ambi(bns, q->pos, j, &seqid);
 					err_printf("%s,%c%d,", bns->anns[seqid].name, q->strand? '-' : '+',

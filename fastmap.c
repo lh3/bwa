@@ -91,9 +91,12 @@ int main_mem(int argc, char *argv[])
 
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
-	bwa_print_sam_hdr(idx->bns, rg_line);
 
 	ko = kopen(argv[optind + 1], &fd);
+	if (ko == 0) {
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__, argv[optind + 1]);
+		return 1;
+	}
 	fp = gzdopen(fd, "r");
 	ks = kseq_init(fp);
 	if (optind + 2 < argc) {
@@ -102,11 +105,16 @@ int main_mem(int argc, char *argv[])
 				fprintf(stderr, "[W::%s] when '-p' is in use, the second query file will be ignored.\n", __func__);
 		} else {
 			ko2 = kopen(argv[optind + 2], &fd2);
+			if (ko2 == 0) {
+				if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__, argv[optind + 2]);
+				return 1;
+			}
 			fp2 = gzdopen(fd2, "r");
 			ks2 = kseq_init(fp2);
 			opt->flag |= MEM_F_PE;
 		}
 	}
+	bwa_print_sam_hdr(idx->bns, rg_line);
 	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
@@ -121,7 +129,11 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs, 0);
+		for (i = 0; i < n; ++i) {
+			err_fputs(seqs[i].sam, stdout);
+			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
+		}
 		free(seqs);
 	}
 
