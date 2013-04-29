@@ -226,6 +226,7 @@ int main_pemerge(int argc, char *argv[])
 		else if (c == 'Q') opt->q_thres = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg);
 		else if (c == 'T') min_ovlp = atoi(optarg);
+		else return 1;
 	}
 	if (flag == 0) flag = 3;
 	opt->flag = flag;

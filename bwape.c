@@ -765,7 +765,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		return 0;
+		return 1;
 	}
 	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt, rg_line);
 	free(prefix); free(popt);
