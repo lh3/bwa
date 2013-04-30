@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <emmintrin.h>
+#include "memory.h"
 #include "ksw.h"
 
 #ifdef __GNUC__
@@ -63,7 +64,7 @@ kswq_t *ksw_qinit(int size, int qlen, const uint8_t *query, int m, const int8_t 
 	size = size > 1? 2 : 1;
 	p = 8 * (3 - size); // # values per __m128i
 	slen = (qlen + p - 1) / p; // segmented length
-	q = (kswq_t*)malloc(sizeof(kswq_t) + 256 + 16 * slen * (m + 4)); // a single block of memory
+	q = (kswq_t*)SAFE_MALLOC(sizeof(kswq_t) + 256 + 16 * slen * (m + 4)); // a single block of memory
 	q->qp = (__m128i*)(((size_t)q + sizeof(kswq_t) + 15) >> 4 << 4); // align memory
 	q->H0 = q->qp + slen * m;
 	q->H1 = q->H0 + slen;
@@ -185,7 +186,7 @@ end_loop16:
 			if (n_b == 0 || (int32_t)b[n_b-1] + 1 != i) { // then append
 				if (n_b == m_b) {
 					m_b = m_b? m_b<<1 : 8;
-					b = (uint64_t*)realloc(b, 8 * m_b);
+					b = (uint64_t*)SAFE_REALLOC(b, 8 * m_b);
 				}
 				b[n_b++] = (uint64_t)imax<<32 | i;
 			} else if ((int)(b[n_b-1]>>32) < imax) b[n_b-1] = (uint64_t)imax<<32 | i; // modify the last
@@ -288,7 +289,7 @@ end_loop8:
 			if (n_b == 0 || (int32_t)b[n_b-1] + 1 != i) {
 				if (n_b == m_b) {
 					m_b = m_b? m_b<<1 : 8;
-					b = (uint64_t*)realloc(b, 8 * m_b);
+					b = (uint64_t*)SAFE_REALLOC(b, 8 * m_b);
 				}
 				b[n_b++] = (uint64_t)imax<<32 | i;
 			} else if ((int)(b[n_b-1]>>32) < imax) b[n_b-1] = (uint64_t)imax<<32 | i; // modify the last
@@ -368,8 +369,8 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap, max_ie, gscore, max_off;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
-	qp = malloc(qlen * m);
-	eh = calloc(qlen + 1, 8);
+	qp = (int8_t *)SAFE_MALLOC(qlen * m);
+	eh = SAFE_CALLOC(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];
@@ -460,7 +461,7 @@ static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, 
 	if (*n_cigar == 0 || op != (cigar[(*n_cigar) - 1]&0xf)) {
 		if (*n_cigar == *m_cigar) {
 			*m_cigar = *m_cigar? (*m_cigar)<<1 : 4;
-			cigar = realloc(cigar, (*m_cigar) << 2);
+			cigar = SAFE_REALLOC(cigar, (*m_cigar) << 2);
 		}
 		cigar[(*n_cigar)++] = len<<4 | op;
 	} else cigar[(*n_cigar)-1] += len<<4;
@@ -476,9 +477,9 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
-	z = malloc(n_col * tlen);
-	qp = malloc(qlen * m);
-	eh = calloc(qlen + 1, 8);
+	z = (uint8_t*)SAFE_MALLOC(n_col * tlen);
+	qp = (int8_t*)SAFE_MALLOC(qlen * m);
+	eh = SAFE_CALLOC(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];
@@ -619,7 +620,7 @@ int main(int argc, char *argv[])
 		if (!forward_only) { // reverse
 			if ((int)ksq->seq.m > max_rseq) {
 				max_rseq = ksq->seq.m;
-				rseq = (uint8_t*)realloc(rseq, max_rseq);
+				rseq = (uint8_t*)SAFE_REALLOC(rseq, max_rseq);
 			}
 			for (i = 0, j = ksq->seq.l - 1; i < (int)ksq->seq.l; ++i, --j)
 				rseq[j] = ksq->seq.s[i] == 4? 4 : 3 - ksq->seq.s[i];

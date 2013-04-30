@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include "memory.h"
 #include "kstring.h"
 #include "bwamem.h"
 #include "kvec.h"
@@ -121,7 +122,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
 		is_larger = !(r>>1); // whether the mate has larger coordinate
 		if (is_rev) {
-			rev = malloc(l_ms); // this is the reverse complement of $ms
+			rev = (uint8_t*)SAFE_MALLOC(l_ms); // this is the reverse complement of $ms
 			for (i = 0; i < l_ms; ++i) rev[l_ms - 1 - i] = ms[i] < 4? 3 - ms[i] : 4;
 			seq = rev;
 		} else seq = (uint8_t*)ms;
@@ -294,7 +295,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// write SAM
 		h[0] = mem_reg2aln(opt, bns, pac, s[0].l_seq, s[0].seq, &a[0].a[z[0]]); h[0].mapq = q_se[0]; h[0].flag |= 0x40 | extra_flag;
 		h[1] = mem_reg2aln(opt, bns, pac, s[1].l_seq, s[1].seq, &a[1].a[z[1]]); h[1].mapq = q_se[1]; h[1].flag |= 0x80 | extra_flag;
-		mem_aln2sam(bns, &str, &s[0], 1, &h[0], 0, &h[1]); s[0].sam = strdup(str.s); str.l = 0;
+		mem_aln2sam(bns, &str, &s[0], 1, &h[0], 0, &h[1]); s[0].sam = SAFE_STRDUP(str.s); str.l = 0;
 		mem_aln2sam(bns, &str, &s[1], 1, &h[1], 0, &h[0]); s[1].sam = str.s;
 		free(h[0].cigar); free(h[1].cigar);
 	} else goto no_pairing;

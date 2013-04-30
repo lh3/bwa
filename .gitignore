@@ -1,5 +1,7 @@
 *.[oa]
 bwa
+bwamem-lite
 test
 test64
 .*.swp
+*~

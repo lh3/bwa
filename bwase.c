@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include "memory.h"
 #include "bwase.h"
 #include "bwtaln.h"
 #include "bntseq.h"
@@ -59,7 +60,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 		 * simply output all hits, but the following samples "rest"
 		 * number of random hits. */
 		rest = n_occ > n_multi + 1? n_multi + 1 : n_occ; // find one additional for ->sa
-		s->multi = calloc(rest, sizeof(bwt_multi1_t));
+		s->multi = SAFE_CALLOC(rest, sizeof(bwt_multi1_t));
 		for (k = 0; k < n_aln; ++k) {
 			const bwt_aln1_t *q = aln + k;
 			if (q->l - q->k + 1 <= rest) {
@@ -184,7 +185,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		if (rlen == 0) goto refine_gapped_err;
 		ksw_global(qle, &seq[len-qle], rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32);
 		if (qle < len) { // write soft clip
-			cigar = realloc(cigar, (*n_cigar + 1) * 4);
+			cigar = SAFE_REALLOC(cigar, (*n_cigar + 1) * 4);
 			memmove(cigar + 1, cigar, *n_cigar * 4);
 			cigar[0] = (len - qle)<<4 | FROM_S;
 			++(*n_cigar);
@@ -199,7 +200,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 		if (rlen == 0) goto refine_gapped_err;
 		ksw_global(qle, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension
 		if (qle < len) {
-			cigar = realloc(cigar, (*n_cigar + 1) * 4);
+			cigar = SAFE_REALLOC(cigar, (*n_cigar + 1) * 4);
 			cigar[*n_cigar - 1] = (len - qle)<<4 | FROM_S;
 			++(*n_cigar);
 		}
@@ -265,7 +266,7 @@ char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_
 	}
 	ksprintf(str, "%d", u);
 	*_nm = nm;
-	return strdup(str->s);
+	return SAFE_STRDUP(str->s);
 }
 
 void bwa_correct_trimmed(bwa_seq_t *s)
@@ -277,11 +278,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 		} else {
 			if (s->cigar == 0) {
 				s->n_cigar = 2;
-				s->cigar = calloc(s->n_cigar, sizeof(bwa_cigar_t));
+				s->cigar = SAFE_CALLOC(s->n_cigar, sizeof(bwa_cigar_t));
 				s->cigar[0] = __cigar_create(0, s->len);
 			} else {
 				++s->n_cigar;
-				s->cigar = realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
+				s->cigar = (bwa_cigar_t*)SAFE_REALLOC(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
 			}
 			s->cigar[s->n_cigar-1] = __cigar_create(3, (s->full_len - s->len));
 		}
@@ -291,11 +292,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 		} else {
 			if (s->cigar == 0) {
 				s->n_cigar = 2;
-				s->cigar = calloc(s->n_cigar, sizeof(bwa_cigar_t));
+				s->cigar = SAFE_CALLOC(s->n_cigar, sizeof(bwa_cigar_t));
 				s->cigar[1] = __cigar_create(0, s->len);
 			} else {
 				++s->n_cigar;
-				s->cigar = realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
+				s->cigar = (bwa_cigar_t*)SAFE_REALLOC(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
 				memmove(s->cigar + 1, s->cigar, (s->n_cigar-1) * sizeof(bwa_cigar_t));
 			}
 			s->cigar[0] = __cigar_create(3, (s->full_len - s->len));
@@ -311,7 +312,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 	kstring_t *str;
 
 	if (!_pacseq) {
-		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
+		pacseq = (ubyte_t*)SAFE_CALLOC(bns->l_pac/4+1, 1);
 		rewind(bns->fp_pac);
 		fread(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
 	} else pacseq = _pacseq;
@@ -330,7 +331,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		if (s->cigar == 0) s->type = BWA_TYPE_NO_MATCH;
 	}
 	// generate MD tag
-	str = (kstring_t*)calloc(1, sizeof(kstring_t));
+	str = (kstring_t*)SAFE_CALLOC(1, sizeof(kstring_t));
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *s = seqs + i;
 		if (s->type != BWA_TYPE_NO_MATCH) {
@@ -539,7 +540,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 			fread(&n_aln, 4, 1, fp_sa);
 			if (n_aln > m_aln) {
 				m_aln = n_aln;
-				aln = (bwt_aln1_t*)realloc(aln, sizeof(bwt_aln1_t) * m_aln);
+				aln = (bwt_aln1_t*)SAFE_REALLOC(aln, sizeof(bwt_aln1_t) * m_aln);
 			}
 			fread(aln, sizeof(bwt_aln1_t), n_aln, fp_sa);
 			bwa_aln2seq_core(n_aln, aln, p, 1, n_occ);

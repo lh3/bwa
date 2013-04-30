@@ -33,8 +33,8 @@
 #include <errno.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include "memory.h"
 #include "utils.h"
-
 #include "ksort.h"
 #define pair64_lt(a, b) ((a).x < (b).x || ((a).x == (b).x && (a).y < (b).y))
 KSORT_INIT(128, pair64_t, pair64_lt)
@@ -62,7 +62,7 @@ FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
 FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE *fp)
 {
 	if (freopen(fn, mode, fp) == 0) {
-		fprintf(stderr, "[%s] fail to open file '%s': ", func, fn);
+		fprintf(stderr, "[%s] fail to open file '%s'", func, fn);
 		perror(NULL);
 		fprintf(stderr, "Abort!\n");
 		abort();

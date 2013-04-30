@@ -30,6 +30,7 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include "memory.h"
 #include "utils.h"
 #include "bwt.h"
 #include "kvec.h"
@@ -66,7 +67,7 @@ void bwt_cal_sa(bwt_t *bwt, int intv)
 	if (bwt->sa) free(bwt->sa);
 	bwt->sa_intv = intv;
 	bwt->n_sa = (bwt->seq_len + intv) / intv;
-	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
+	bwt->sa = (bwtint_t*)SAFE_CALLOC(bwt->n_sa, sizeof(bwtint_t));
 	if (bwt->sa == 0) {
 		fprintf(stderr, "[%s] Fail to allocate %.3fMB memory. Abort!\n", __func__, bwt->n_sa * sizeof(bwtint_t) / 1024.0/1024.0);
 		abort();
@@ -399,7 +400,7 @@ void bwt_restore_sa(const char *fn, bwt_t *bwt)
 	xassert(primary == bwt->seq_len, "SA-BWT inconsistency: seq_len is not the same.");
 
 	bwt->n_sa = (bwt->seq_len + bwt->sa_intv) / bwt->sa_intv;
-	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
+	bwt->sa = (bwtint_t*)SAFE_CALLOC(bwt->n_sa, sizeof(bwtint_t));
 	bwt->sa[0] = -1;
 
 	fread_fix(fp, sizeof(bwtint_t) * (bwt->n_sa - 1), bwt->sa + 1);
@@ -411,11 +412,11 @@ bwt_t *bwt_restore_bwt(const char *fn)
 	bwt_t *bwt;
 	FILE *fp;
 
-	bwt = (bwt_t*)calloc(1, sizeof(bwt_t));
+	bwt = (bwt_t*)SAFE_CALLOC(1, sizeof(bwt_t));
 	fp = xopen(fn, "rb");
 	fseek(fp, 0, SEEK_END);
 	bwt->bwt_size = (ftell(fp) - sizeof(bwtint_t) * 5) >> 2;
-	bwt->bwt = (uint32_t*)calloc(bwt->bwt_size, 4);
+	bwt->bwt = (uint32_t*)SAFE_CALLOC(bwt->bwt_size, 4);
 	fseek(fp, 0, SEEK_SET);
 	fread(&bwt->primary, sizeof(bwtint_t), 1, fp);
 	fread(bwt->L2+1, sizeof(bwtint_t), 4, fp);

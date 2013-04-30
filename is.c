@@ -25,6 +25,7 @@
  */
 
 #include <stdlib.h>
+#include "memory.h"
 
 typedef unsigned char ubyte_t;
 #define chr(i) (cs == sizeof(int) ? ((const int *)T)[i]:((const unsigned char *)T)[i])
@@ -105,7 +106,7 @@ static int sais_main(const unsigned char *T, int *SA, int fs, int n, int k, int 
 	if (k <= fs) {
 		C = SA + n;
 		B = (k <= (fs - k)) ? C + k : C;
-	} else if ((C = B = (int *) malloc(k * sizeof(int))) == NULL) return -2;
+	} else if ((C = B = (int *) SAFE_MALLOC(k * sizeof(int))) == NULL) return -2;
 	getCounts(T, C, n, k, cs);
 	getBuckets(C, B, k, 1);	/* find ends of buckets */
 	for (i = 0; i < n; ++i) SA[i] = 0;
@@ -163,7 +164,7 @@ static int sais_main(const unsigned char *T, int *SA, int fs, int n, int k, int 
 	if (k <= fs) {
 		C = SA + n;
 		B = (k <= (fs - k)) ? C + k : C;
-	} else if ((C = B = (int *) malloc(k * sizeof(int))) == NULL) return -2;
+	} else if ((C = B = (int *) SAFE_MALLOC(k * sizeof(int))) == NULL) return -2;
 	/* put all left-most S characters into their buckets */
 	getCounts(T, C, n, k, cs);
 	getBuckets(C, B, k, 1);	/* find ends of buckets */
@@ -204,7 +205,7 @@ int is_sa(const ubyte_t *T, int *SA, int n)
 int is_bwt(ubyte_t *T, int n)
 {
 	int *SA, i, primary = 0;
-	SA = (int*)calloc(n+1, sizeof(int));
+	SA = (int*)SAFE_CALLOC(n+1, sizeof(int));
 	is_sa(T, SA, n);
 
 	for (i = 0; i <= n; ++i) {

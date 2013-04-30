@@ -6,7 +6,7 @@
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
-
+#include "memory.h"
 #include "kstring.h"
 #include "bwamem.h"
 #include "bntseq.h"
@@ -41,7 +41,7 @@
 mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
-	o = calloc(1, sizeof(mem_opt_t));
+	o = SAFE_CALLOC(1, sizeof(mem_opt_t));
 	o->flag = 0;
 	o->a = 1; o->b = 4; o->q = 6; o->r = 1; o->w = 100;
 	o->T = 30;
@@ -79,12 +79,12 @@ struct __smem_i {
 smem_i *smem_itr_init(const bwt_t *bwt)
 {
 	smem_i *itr;
-	itr = calloc(1, sizeof(smem_i));
+	itr = SAFE_CALLOC(1, sizeof(smem_i));
 	itr->bwt = bwt;
-	itr->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
-	itr->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
-	itr->matches   = calloc(1, sizeof(bwtintv_v));
-	itr->sub       = calloc(1, sizeof(bwtintv_v));
+	itr->tmpvec[0] = SAFE_CALLOC(1, sizeof(bwtintv_v));
+	itr->tmpvec[1] = SAFE_CALLOC(1, sizeof(bwtintv_v));
+	itr->matches   = SAFE_CALLOC(1, sizeof(bwtintv_v));
+	itr->sub       = SAFE_CALLOC(1, sizeof(bwtintv_v));
 	return itr;
 }
 
@@ -181,7 +181,7 @@ static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, c
 	if (y >= 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
 		if (c->n == c->m) {
 			c->m <<= 1;
-			c->seeds = realloc(c->seeds, c->m * sizeof(mem_seed_t));
+			c->seeds = (mem_seed_t*)SAFE_REALLOC(c->seeds, c->m * sizeof(mem_seed_t));
 		}
 		c->seeds[c->n++] = *p;
 		return 1;
@@ -215,7 +215,7 @@ static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *
 				} else to_add = 1;
 				if (to_add) { // add the seed as a new chain
 					tmp.n = 1; tmp.m = 4;
-					tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
+					tmp.seeds = SAFE_CALLOC(tmp.m, sizeof(mem_seed_t));
 					tmp.seeds[0] = s;
 					kb_putp(chn, tree, &tmp);
 				}
@@ -283,7 +283,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	flt_aux_t *a;
 	int i, j, n;
 	if (n_chn <= 1) return n_chn; // no need to filter
-	a = malloc(sizeof(flt_aux_t) * n_chn);
+	a = (flt_aux_t*)SAFE_MALLOC(sizeof(flt_aux_t) * n_chn);
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &chains[i];
 		int64_t end;
@@ -309,7 +309,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	ks_introsort(mem_flt, n_chn, a);
 	{ // reorder chains such that the best chain appears first
 		mem_chain_t *swap;
-		swap = malloc(sizeof(mem_chain_t) * n_chn);
+		swap = (mem_chain_t*)SAFE_MALLOC(sizeof(mem_chain_t) * n_chn);
 		for (i = 0; i < n_chn; ++i) {
 			swap[i] = *((mem_chain_t*)a[i].p);
 			a[i].p = &chains[i]; // as we will memcpy() below, a[i].p is changed
@@ -512,7 +512,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
 	assert(rlen == rmax[1] - rmax[0]);
 
-	srt = malloc(c->n * 8);
+	srt = (uint64_t*)SAFE_MALLOC(c->n * 8);
 	for (i = 0; i < c->n; ++i)
 		srt[i] = (uint64_t)c->seeds[i].len<<32 | i;
 	ks_introsort_64(c->n, srt);
@@ -560,10 +560,10 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
 			int qle, tle, gtle, gscore;
-			qs = malloc(s->qbeg);
+			qs = (uint8_t*)SAFE_MALLOC(s->qbeg);
 			for (i = 0; i < s->qbeg; ++i) qs[i] = query[s->qbeg - 1 - i];
 			tmp = s->rbeg - rmax[0];
-			rs = malloc(tmp);
+			rs = (uint8_t*)SAFE_MALLOC(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
@@ -838,7 +838,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 { // the difference from mem_align1_core() is that this routine: 1) calls mem_mark_primary_se(); 2) does not modify the input sequence
 	mem_alnreg_v ar;
 	char *seq;
-	seq = malloc(l_seq);
+	seq = (char*)SAFE_MALLOC(l_seq);
 	memcpy(seq, seq_, l_seq); // makes a copy of seq_
 	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
 	mem_mark_primary_se(opt, ar.n, ar.a);
@@ -861,7 +861,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	}
 	qb = ar->qb, qe = ar->qe;
 	rb = ar->rb, re = ar->re;
-	query = malloc(l_query);
+	query = (uint8_t*)SAFE_MALLOC(l_query);
 	for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
@@ -887,7 +887,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		int clip5, clip3;
 		clip5 = is_rev? l_query - qe : qb;
 		clip3 = is_rev? qb : l_query - qe;
-		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2));
+		a.cigar = (uint32_t*)SAFE_REALLOC(a.cigar, 4 * (a.n_cigar + 2));
 		if (clip5) {
 			memmove(a.cigar+1, a.cigar, a.n_cigar * 4);
 			a.cigar[0] = clip5<<4 | (opt->flag&MEM_F_HARDCLIP? 4 : 3);
@@ -958,8 +958,8 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	mem_alnreg_v *regs;
 	mem_pestat_t pes[4];
 
-	w = calloc(opt->n_threads, sizeof(worker_t));
-	regs = malloc(n * sizeof(mem_alnreg_v));
+	w = SAFE_CALLOC(opt->n_threads, sizeof(worker_t));
+	regs = (mem_alnreg_v*)SAFE_MALLOC(n * sizeof(mem_alnreg_v));
 	for (i = 0; i < opt->n_threads; ++i) {
 		worker_t *p = &w[i];
 		p->start = i; p->step = opt->n_threads; p->n = n;
@@ -980,7 +980,7 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 #ifdef HAVE_PTHREAD
 	} else {
 		pthread_t *tid;
-		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
+		tid = (pthread_t*)SAFE_CALLOC(opt->n_threads, sizeof(pthread_t));
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker1, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		if (opt->flag&MEM_F_PE) {

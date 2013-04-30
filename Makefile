@@ -2,7 +2,8 @@ CC=			gcc
 CFLAGS=		-g -Wall -O2
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD
-LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o
+LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o \
+		 memory.o
 AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o kopen.o pemerge.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
@@ -11,6 +12,8 @@ PROG=		bwa
 INCLUDES=	
 LIBS=		-lm -lz -lpthread
 SUBDIRS=	.
+
+.PHONY: all clean
 
 .SUFFIXES:.c .o .cc
 
@@ -48,6 +51,7 @@ bwtgap.o:bwtgap.h bwtaln.h bwt.h
 bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h
 bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h
 bwtsw2_main.o:bwtsw2.h
+memory.o: memory.h
 
 clean:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a
