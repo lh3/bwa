@@ -33,8 +33,8 @@
 #include <errno.h>
 #include <sys/resource.h>
 #include <sys/time.h>
+#include "memory.h"
 #include "utils.h"
-
 #include "ksort.h"
 #define pair64_lt(a, b) ((a).x < (b).x || ((a).x == (b).x && (a).y < (b).y))
 KSORT_INIT(128, pair64_t, pair64_lt)

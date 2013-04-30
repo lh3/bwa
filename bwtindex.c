@@ -216,7 +216,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		return 1;
 	}
 	if (prefix == 0) {
-		SAFE_MALLOC(prefix,(char*),(strlen(argv[optind]) + 4));
+		prefix=SAFE_MALLOC(strlen(argv[optind]) + 4);
 		strcpy(prefix, argv[optind]);
 		if (is_64) strcat(prefix, ".64");
 	}

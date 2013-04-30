@@ -1,3 +1,7 @@
+/**
+ * safe calls to alloc function : abort in case of error
+ * Pierre Lindenbaum PhD.
+ */
 #ifndef BWA_MEMORY_H
 #define BWA_MEMORY_H
 #include <stddef.h>

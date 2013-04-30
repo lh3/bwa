@@ -478,7 +478,7 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
 	z = (uint8_t*)SAFE_MALLOC(n_col * tlen);
-	qp = (uint8_t*)SAFE_MALLOC(qlen * m);
+	qp = (int8_t*)SAFE_MALLOC(qlen * m);
 	eh = SAFE_CALLOC(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
