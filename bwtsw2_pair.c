@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "memory.h"
 #include "bwt.h"
 #include "bntseq.h"
 #include "bwtsw2.h"
@@ -26,7 +27,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 	bsw2pestat_t r;
 
 	memset(&r, 0, sizeof(bsw2pestat_t));
-	isize = calloc(n, 8);
+	isize = SAFE_CALLOC(n, 8);
 	for (i = k = 0; i < n; i += 2) {
 		bsw2hit_t *t[2];
 		int l;
@@ -115,7 +116,7 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	if (end > l_pac) end = l_pac;
 	if (end - beg < l_mseq) return;
 	// generate the sequence
-	seq = malloc(l_mseq + (end - beg));
+	seq = (uint8_t*)SAFE_MALLOC(l_mseq + (end - beg));
 	ref = seq + l_mseq;
 	for (k = beg; k < end; ++k)
 		ref[k - beg] = pac[k>>2] >> ((~k&3)<<1) & 0x3;
@@ -194,7 +195,7 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 			a[which].flag |= BSW2_FLAG_RESCUED;
 			if (p[1]->max == 0) {
 				p[1]->max = 1;
-				p[1]->hits = malloc(sizeof(bsw2hit_t));
+				p[1]->hits = (bsw2hit_t*)SAFE_MALLOC(sizeof(bsw2hit_t));
 			}
 			p[1]->hits[0] = a[which];
 			p[1]->n = 1;

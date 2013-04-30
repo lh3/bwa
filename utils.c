@@ -62,7 +62,7 @@ FILE *err_xopen_core(const char *func, const char *fn, const char *mode)
 FILE *err_xreopen_core(const char *func, const char *fn, const char *mode, FILE *fp)
 {
 	if (freopen(fn, mode, fp) == 0) {
-		fprintf(stderr, "[%s] fail to open file '%s': ", func, fn);
+		fprintf(stderr, "[%s] fail to open file '%s'", func, fn);
 		perror(NULL);
 		fprintf(stderr, "Abort!\n");
 		abort();

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <zlib.h>
 #include <pthread.h>
+#include "memory.h"
 #include "ksw.h"
 #include "kseq.h"
 #include "kstring.h"
@@ -38,7 +39,7 @@ typedef struct {
 pem_opt_t *pem_opt_init()
 {
 	pem_opt_t *opt;
-	opt = calloc(1, sizeof(pem_opt_t));
+	opt = SAFE_CALLOC(1, sizeof(pem_opt_t));
 	opt->a = 5; opt->b = 4; opt->q = 2, opt->r = 17; opt->w = 20;
 	opt->T = opt->a * 10;
 	opt->q_def = 20;
@@ -56,8 +57,8 @@ int bwa_pemerge(const pem_opt_t *opt, bseq1_t x[2])
 	int i, xtra, l, l_seq, sum_q, ret = 0;
 	kswr_t r;
 
-	s[0] = malloc(x[0].l_seq); q[0] = malloc(x[0].l_seq);
-	s[1] = malloc(x[1].l_seq); q[1] = malloc(x[1].l_seq);
+	s[0] = (uint8_t*)SAFE_MALLOC(x[0].l_seq); q[0] = (uint8_t*)SAFE_MALLOC(x[0].l_seq);
+	s[1] =(uint8_t*) SAFE_MALLOC(x[1].l_seq); q[1] = (uint8_t*)SAFE_MALLOC(x[1].l_seq);
 	for (i = 0; i < x[0].l_seq; ++i) {
 		int c = x[0].seq[i];
 		s[0][i] = c < 0 || c > 127? 4 : c <= 4? c : nst_nt4_table[c];
@@ -101,8 +102,8 @@ int bwa_pemerge(const pem_opt_t *opt, bseq1_t x[2])
 
 	l = x[0].l_seq - (r.tb - r.qb); // length to merge
 	l_seq = x[0].l_seq + x[1].l_seq - l;
-	seq = malloc(l_seq + 1);
-	qual = malloc(l_seq + 1);
+	seq =  (uint8_t*)SAFE_MALLOC(l_seq + 1);
+	qual =  (uint8_t*)SAFE_MALLOC(l_seq + 1);
 	memcpy(seq,  s[0], x[0].l_seq); memcpy(seq  + x[0].l_seq, &s[1][l], x[1].l_seq - l);
 	memcpy(qual, q[0], x[0].l_seq); memcpy(qual + x[0].l_seq, &q[1][l], x[1].l_seq - l);
 	for (i = 0, sum_q = 0; i < l; ++i) {
@@ -172,7 +173,7 @@ static void process_seqs(const pem_opt_t *opt, int n_, bseq1_t *seqs, int64_t cn
 	int i, j, n = n_>>1<<1;
 	worker_t *w;
 
-	w = calloc(opt->n_threads, sizeof(worker_t));
+	w = SAFE_CALLOC(opt->n_threads, sizeof(worker_t));
 	for (i = 0; i < opt->n_threads; ++i) {
 		worker_t *p = &w[i];
 		p->start = i; p->n = n;
@@ -183,7 +184,7 @@ static void process_seqs(const pem_opt_t *opt, int n_, bseq1_t *seqs, int64_t cn
 		worker(w);
 	} else {
 		pthread_t *tid;
-		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
+		tid = (pthread_t*)SAFE_CALLOC(opt->n_threads, sizeof(pthread_t));
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		free(tid);

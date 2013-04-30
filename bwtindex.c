@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <zlib.h>
+#include "memory.h"
 #include "bntseq.h"
 #include "bwt.h"
 #include "utils.h"
@@ -62,18 +63,18 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 	FILE *fp;
 
 	// initialization
-	bwt = (bwt_t*)calloc(1, sizeof(bwt_t));
+	bwt = (bwt_t*)SAFE_CALLOC(1, sizeof(bwt_t));
 	bwt->seq_len = bwa_seq_len(fn_pac);
 	bwt->bwt_size = (bwt->seq_len + 15) >> 4;
 	fp = xopen(fn_pac, "rb");
 
 	// prepare sequence
 	pac_size = (bwt->seq_len>>2) + ((bwt->seq_len&3) == 0? 0 : 1);
-	buf2 = (ubyte_t*)calloc(pac_size, 1);
+	buf2 = (ubyte_t*)SAFE_CALLOC(pac_size, 1);
 	fread(buf2, 1, pac_size, fp);
 	fclose(fp);
 	memset(bwt->L2, 0, 5 * 4);
-	buf = (ubyte_t*)calloc(bwt->seq_len + 1, 1);
+	buf = (ubyte_t*)SAFE_CALLOC(bwt->seq_len + 1, 1);
 	for (i = 0; i < bwt->seq_len; ++i) {
 		buf[i] = buf2[i>>2] >> ((3 - (i&3)) << 1) & 3;
 		++bwt->L2[1+buf[i]];
@@ -91,7 +92,7 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 		err_fatal_simple("libdivsufsort is not compiled in.");
 #endif
 	}
-	bwt->bwt = (u_int32_t*)calloc(bwt->bwt_size, 4);
+	bwt->bwt = (u_int32_t*)SAFE_CALLOC(bwt->bwt_size, 4);
 	for (i = 0; i < bwt->seq_len; ++i)
 		bwt->bwt[i>>4] |= buf[i] << ((15 - (i&15)) << 1);
 	free(buf);
@@ -127,7 +128,7 @@ void bwt_bwtupdate_core(bwt_t *bwt)
 
 	n_occ = (bwt->seq_len + OCC_INTERVAL - 1) / OCC_INTERVAL + 1;
 	bwt->bwt_size += n_occ * sizeof(bwtint_t); // the new size
-	buf = (uint32_t*)calloc(bwt->bwt_size, 4); // will be the new bwt
+	buf = (uint32_t*)SAFE_CALLOC(bwt->bwt_size, 4); // will be the new bwt
 	c[0] = c[1] = c[2] = c[3] = 0;
 	for (i = k = 0; i < bwt->seq_len; ++i) {
 		if (i % OCC_INTERVAL == 0) {
@@ -196,7 +197,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 			else if (strcmp(optarg, "is") == 0) algo_type = 3;
 			else err_fatal(__func__, "unknown algorithm: '%s'.", optarg);
 			break;
-		case 'p': prefix = strdup(optarg); break;
+		case 'p': prefix = SAFE_STRDUP(optarg); break;
 		case '6': is_64 = 1; break;
 		default: return 1;
 		}
@@ -215,13 +216,13 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		return 1;
 	}
 	if (prefix == 0) {
-		prefix = malloc(strlen(argv[optind]) + 4);
+		SAFE_MALLOC(prefix,(char*),(strlen(argv[optind]) + 4));
 		strcpy(prefix, argv[optind]);
 		if (is_64) strcat(prefix, ".64");
 	}
-	str  = (char*)calloc(strlen(prefix) + 10, 1);
-	str2 = (char*)calloc(strlen(prefix) + 10, 1);
-	str3 = (char*)calloc(strlen(prefix) + 10, 1);
+	str  = (char*)SAFE_CALLOC(strlen(prefix) + 10, 1);
+	str2 = (char*)SAFE_CALLOC(strlen(prefix) + 10, 1);
+	str3 = (char*)SAFE_CALLOC(strlen(prefix) + 10, 1);
 
 	{ // nucleotide indexing
 		gzFile fp = xzopen(argv[optind], "r");

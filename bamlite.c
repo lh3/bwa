@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
+#include "memory.h"
 #include "bamlite.h"
 
 /*********************
@@ -53,7 +54,7 @@ int bam_is_be;
 bam_header_t *bam_header_init()
 {
 	bam_is_be = bam_is_big_endian();
-	return (bam_header_t*)calloc(1, sizeof(bam_header_t));
+	return (bam_header_t*)SAFE_CALLOC(1, sizeof(bam_header_t));
 }
 
 void bam_header_destroy(bam_header_t *header)
@@ -86,17 +87,17 @@ bam_header_t *bam_header_read(bamFile fp)
 	// read plain text and the number of reference sequences
 	bam_read(fp, &header->l_text, 4);
 	if (bam_is_be) bam_swap_endian_4p(&header->l_text);
-	header->text = (char*)calloc(header->l_text + 1, 1);
+	header->text = (char*)SAFE_CALLOC(header->l_text + 1, 1);
 	bam_read(fp, header->text, header->l_text);
 	bam_read(fp, &header->n_targets, 4);
 	if (bam_is_be) bam_swap_endian_4p(&header->n_targets);
 	// read reference sequence names and lengths
-	header->target_name = (char**)calloc(header->n_targets, sizeof(char*));
-	header->target_len = (uint32_t*)calloc(header->n_targets, 4);
+	header->target_name = (char**)SAFE_CALLOC(header->n_targets, sizeof(char*));
+	header->target_len = (uint32_t*)SAFE_CALLOC(header->n_targets, 4);
 	for (i = 0; i != header->n_targets; ++i) {
 		bam_read(fp, &name_len, 4);
 		if (bam_is_be) bam_swap_endian_4p(&name_len);
-		header->target_name[i] = (char*)calloc(name_len, 1);
+		header->target_name[i] = (char*)SAFE_CALLOC(name_len, 1);
 		bam_read(fp, header->target_name[i], name_len);
 		bam_read(fp, &header->target_len[i], 4);
 		if (bam_is_be) bam_swap_endian_4p(&header->target_len[i]);
@@ -146,7 +147,7 @@ int bam_read1(bamFile fp, bam1_t *b)
 	if (b->m_data < b->data_len) {
 		b->m_data = b->data_len;
 		kroundup32(b->m_data);
-		b->data = (uint8_t*)realloc(b->data, b->m_data);
+		b->data = (uint8_t*)SAFE_REALLOC(b->data, b->m_data);
 	}
 	if (bam_read(fp, b->data, b->data_len) != b->data_len) return -4;
 	b->l_aux = b->data_len - c->n_cigar * 4 - c->l_qname - c->l_qseq - (c->l_qseq+1)/2;

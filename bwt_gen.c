@@ -27,6 +27,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <errno.h>
+#include "memory.h"
 #include "QSufSort.h"
 
 typedef uint64_t bgint_t;
@@ -319,25 +321,25 @@ BWT *BWTCreate(const bgint_t textLength, unsigned int *decodeTable)
 {
 	BWT *bwt;
 
-	bwt = (BWT*)calloc(1, sizeof(BWT));
+	bwt = (BWT*)SAFE_CALLOC(1, sizeof(BWT));
 
 	bwt->textLength = 0;
 
-	bwt->cumulativeFreq = (bgint_t*)calloc((ALPHABET_SIZE + 1), sizeof(bgint_t));
+	bwt->cumulativeFreq = (bgint_t*)SAFE_CALLOC((ALPHABET_SIZE + 1), sizeof(bgint_t));
 	initializeVAL_bg(bwt->cumulativeFreq, ALPHABET_SIZE + 1, 0);
 
 	bwt->bwtSizeInWord = 0;
 
 	// Generate decode tables
 	if (decodeTable == NULL) {
-		bwt->decodeTable = (unsigned*)calloc(DNA_OCC_CNT_TABLE_SIZE_IN_WORD, sizeof(unsigned int));
+		bwt->decodeTable = (unsigned*)SAFE_CALLOC(DNA_OCC_CNT_TABLE_SIZE_IN_WORD, sizeof(unsigned int));
 		GenerateDNAOccCountTable(bwt->decodeTable);
 	} else {
 		bwt->decodeTable = decodeTable;
 	}
 
 	bwt->occMajorSizeInWord = BWTOccValueMajorSizeInWord(textLength);
-	bwt->occValueMajor = (bgint_t*)calloc(bwt->occMajorSizeInWord, sizeof(bgint_t));
+	bwt->occValueMajor = (bgint_t*)SAFE_CALLOC(bwt->occMajorSizeInWord, sizeof(bgint_t));
 
 	bwt->occSizeInWord = 0;
 	bwt->occValue = NULL;
@@ -353,16 +355,16 @@ BWTInc *BWTIncCreate(const bgint_t textLength, unsigned int initialMaxBuildSize,
 	if (textLength < incMaxBuildSize) incMaxBuildSize = textLength;
 	if (textLength < initialMaxBuildSize) initialMaxBuildSize = textLength;
 
-	bwtInc = (BWTInc*)calloc(1, sizeof(BWTInc));
+	bwtInc = (BWTInc*)SAFE_CALLOC(1, sizeof(BWTInc));
 	bwtInc->numberOfIterationDone = 0;
 	bwtInc->bwt = BWTCreate(textLength, NULL);
 	bwtInc->initialMaxBuildSize = initialMaxBuildSize;
 	bwtInc->incMaxBuildSize = incMaxBuildSize;
-	bwtInc->cumulativeCountInCurrentBuild = (bgint_t*)calloc((ALPHABET_SIZE + 1), sizeof(bgint_t));
+	bwtInc->cumulativeCountInCurrentBuild = (bgint_t*)SAFE_CALLOC((ALPHABET_SIZE + 1), sizeof(bgint_t));
 	initializeVAL_bg(bwtInc->cumulativeCountInCurrentBuild, ALPHABET_SIZE + 1, 0);
 
 	// Build frequently accessed data
-	bwtInc->packedShift = (unsigned*)calloc(CHAR_PER_WORD, sizeof(unsigned int));
+	bwtInc->packedShift = (unsigned*)SAFE_CALLOC(CHAR_PER_WORD, sizeof(unsigned int));
 	for (i=0; i<CHAR_PER_WORD; i++)
 		bwtInc->packedShift[i] = BITS_IN_WORD - (i+1) * BIT_PER_CHAR;
 
@@ -372,7 +374,7 @@ BWTInc *BWTIncCreate(const bgint_t textLength, unsigned int initialMaxBuildSize,
 		+ incMaxBuildSize/5 * 3 * (sizeof(bgint_t) / 4); // space for the 3 temporary arrays in each iteration
 	if (bwtInc->availableWord < MIN_AVAILABLE_WORD) bwtInc->availableWord = MIN_AVAILABLE_WORD; // lh3: otherwise segfaul when availableWord is too small
 	fprintf(stderr, "[%s] textLength=%ld, availableWord=%ld\n", __func__, (long)textLength, (long)bwtInc->availableWord);
-	bwtInc->workingMemory = (unsigned*)calloc(bwtInc->availableWord, BYTES_IN_WORD);
+	bwtInc->workingMemory = (unsigned*)SAFE_CALLOC(bwtInc->availableWord, BYTES_IN_WORD);
 
 	return bwtInc;
 }
@@ -1443,7 +1445,7 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 	packedFile = (FILE*)fopen(inputFileName, "rb");
 
 	if (packedFile == NULL) {
-		fprintf(stderr, "BWTIncConstructFromPacked() : Cannot open inputFileName!\n");
+		fprintf(stderr, "BWTIncConstructFromPacked() : Cannot open inputFileName \"%s\"!\n",strerror(errno));
 		exit(1);
 	}
 
@@ -1526,7 +1528,7 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 
 	bwtFile = (FILE*)fopen(bwtFileName, "wb");
 	if (bwtFile == NULL) {
-		fprintf(stderr, "BWTSaveBwtCodeAndOcc(): Cannot open BWT code file!\n");
+		fprintf(stderr, "BWTSaveBwtCodeAndOcc(): Cannot open BWT code file! \"%s\"\n",strerror(errno));
 		exit(1);
 	}
 

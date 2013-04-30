@@ -71,7 +71,7 @@ typedef struct {
 #define bam1_seqi(s, i) ((s)[(i)/2] >> 4*(1-(i)%2) & 0xf)
 #define bam1_aux(b) ((b)->data + (b)->core.n_cigar*4 + (b)->core.l_qname + (b)->core.l_qseq + ((b)->core.l_qseq + 1)/2)
 
-#define bam_init1() ((bam1_t*)calloc(1, sizeof(bam1_t)))
+#define bam_init1() ((bam1_t*)SAFE_CALLOC(1, sizeof(bam1_t)))
 #define bam_destroy1(b) do {					\
 		if (b) { free((b)->data); free(b); }	\
 	} while (0)
