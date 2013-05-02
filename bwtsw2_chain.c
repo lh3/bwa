@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include "bwtsw2.h"
-#include "utils.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 typedef struct {
 	uint32_t tbeg, tend;
@@ -49,9 +52,9 @@ void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2])
 	char *flag;
 	// initialization
 	n[0] = b[0]->n; n[1] = b[1]->n;
-	z[0] = xcalloc(n[0] + n[1], sizeof(hsaip_t));
+	z[0] = calloc(n[0] + n[1], sizeof(hsaip_t));
 	z[1] = z[0] + n[0];
-	chain[0] = xcalloc(n[0] + n[1], sizeof(hsaip_t));
+	chain[0] = calloc(n[0] + n[1], sizeof(hsaip_t));
 	for (k = j = 0; k < 2; ++k) {
 		for (i = 0; i < b[k]->n; ++i) {
 			bsw2hit_t *p = b[k]->hits + i;
@@ -74,7 +77,7 @@ void bsw2_chain_filter(const bsw2opt_t *opt, int len, bwtsw2_t *b[2])
 	}
 	//for (k = 0; k < m[0]; ++k) printf("%d, [%d,%d), [%d,%d)\n", chain[0][k].chain, chain[0][k].tbeg, chain[0][k].tend, chain[0][k].qbeg, chain[0][k].qend);
 	// filtering
-	flag = xcalloc(m[0] + m[1], 1);
+	flag = calloc(m[0] + m[1], 1);
 	ks_introsort(hsaip, m[0] + m[1], chain[0]);
 	for (k = 1; k < m[0] + m[1]; ++k) {
 		hsaip_t *p = chain[0] + k;

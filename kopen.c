@@ -14,7 +14,9 @@
 #include <sys/socket.h>
 #endif
 
-#include "utils.h"
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 #ifdef _WIN32
 #define _KO_NO_NET
@@ -82,7 +84,7 @@ static int http_open(const char *fn)
 	// set ->http_host
 	for (p = (char*)fn + 7; *p && *p != '/'; ++p);
 	l = p - fn - 7;
-	http_host = xcalloc(l + 1, 1);
+	http_host = calloc(l + 1, 1);
 	strncpy(http_host, fn + 7, l);
 	http_host[l] = 0;
 	for (q = http_host; *q && *q != ':'; ++q);
@@ -91,21 +93,21 @@ static int http_open(const char *fn)
 	proxy = getenv("http_proxy");
 	// set host, port and path
 	if (proxy == 0) {
-		host = xstrdup(http_host); // when there is no proxy, server name is identical to http_host name.
-		port = xstrdup(*q? q : "80");
-		path = xstrdup(*p? p : "/");
+		host = strdup(http_host); // when there is no proxy, server name is identical to http_host name.
+		port = strdup(*q? q : "80");
+		path = strdup(*p? p : "/");
 	} else {
-		host = (strstr(proxy, "http://") == proxy)? xstrdup(proxy + 7) : xstrdup(proxy);
+		host = (strstr(proxy, "http://") == proxy)? strdup(proxy + 7) : strdup(proxy);
 		for (q = host; *q && *q != ':'; ++q);
 		if (*q == ':') *q++ = 0; 
-		port = xstrdup(*q? q : "80");
-		path = xstrdup(fn);
+		port = strdup(*q? q : "80");
+		path = strdup(fn);
 	}
 
 	/* connect; adapted from khttp_connect() in knetfile.c */
 	l = 0;
 	fd = socket_connect(host, port);
-	buf = xcalloc(bufsz, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
+	buf = calloc(bufsz, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
 	l += snprintf(buf + l, bufsz, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n",
 				 path, http_host);
 	if (write_bytes(fd, buf, l) != 0) {
@@ -152,7 +154,7 @@ static int kftp_get_response(ftpaux_t *aux)
 	while (read(aux->ctrl_fd, &c, 1)) { // FIXME: this is *VERY BAD* for unbuffered I/O
 		if (n >= aux->max_response) {
 			aux->max_response = aux->max_response? aux->max_response<<1 : 256;
-			aux->response = xrealloc(aux->response, aux->max_response);
+			aux->response = realloc(aux->response, aux->max_response);
 		}
 		aux->response[n++] = c;
 		if (c == '\n') {
@@ -186,10 +188,10 @@ static int ftp_open(const char *fn)
 	for (p = (char*)fn + 6; *p && *p != '/'; ++p);
 	if (*p != '/') return 0;
 	l = p - fn - 6;
-	port = xstrdup("21");
-	host = xcalloc(l + 1, 1);
+	port = strdup("21");
+	host = calloc(l + 1, 1);
 	strncpy(host, fn + 6, l);
-	retr = xcalloc(strlen(p) + 8, 1);
+	retr = calloc(strlen(p) + 8, 1);
 	sprintf(retr, "RETR %s\r\n", p);
 	
 	/* connect to ctrl */
@@ -241,8 +243,8 @@ static char **cmd2argv(const char *cmd)
 	for (i = beg + 1, argc = 0; i < end; ++i)
 		if (isspace(cmd[i]) && !isspace(cmd[i-1]))
 			++argc;
-	argv = (char**)xcalloc(argc + 2, sizeof(void*));
-	argv[0] = str = (char*)xcalloc(end - beg + 1, 1);
+	argv = (char**)calloc(argc + 2, sizeof(void*));
+	argv[0] = str = (char*)calloc(end - beg + 1, 1);
 	strncpy(argv[0], cmd + beg, end - beg);
 	for (i = argc = 1; i < end - beg; ++i)
 		if (isspace(str[i])) str[i] = 0;
@@ -266,15 +268,15 @@ void *kopen(const char *fn, int *_fd)
 	koaux_t *aux = 0;
 	*_fd = -1;
 	if (strstr(fn, "http://") == fn) {
-		aux = xcalloc(1, sizeof(koaux_t));
+		aux = calloc(1, sizeof(koaux_t));
 		aux->type = KO_HTTP;
 		aux->fd = http_open(fn);
 	} else if (strstr(fn, "ftp://") == fn) {
-		aux = xcalloc(1, sizeof(koaux_t));
+		aux = calloc(1, sizeof(koaux_t));
 		aux->type = KO_FTP;
 		aux->fd = ftp_open(fn);
 	} else if (strcmp(fn, "-") == 0) {
-		aux = xcalloc(1, sizeof(koaux_t));
+		aux = calloc(1, sizeof(koaux_t));
 		aux->type = KO_STDIN;
 		aux->fd = STDIN_FILENO;
 	} else {
@@ -308,7 +310,7 @@ void *kopen(const char *fn, int *_fd)
 				exit(1);
 			} else { /* parent process */
 				close(pfd[1]);
-				aux = xcalloc(1, sizeof(koaux_t));
+				aux = calloc(1, sizeof(koaux_t));
 				aux->type = KO_PIPE;
 				aux->fd = pfd[0];
 				aux->pid = pid;
@@ -320,7 +322,7 @@ void *kopen(const char *fn, int *_fd)
 			*_fd = open(fn, O_RDONLY);
 #endif
 			if (*_fd >= 0) {
-				aux = xcalloc(1, sizeof(koaux_t));
+				aux = calloc(1, sizeof(koaux_t));
 				aux->type = KO_FILE;
 				aux->fd = *_fd;
 			}

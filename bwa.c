@@ -7,6 +7,10 @@
 #include "ksw.h"
 #include "utils.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 int bwa_verbose = 3;
 char bwa_rg_id[256];
 
@@ -25,10 +29,10 @@ static inline void trim_readno(kstring_t *s)
 
 static inline void kseq2bseq1(const kseq_t *ks, bseq1_t *s)
 { // TODO: it would be better to allocate one chunk of memory, but probably it does not matter in practice
-	s->name = xstrdup(ks->name.s);
-	s->comment = ks->comment.l? xstrdup(ks->comment.s) : 0;
-	s->seq = xstrdup(ks->seq.s);
-	s->qual = ks->qual.l? xstrdup(ks->qual.s) : 0;
+	s->name = strdup(ks->name.s);
+	s->comment = ks->comment.l? strdup(ks->comment.s) : 0;
+	s->seq = strdup(ks->seq.s);
+	s->qual = ks->qual.l? strdup(ks->qual.s) : 0;
 	s->l_seq = strlen(s->seq);
 }
 
@@ -45,7 +49,7 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 		}
 		if (n >= m) {
 			m = m? m<<1 : 256;
-			seqs = xrealloc(seqs, m * sizeof(bseq1_t));
+			seqs = realloc(seqs, m * sizeof(bseq1_t));
 		}
 		trim_readno(&ks->name);
 		kseq2bseq1(ks, &seqs[n]);
@@ -98,7 +102,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
 	}
 	if (l_query == re - rb && w_ == 0) { // no gap; no need to do DP
-		cigar = xmalloc(4);
+		cigar = malloc(4);
 		cigar[0] = l_query<<4 | 0;
 		*n_cigar = 1;
 		for (i = 0, *score = 0; i < l_query; ++i)
@@ -205,7 +209,7 @@ char *bwa_idx_infer_prefix(const char *hint)
 	int l_hint;
 	FILE *fp;
 	l_hint = strlen(hint);
-	prefix = xmalloc(l_hint + 3 + 4 + 1);
+	prefix = malloc(l_hint + 3 + 4 + 1);
 	strcpy(prefix, hint);
 	strcpy(prefix + l_hint, ".64.bwt");
 	if ((fp = fopen(prefix, "rb")) != 0) {
@@ -234,7 +238,7 @@ bwt_t *bwa_idx_load_bwt(const char *hint)
 		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to locate the index files\n", __func__);
 		return 0;
 	}
-	tmp = xcalloc(strlen(prefix) + 5, 1);
+	tmp = calloc(strlen(prefix) + 5, 1);
 	strcat(strcpy(tmp, prefix), ".bwt"); // FM-index
 	bwt = bwt_restore_bwt(tmp);
 	strcat(strcpy(tmp, prefix), ".sa");  // partial suffix array (SA)
@@ -252,12 +256,12 @@ bwaidx_t *bwa_idx_load(const char *hint, int which)
 		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to locate the index files\n", __func__);
 		return 0;
 	}
-	idx = xcalloc(1, sizeof(bwaidx_t));
+	idx = calloc(1, sizeof(bwaidx_t));
 	if (which & BWA_IDX_BWT) idx->bwt = bwa_idx_load_bwt(hint);
 	if (which & BWA_IDX_BNS) {
 		idx->bns = bns_restore(prefix);
 		if (which & BWA_IDX_PAC) {
-			idx->pac = xcalloc(idx->bns->l_pac/4+1, 1);
+			idx->pac = calloc(idx->bns->l_pac/4+1, 1);
 			err_fread_noeof(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
 			err_fclose(idx->bns->fp_pac);
 			idx->bns->fp_pac = 0;
@@ -312,7 +316,7 @@ char *bwa_set_rg(const char *s)
 		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] the read group line is not started with @RG\n", __func__);
 		goto err_set_rg;
 	}
-	rg_line = xstrdup(s);
+	rg_line = strdup(s);
 	bwa_escape(rg_line);
 	if ((p = strstr(rg_line, "\tID:")) == 0) {
 		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID at the read group line\n", __func__);

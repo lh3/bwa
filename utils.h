@@ -48,12 +48,6 @@
 
 #define xassert(cond, msg) if ((cond) == 0) _err_fatal_simple_core(__func__, msg)
 
-#define xcalloc(n, s)  err_calloc( (n), (s), __FILE__, __LINE__, __func__)
-#define xmalloc(s)     err_malloc( (s),      __FILE__, __LINE__, __func__)
-#define xrealloc(p, s) err_realloc((p), (s), __FILE__, __LINE__, __func__)
-#define xstrdup(s)     err_strdup( (s),      __FILE__, __LINE__, __func__)
-
-
 typedef struct {
 	uint64_t x, y;
 } pair64_t;
@@ -90,11 +84,6 @@ extern "C" {
 	int err_fflush(FILE *stream);
 	int err_fclose(FILE *stream);
 	int err_gzclose(gzFile file);
-
-	void *err_calloc(size_t nmemb, size_t size, const char *file, unsigned int line, const char *func);
-	void *err_malloc(size_t size, const char *file, unsigned int line, const char *func);
-	void *err_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func);
-	char *err_strdup(const char *s, const char *file, unsigned int line, const char *func);
 
 	double cputime();
 	double realtime();

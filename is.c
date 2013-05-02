@@ -27,6 +27,10 @@
 #include <stdlib.h>
 #include "utils.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 typedef unsigned char ubyte_t;
 #define chr(i) (cs == sizeof(int) ? ((const int *)T)[i]:((const unsigned char *)T)[i])
 
@@ -205,7 +209,7 @@ int is_sa(const ubyte_t *T, int *SA, int n)
 int is_bwt(ubyte_t *T, int n)
 {
 	int *SA, i, primary = 0;
-	SA = (int*)xcalloc(n+1, sizeof(int));
+	SA = (int*)calloc(n+1, sizeof(int));
 
 	if (is_sa(T, SA, n)) err_fatal_simple("is_sa failed");
 

@@ -115,7 +115,10 @@ int main() {
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include "utils.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 /* compipler specific configuration */
 
@@ -161,13 +164,13 @@ typedef khint_t khiter_t;
 #endif
 
 #ifndef kcalloc
-#define kcalloc(N,Z) xcalloc(N,Z)
+#define kcalloc(N,Z) calloc(N,Z)
 #endif
 #ifndef kmalloc
-#define kmalloc(Z) xmalloc(Z)
+#define kmalloc(Z) malloc(Z)
 #endif
 #ifndef krealloc
-#define krealloc(P,Z) xrealloc(P,Z)
+#define krealloc(P,Z) realloc(P,Z)
 #endif
 #ifndef kfree
 #define kfree(P) free(P)

@@ -12,6 +12,10 @@
 #include "utils.h"
 KSEQ_DECLARE(gzFile)
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 #define MAX_SCORE_RATIO 0.9f
 #define MAX_ERR 8
 
@@ -40,7 +44,7 @@ typedef struct {
 pem_opt_t *pem_opt_init()
 {
 	pem_opt_t *opt;
-	opt = xcalloc(1, sizeof(pem_opt_t));
+	opt = calloc(1, sizeof(pem_opt_t));
 	opt->a = 5; opt->b = 4; opt->q = 2, opt->r = 17; opt->w = 20;
 	opt->T = opt->a * 10;
 	opt->q_def = 20;
@@ -58,8 +62,8 @@ int bwa_pemerge(const pem_opt_t *opt, bseq1_t x[2])
 	int i, xtra, l, l_seq, sum_q, ret = 0;
 	kswr_t r;
 
-	s[0] = xmalloc(x[0].l_seq); q[0] = xmalloc(x[0].l_seq);
-	s[1] = xmalloc(x[1].l_seq); q[1] = xmalloc(x[1].l_seq);
+	s[0] = malloc(x[0].l_seq); q[0] = malloc(x[0].l_seq);
+	s[1] = malloc(x[1].l_seq); q[1] = malloc(x[1].l_seq);
 	for (i = 0; i < x[0].l_seq; ++i) {
 		int c = x[0].seq[i];
 		s[0][i] = c < 0 || c > 127? 4 : c <= 4? c : nst_nt4_table[c];
@@ -103,8 +107,8 @@ int bwa_pemerge(const pem_opt_t *opt, bseq1_t x[2])
 
 	l = x[0].l_seq - (r.tb - r.qb); // length to merge
 	l_seq = x[0].l_seq + x[1].l_seq - l;
-	seq = xmalloc(l_seq + 1);
-	qual = xmalloc(l_seq + 1);
+	seq = malloc(l_seq + 1);
+	qual = malloc(l_seq + 1);
 	memcpy(seq,  s[0], x[0].l_seq); memcpy(seq  + x[0].l_seq, &s[1][l], x[1].l_seq - l);
 	memcpy(qual, q[0], x[0].l_seq); memcpy(qual + x[0].l_seq, &q[1][l], x[1].l_seq - l);
 	for (i = 0, sum_q = 0; i < l; ++i) {
@@ -174,7 +178,7 @@ static void process_seqs(const pem_opt_t *opt, int n_, bseq1_t *seqs, int64_t cn
 	int i, j, n = n_>>1<<1;
 	worker_t *w;
 
-	w = xcalloc(opt->n_threads, sizeof(worker_t));
+	w = calloc(opt->n_threads, sizeof(worker_t));
 	for (i = 0; i < opt->n_threads; ++i) {
 		worker_t *p = &w[i];
 		p->start = i; p->n = n;
@@ -185,7 +189,7 @@ static void process_seqs(const pem_opt_t *opt, int n_, bseq1_t *seqs, int64_t cn
 		worker(w);
 	} else {
 		pthread_t *tid;
-		tid = (pthread_t*)xcalloc(opt->n_threads, sizeof(pthread_t));
+		tid = (pthread_t*)calloc(opt->n_threads, sizeof(pthread_t));
 		for (i = 0; i < opt->n_threads; ++i) pthread_create(&tid[i], 0, worker, &w[i]);
 		for (i = 0; i < opt->n_threads; ++i) pthread_join(tid[i], 0);
 		free(tid);

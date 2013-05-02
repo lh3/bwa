@@ -31,7 +31,10 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdlib.h>
-#include "utils.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 #define KS_SEP_SPACE 0 // isspace(): \t, \n, \v, \f, \r
 #define KS_SEP_TAB   1 // isspace() && !' '
@@ -51,9 +54,9 @@
 #define __KS_BASIC(type_t, __bufsize)								\
 	static inline kstream_t *ks_init(type_t f)						\
 	{																\
-		kstream_t *ks = (kstream_t*)xcalloc(1, sizeof(kstream_t)); \
+		kstream_t *ks = (kstream_t*)calloc(1, sizeof(kstream_t)); \
 		ks->f = f;													\
-		ks->buf = (unsigned char*)xmalloc(__bufsize);						\
+		ks->buf = (unsigned char*)malloc(__bufsize);						\
 		return ks;													\
 	}																\
 	static inline void ks_destroy(kstream_t *ks)					\
@@ -121,7 +124,7 @@ typedef struct __kstring_t {
 			if (str->m - str->l < (size_t)(i - ks->begin + 1)) {		\
 				str->m = str->l + (i - ks->begin) + 1;					\
 				kroundup32(str->m);										\
-				str->s = (char*)xrealloc(str->s, str->m);			\
+				str->s = (char*)realloc(str->s, str->m);			\
 			}															\
 			memcpy(str->s + str->l, ks->buf + ks->begin, i - ks->begin); \
 			str->l = str->l + (i - ks->begin);							\
@@ -133,7 +136,7 @@ typedef struct __kstring_t {
 		}																\
 		if (str->s == 0) {												\
 			str->m = 1;													\
-			str->s = (char*)xcalloc(1, 1);								\
+			str->s = (char*)calloc(1, 1);								\
 		} else if (delimiter == KS_SEP_LINE && str->l > 1 && str->s[str->l-1] == '\r') --str->l; \
 		str->s[str->l] = '\0';											\
 		return str->l;													\
@@ -152,7 +155,7 @@ typedef struct __kstring_t {
 #define __KSEQ_BASIC(SCOPE, type_t)										\
 	SCOPE kseq_t *kseq_init(type_t fd)									\
 	{																	\
-		kseq_t *s = (kseq_t*)xcalloc(1, sizeof(kseq_t));				\
+		kseq_t *s = (kseq_t*)calloc(1, sizeof(kseq_t));				\
 		s->f = ks_init(fd);												\
 		return s;														\
 	}																	\
@@ -184,7 +187,7 @@ typedef struct __kstring_t {
 		if (c != '\n') ks_getuntil(ks, KS_SEP_LINE, &seq->comment, 0); /* read FASTA/Q comment */ \
 		if (seq->seq.s == 0) { /* we can do this in the loop below, but that is slower */ \
 			seq->seq.m = 256; \
-			seq->seq.s = (char*)xmalloc(seq->seq.m); \
+			seq->seq.s = (char*)malloc(seq->seq.m); \
 		} \
 		while ((c = ks_getc(ks)) != -1 && c != '>' && c != '+' && c != '@') { \
 			if (c == '\n') continue; /* skip empty lines */ \
@@ -195,13 +198,13 @@ typedef struct __kstring_t {
 		if (seq->seq.l + 1 >= seq->seq.m) { /* seq->seq.s[seq->seq.l] below may be out of boundary */ \
 			seq->seq.m = seq->seq.l + 2; \
 			kroundup32(seq->seq.m); /* rounded to the next closest 2^k */ \
-			seq->seq.s = (char*)xrealloc(seq->seq.s, seq->seq.m); \
+			seq->seq.s = (char*)realloc(seq->seq.s, seq->seq.m); \
 		} \
 		seq->seq.s[seq->seq.l] = 0;	/* null terminated string */ \
 		if (c != '+') return seq->seq.l; /* FASTA */ \
 		if (seq->qual.m < seq->seq.m) {	/* allocate memory for qual in case insufficient */ \
 			seq->qual.m = seq->seq.m; \
-			seq->qual.s = (char*)xrealloc(seq->qual.s, seq->qual.m); \
+			seq->qual.s = (char*)realloc(seq->qual.s, seq->qual.m); \
 		} \
 		while ((c = ks_getc(ks)) != -1 && c != '\n'); /* skip the rest of '+' line */ \
 		if (c == -1) return -2; /* error: no quality string */ \

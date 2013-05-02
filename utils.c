@@ -264,47 +264,6 @@ int err_gzclose(gzFile file)
 	return ret;
 }
 
-void *err_calloc(size_t nmemb, size_t size, const char *file, unsigned int line, const char *func)
-{
-	void *p = calloc(nmemb, size);
-	if (NULL == p)
-	{
-		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", nmemb * size, file, line, strerror(errno));
-	}
-	return p;
-}
-
-void *err_malloc(size_t size, const char *file, unsigned int line, const char *func)
-{
-	void *p = malloc(size);
-	if (NULL == p)
-	{
-		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", size, file, line, strerror(errno));
-	}
-	return p;
-}
-
-void *err_realloc(void *ptr, size_t size, const char *file, unsigned int line, const char *func)
-{
-	void *p = realloc(ptr, size);
-	if (NULL == p)
-	{
-		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", size, file, line, strerror(errno));
-	}
-	return p;
-}
-
-char *err_strdup(const char *s, const char *file, unsigned int line, const char *func)
-{
-	char *p = strdup(s);
-
-	if (NULL == p)
-	{
-		err_fatal(func, "Failed to allocate %zd bytes at %s line %u: %s\n", strlen(s), file, line, strerror(errno));
-	}
-	return p;
-}
-
 /*********
  * Timer *
  *********/

@@ -3,7 +3,10 @@
 
 #include <stdlib.h>
 #include <string.h>
-#include "utils.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 #ifndef kroundup32
 #define kroundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
@@ -22,7 +25,7 @@ static inline void ks_resize(kstring_t *s, size_t size)
 	if (s->m < size) {
 		s->m = size;
 		kroundup32(s->m);
-		s->s = (char*)xrealloc(s->s, s->m);
+		s->s = (char*)realloc(s->s, s->m);
 	}
 }
 
@@ -31,7 +34,7 @@ static inline int kputsn(const char *p, int l, kstring_t *s)
 	if (s->l + l + 1 >= s->m) {
 		s->m = s->l + l + 2;
 		kroundup32(s->m);
-		s->s = (char*)xrealloc(s->s, s->m);
+		s->s = (char*)realloc(s->s, s->m);
 	}
 	memcpy(s->s + s->l, p, l);
 	s->l += l;
@@ -49,7 +52,7 @@ static inline int kputc(int c, kstring_t *s)
 	if (s->l + 1 >= s->m) {
 		s->m = s->l + 2;
 		kroundup32(s->m);
-		s->s = (char*)xrealloc(s->s, s->m);
+		s->s = (char*)realloc(s->s, s->m);
 	}
 	s->s[s->l++] = c;
 	s->s[s->l] = 0;
@@ -66,7 +69,7 @@ static inline int kputw(int c, kstring_t *s)
 	if (s->l + l + 1 >= s->m) {
 		s->m = s->l + l + 2;
 		kroundup32(s->m);
-		s->s = (char*)xrealloc(s->s, s->m);
+		s->s = (char*)realloc(s->s, s->m);
 	}
 	for (x = l - 1; x >= 0; --x) s->s[s->l++] = buf[x];
 	s->s[s->l] = 0;
@@ -83,7 +86,7 @@ static inline int kputuw(unsigned c, kstring_t *s)
 	if (s->l + l + 1 >= s->m) {
 		s->m = s->l + l + 2;
 		kroundup32(s->m);
-		s->s = (char*)xrealloc(s->s, s->m);
+		s->s = (char*)realloc(s->s, s->m);
 	}
 	for (i = l - 1; i >= 0; --i) s->s[s->l++] = buf[i];
 	s->s[s->l] = 0;
@@ -100,7 +103,7 @@ static inline int kputl(long c, kstring_t *s)
 	if (s->l + l + 1 >= s->m) {
 		s->m = s->l + l + 2;
 		kroundup32(s->m);
-		s->s = (char*)xrealloc(s->s, s->m);
+		s->s = (char*)realloc(s->s, s->m);
 	}
 	for (x = l - 1; x >= 0; --x) s->s[s->l++] = buf[x];
 	s->s[s->l] = 0;
