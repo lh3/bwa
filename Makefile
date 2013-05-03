@@ -1,12 +1,13 @@
 CC=			gcc
 CFLAGS=		-g -Wall -O2
+WRAP_MALLOC= -DUSE_MALLOC_WRAPPERS
 AR=			ar
-DFLAGS=		-DHAVE_PTHREAD
+DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
 LOBJS=		utils.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o
 AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o kopen.o pemerge.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
-			bwtsw2_chain.o fastmap.o bwtsw2_pair.o
+			bwtsw2_chain.o fastmap.o bwtsw2_pair.o malloc_wrap.o
 PROG=		bwa
 INCLUDES=	
 LIBS=		-lm -lz -lpthread
@@ -28,26 +29,48 @@ bwamem-lite:libbwa.a example.o
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
-ksw.o:ksw.h
-kstring.o:kstring.h
-utils.o:utils.h ksort.h kseq.h
-bntseq.o:bntseq.h
-bwt.o:bwt.h utils.h
-bwa.o:bwa.h bwt.h bntseq.h
-bwamem.o:ksw.h kbtree.h ksort.h kvec.h kstring.h utils.h bwamem.h
-bwamem_pair.o:ksw.h kvec.h kstring.h utils.h bwamem.h
-
-QSufSort.o:QSufSort.h
-bwt_gen.o:QSufSort.h
-
-fastmap.o:bwt.h bwamem.h
-
-bwtaln.o:bwt.h bwtaln.h kseq.h
-bwtgap.o:bwtgap.h bwtaln.h bwt.h
-
-bwtsw2_core.o:bwtsw2.h bwt.h bwt_lite.h
-bwtsw2_aux.o:bwtsw2.h bwt.h bwt_lite.h
-bwtsw2_main.o:bwtsw2.h
-
 clean:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a
+
+depend:
+	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c )
+
+# DO NOT DELETE THIS LINE -- make depend depends on it.
+
+QSufSort.o: QSufSort.h
+bamlite.o: bamlite.h malloc_wrap.h
+bntseq.o: bntseq.h utils.h kseq.h malloc_wrap.h
+bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h malloc_wrap.h kseq.h
+bwamem.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h ksw.h kvec.h
+bwamem.o: ksort.h utils.h kbtree.h
+bwamem_pair.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h kvec.h
+bwamem_pair.o: utils.h ksw.h
+bwape.o: bwtaln.h bwt.h kvec.h malloc_wrap.h bntseq.h utils.h bwase.h bwa.h
+bwape.o: ksw.h khash.h
+bwase.o: bwase.h bntseq.h bwt.h bwtaln.h utils.h kstring.h malloc_wrap.h
+bwase.o: bwa.h ksw.h
+bwaseqio.o: bwtaln.h bwt.h utils.h bamlite.h malloc_wrap.h kseq.h
+bwt.o: utils.h bwt.h kvec.h malloc_wrap.h
+bwt_gen.o: QSufSort.h malloc_wrap.h
+bwt_lite.o: bwt_lite.h malloc_wrap.h
+bwtaln.o: bwtaln.h bwt.h bwtgap.h utils.h bwa.h bntseq.h malloc_wrap.h
+bwtgap.o: bwtgap.h bwt.h bwtaln.h malloc_wrap.h
+bwtindex.o: bntseq.h bwt.h utils.h malloc_wrap.h
+bwtsw2_aux.o: bntseq.h bwt_lite.h utils.h bwtsw2.h bwt.h kstring.h
+bwtsw2_aux.o: malloc_wrap.h bwa.h ksw.h kseq.h ksort.h
+bwtsw2_chain.o: bwtsw2.h bntseq.h bwt_lite.h bwt.h malloc_wrap.h ksort.h
+bwtsw2_core.o: bwt_lite.h bwtsw2.h bntseq.h bwt.h kvec.h malloc_wrap.h
+bwtsw2_core.o: khash.h ksort.h
+bwtsw2_main.o: bwt.h bwtsw2.h bntseq.h bwt_lite.h utils.h bwa.h
+bwtsw2_pair.o: utils.h bwt.h bntseq.h bwtsw2.h bwt_lite.h kstring.h
+bwtsw2_pair.o: malloc_wrap.h ksw.h
+example.o: bwamem.h bwt.h bntseq.h bwa.h kseq.h malloc_wrap.h
+fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
+is.o: malloc_wrap.h
+kopen.o: malloc_wrap.h
+kstring.o: kstring.h malloc_wrap.h
+ksw.o: ksw.h malloc_wrap.h
+main.o: utils.h
+malloc_wrap.o: malloc_wrap.h
+pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
+utils.o: utils.h ksort.h malloc_wrap.h kseq.h

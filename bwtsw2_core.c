@@ -8,6 +8,10 @@
 #include "bwt.h"
 #include "kvec.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 typedef struct {
 	bwtint_t k, l;
 } qintv_t;

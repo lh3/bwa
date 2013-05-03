@@ -12,6 +12,10 @@
 #include "bwa.h"
 #include "ksw.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 typedef struct {
 	int n;
 	bwtint_t *a;
@@ -280,11 +284,11 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 			p[j] = seqs[j] + i;
 			p[j]->n_multi = 0;
 			p[j]->extra_flag |= SAM_FPD | (j == 0? SAM_FR1 : SAM_FR2);
-			fread(&n_aln, 4, 1, fp_sa[j]);
+			err_fread_noeof(&n_aln, 4, 1, fp_sa[j]);
 			if (n_aln > kv_max(d->aln[j]))
 				kv_resize(bwt_aln1_t, d->aln[j], n_aln);
 			d->aln[j].n = n_aln;
-			fread(d->aln[j].a, sizeof(bwt_aln1_t), n_aln, fp_sa[j]);
+			err_fread_noeof(d->aln[j].a, sizeof(bwt_aln1_t), n_aln, fp_sa[j]);
 			kv_copy(bwt_aln1_t, buf[j][i].aln, d->aln[j]); // backup d->aln[j]
 			// generate SE alignment and mapping quality
 			bwa_aln2seq(n_aln, d->aln[j].a, p[j]);
@@ -498,8 +502,8 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 	// load reference sequence
 	if (_pacseq == 0) {
 		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
-		rewind(bns->fp_pac);
-		fread(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
+		err_rewind(bns->fp_pac);
+		err_fread_noeof(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
 	} else pacseq = (ubyte_t*)_pacseq;
 	if (!popt->is_sw || ii->avg < 0.0) return pacseq;
 
@@ -644,18 +648,18 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	g_hash = kh_init(b128);
 	last_ii.avg = -1.0;
 
-	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
+	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
 	ks[0] = bwa_open_reads(opt.mode, fn_fa[0]);
 	opt0 = opt;
-	fread(&opt, sizeof(gap_opt_t), 1, fp_sa[1]); // overwritten!
+	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa[1]); // overwritten!
 	ks[1] = bwa_open_reads(opt.mode, fn_fa[1]);
 	{ // for Illumina alignment only
 		if (popt->is_preload) {
 			strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
 			strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
 			pac = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
-			rewind(bns->fp_pac);
-			fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
+			err_rewind(bns->fp_pac);
+			err_fread_noeof(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 		}
 	}
 
@@ -709,7 +713,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	bns_destroy(bns);
 	for (i = 0; i < 2; ++i) {
 		bwa_seq_close(ks[i]);
-		fclose(fp_sa[i]);
+		err_fclose(fp_sa[i]);
 	}
 	for (iter = kh_begin(g_hash); iter != kh_end(g_hash); ++iter)
 		if (kh_exist(g_hash, iter)) free(kh_val(g_hash, iter).a);
@@ -765,7 +769,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		return 0;
+		return 1;
 	}
 	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt, rg_line);
 	free(prefix); free(popt);

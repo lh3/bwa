@@ -8,6 +8,11 @@
 #include "utils.h"
 #include "ksw.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
+
 #define MIN_RATIO     0.8
 #define MIN_DIR_CNT   10
 #define MIN_DIR_RATIO 0.05

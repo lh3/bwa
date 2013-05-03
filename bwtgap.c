@@ -4,6 +4,10 @@
 #include "bwtgap.h"
 #include "bwtaln.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 #define STATE_M 0
 #define STATE_I 1
 #define STATE_D 2

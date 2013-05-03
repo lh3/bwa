@@ -15,6 +15,10 @@
 #include "ksort.h"
 #include "utils.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 /* Theory on probability and scoring *ungapped* alignment
  *
  * s'(a,b) = log[P(b|a)/P(b)] = log[4P(b|a)], assuming uniform base distribution
@@ -229,16 +233,16 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 	int i, j;
 	for (i = 0; i < chn->n; ++i) {
 		mem_chain_t *p = &chn->a[i];
-		printf("%d", p->n);
+		err_printf("%d", p->n);
 		for (j = 0; j < p->n; ++j) {
 			bwtint_t pos;
 			int is_rev, ref_id;
 			pos = bns_depos(bns, p->seeds[j].rbeg, &is_rev);
 			if (is_rev) pos -= p->seeds[j].len - 1;
 			bns_cnt_ambi(bns, pos, p->seeds[j].len, &ref_id);
-			printf("\t%d,%d,%ld(%s:%c%ld)", p->seeds[j].len, p->seeds[j].qbeg, (long)p->seeds[j].rbeg, bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
+			err_printf("\t%d,%d,%ld(%s:%c%ld)", p->seeds[j].len, p->seeds[j].qbeg, (long)p->seeds[j].rbeg, bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
 		}
-		putchar('\n');
+		err_putchar('\n');
 	}
 }
 

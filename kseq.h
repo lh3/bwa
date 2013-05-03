@@ -32,6 +32,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 #define KS_SEP_SPACE 0 // isspace(): \t, \n, \v, \f, \r
 #define KS_SEP_TAB   1 // isspace() && !' '
 #define KS_SEP_LINE  2 // line separator: "\n" (Unix) or "\r\n" (Windows)
@@ -50,9 +54,9 @@
 #define __KS_BASIC(type_t, __bufsize)								\
 	static inline kstream_t *ks_init(type_t f)						\
 	{																\
-		kstream_t *ks = (kstream_t*)calloc(1, sizeof(kstream_t));	\
+		kstream_t *ks = (kstream_t*)calloc(1, sizeof(kstream_t)); \
 		ks->f = f;													\
-		ks->buf = (unsigned char*)malloc(__bufsize);				\
+		ks->buf = (unsigned char*)malloc(__bufsize);						\
 		return ks;													\
 	}																\
 	static inline void ks_destroy(kstream_t *ks)					\
@@ -120,7 +124,7 @@ typedef struct __kstring_t {
 			if (str->m - str->l < (size_t)(i - ks->begin + 1)) {		\
 				str->m = str->l + (i - ks->begin) + 1;					\
 				kroundup32(str->m);										\
-				str->s = (char*)realloc(str->s, str->m);				\
+				str->s = (char*)realloc(str->s, str->m);			\
 			}															\
 			memcpy(str->s + str->l, ks->buf + ks->begin, i - ks->begin); \
 			str->l = str->l + (i - ks->begin);							\
@@ -151,7 +155,7 @@ typedef struct __kstring_t {
 #define __KSEQ_BASIC(SCOPE, type_t)										\
 	SCOPE kseq_t *kseq_init(type_t fd)									\
 	{																	\
-		kseq_t *s = (kseq_t*)calloc(1, sizeof(kseq_t));					\
+		kseq_t *s = (kseq_t*)calloc(1, sizeof(kseq_t));				\
 		s->f = ks_init(fd);												\
 		return s;														\
 	}																	\

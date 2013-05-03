@@ -12,6 +12,10 @@
 #include "bwa.h"
 #include "ksw.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 int g_log_n[256];
 
 void bwa_print_sam_PG();
@@ -312,8 +316,8 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 
 	if (!_pacseq) {
 		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
-		rewind(bns->fp_pac);
-		fread(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
+		err_rewind(bns->fp_pac);
+		err_fread_noeof(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
 	} else pacseq = _pacseq;
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *s = seqs + i;
@@ -381,6 +385,26 @@ static int64_t pos_5(const bwa_seq_t *p)
 	return -1;
 }
 
+void bwa_print_seq(FILE *stream, bwa_seq_t *seq) {
+	char buffer[4096];
+	const int bsz = sizeof(buffer);
+	int i, j, l;
+	
+	if (seq->strand == 0) {
+		for (i = 0; i < seq->full_len; i += bsz) {
+			l = seq->full_len - i > bsz ? bsz : seq->full_len - i;
+			for (j = 0; j < l; j++) buffer[j] = "ACGTN"[seq->seq[i + j]];
+			err_fwrite(buffer, 1, l, stream);
+		}
+	} else {
+		for (i = seq->full_len - 1; i >= 0; i -= bsz) {
+			l = i + 1 > bsz ? bsz : i + 1;
+			for (j = 0; j < l; j++) buffer[j] = "TGCAN"[seq->seq[i - j]];
+			err_fwrite(buffer, 1, l, stream);
+		}
+	}
+}
+
 void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, int mode, int max_top2)
 {
 	int j;
@@ -432,10 +456,8 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		else err_printf("\t*\t0\t0\t");
 
 		// print sequence and quality
-		if (p->strand == 0)
-			for (j = 0; j != p->full_len; ++j) putchar("ACGTN"[(int)p->seq[j]]);
-		else for (j = 0; j != p->full_len; ++j) putchar("TGCAN"[p->seq[p->full_len - 1 - j]]);
-		putchar('\t');
+		bwa_print_seq(stdout, p);
+		err_putchar('\t');
 		if (p->qual) {
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			err_printf("%s", p->qual);
@@ -478,14 +500,16 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				}
 			}
 		}
-		putchar('\n');
+		err_putchar('\n');
 	} else { // this read has no match
-		ubyte_t *s = p->strand? p->rseq : p->seq;
+		//ubyte_t *s = p->strand? p->rseq : p->seq;
 		int flag = p->extra_flag | SAM_FSU;
 		if (mate && mate->type == BWA_TYPE_NO_MATCH) flag |= SAM_FMU;
 		err_printf("%s\t%d\t*\t0\t0\t*\t*\t0\t0\t", p->name, flag);
-		for (j = 0; j != p->len; ++j) putchar("ACGTN"[(int)s[j]]);
-		putchar('\t');
+		//Why did this work differently to the version above??
+		//for (j = 0; j != p->len; ++j) putchar("ACGTN"[(int)s[j]]);
+		bwa_print_seq(stdout, p);
+		err_putchar('\t');
 		if (p->qual) {
 			if (p->strand) seq_reverse(p->len, p->qual, 0); // reverse quality
 			err_printf("%s", p->qual);
@@ -493,7 +517,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		if (bwa_rg_id[0]) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
-		putchar('\n');
+		err_putchar('\n');
 	}
 }
 
@@ -522,7 +546,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	fp_sa = xopen(fn_sa, "r");
 
 	m_aln = 0;
-	fread(&opt, sizeof(gap_opt_t), 1, fp_sa);
+	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa);
 	bwa_print_sam_hdr(bns, rg_line);
 	//bwa_print_sam_PG();
 	// set ks
@@ -536,12 +560,12 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		for (i = 0; i < n_seqs; ++i) {
 			bwa_seq_t *p = seqs + i;
 			int n_aln;
-			fread(&n_aln, 4, 1, fp_sa);
+			err_fread_noeof(&n_aln, 4, 1, fp_sa);
 			if (n_aln > m_aln) {
 				m_aln = n_aln;
 				aln = (bwt_aln1_t*)realloc(aln, sizeof(bwt_aln1_t) * m_aln);
 			}
-			fread(aln, sizeof(bwt_aln1_t), n_aln, fp_sa);
+			err_fread_noeof(aln, sizeof(bwt_aln1_t), n_aln, fp_sa);
 			bwa_aln2seq_core(n_aln, aln, p, 1, n_occ);
 		}
 
@@ -565,7 +589,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	// destroy
 	bwa_seq_close(ks);
 	bns_destroy(bns);
-	fclose(fp_sa);
+	err_fclose(fp_sa);
 	free(aln);
 }
 
@@ -591,7 +615,7 @@ int bwa_sai2sam_se(int argc, char *argv[])
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
-		return 0;
+		return 1;
 	}
 	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line);
 	free(prefix);
