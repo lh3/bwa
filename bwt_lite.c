@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include "bwt_lite.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 int is_sa(const uint8_t *T, uint32_t *SA, int n);
 int is_bwt(uint8_t *T, int n);
 

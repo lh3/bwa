@@ -7,6 +7,7 @@
 #include "kvec.h"
 #include "utils.h"
 #include "kseq.h"
+#include "utils.h"
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
@@ -51,6 +52,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
 		} else if (c == 's') opt->split_width = atoi(optarg);
+		else return 1;
 	}
 	if (opt->n_threads < 1) opt->n_threads = 1;
 	if (optind + 1 >= argc) {
@@ -130,7 +132,7 @@ int main_mem(int argc, char *argv[])
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
 		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs, 0);
 		for (i = 0; i < n; ++i) {
-			fputs(seqs[i].sam, stdout);
+			err_fputs(seqs[i].sam, stdout);
 			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 		}
 		free(seqs);
@@ -139,10 +141,10 @@ int main_mem(int argc, char *argv[])
 	free(opt);
 	bwa_idx_destroy(idx);
 	kseq_destroy(ks);
-	gzclose(fp); kclose(ko);
+	err_gzclose(fp); kclose(ko);
 	if (ks2) {
 		kseq_destroy(ks2);
-		gzclose(fp2); kclose(ko2);
+		err_gzclose(fp2); kclose(ko2);
 	}
 	return 0;
 }
@@ -163,6 +165,7 @@ int main_fastmap(int argc, char *argv[])
 			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
+		    default: return 1;
 		}
 	}
 	if (optind + 1 >= argc) {
@@ -170,16 +173,16 @@ int main_fastmap(int argc, char *argv[])
 		return 1;
 	}
 
-	fp = gzopen(argv[optind + 1], "r");
+	fp = xzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
-	idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS);
+	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS)) == 0) return 1;
 	itr = smem_itr_init(idx->bwt);
 	while (kseq_read(seq) >= 0) {
-		printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
+		err_printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {
-			putchar('\t');
-			puts(seq->seq.s);
-		} else putchar('\n');
+			err_putchar('\t');
+			err_puts(seq->seq.s);
+		} else err_putchar('\n');
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
@@ -187,7 +190,7 @@ int main_fastmap(int argc, char *argv[])
 			for (i = 0; i < a->n; ++i) {
 				bwtintv_t *p = &a->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;
-				printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
+				err_printf("EM\t%d\t%d\t%ld", (uint32_t)(p->info>>32), (uint32_t)p->info, (long)p->x[2]);
 				if (p->x[2] <= min_iwidth) {
 					for (k = 0; k < p->x[2]; ++k) {
 						bwtint_t pos;
@@ -196,18 +199,18 @@ int main_fastmap(int argc, char *argv[])
 						pos = bns_depos(idx->bns, bwt_sa(idx->bwt, p->x[0] + k), &is_rev);
 						if (is_rev) pos -= len - 1;
 						bns_cnt_ambi(idx->bns, pos, len, &ref_id);
-						printf("\t%s:%c%ld", idx->bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - idx->bns->anns[ref_id].offset) + 1);
+						err_printf("\t%s:%c%ld", idx->bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - idx->bns->anns[ref_id].offset) + 1);
 					}
-				} else fputs("\t*", stdout);
-				putchar('\n');
+				} else err_puts("\t*");
+				err_putchar('\n');
 			}
 		}
-		puts("//");
+		err_puts("//");
 	}
 
 	smem_itr_destroy(itr);
 	bwa_idx_destroy(idx);
 	kseq_destroy(seq);
-	gzclose(fp);
+	err_gzclose(fp);
 	return 0;
 }

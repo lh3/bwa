@@ -4,11 +4,25 @@
 #include <stdint.h>
 #include <zlib.h>
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
+#define USE_VERBOSE_ZLIB_WRAPPERS
+
 typedef gzFile bamFile;
-#define bam_open(fn, mode) gzopen(fn, mode)
-#define bam_dopen(fd, mode) gzdopen(fd, mode)
-#define bam_close(fp) gzclose(fp)
-#define bam_read(fp, buf, size) gzread(fp, buf, size)
+#ifdef USE_VERBOSE_ZLIB_WRAPPERS
+/* These print error messages on failure */
+#  define bam_open(fn, mode)      bamlite_gzopen(fn, mode)
+#  define bam_dopen(fd, mode)     gzdopen(fd, mode)
+#  define bam_close(fp)           bamlite_gzclose(fp)
+#  define bam_read(fp, buf, size) bamlite_gzread(fp, buf, size)
+#else
+#  define bam_open(fn, mode)      gzopen(fn, mode)
+#  define bam_dopen(fd, mode)     gzdopen(fd, mode)
+#  define bam_close(fp)           gzclose(fp)
+#  define bam_read(fp, buf, size) gzread(fp, buf, size)
+#endif /* USE_VERBOSE_ZLIB_WRAPPERS */
 
 typedef struct {
 	int32_t n_targets;
@@ -86,6 +100,12 @@ extern "C" {
 	void bam_header_destroy(bam_header_t *header);
 	bam_header_t *bam_header_read(bamFile fp);
 	int bam_read1(bamFile fp, bam1_t *b);
+
+#ifdef USE_VERBOSE_ZLIB_WRAPPERS
+	gzFile bamlite_gzopen(const char *fn, const char *mode);
+	int bamlite_gzread(gzFile file, void *ptr, unsigned int len);
+	int bamlite_gzclose(gzFile file);
+#endif /* USE_VERBOSE_ZLIB_WRAPPERS */
 
 #ifdef __cplusplus
 }

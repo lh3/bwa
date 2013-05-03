@@ -28,6 +28,10 @@
 #include <emmintrin.h>
 #include "ksw.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect((x),1)
 #define UNLIKELY(x) __builtin_expect((x),0)
@@ -553,7 +557,7 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 #include <stdio.h>
 #include <zlib.h>
 #include "kseq.h"
-KSEQ_INIT(gzFile, gzread)
+KSEQ_INIT(gzFile, err_gzread)
 
 unsigned char seq_nt4_table[256] = {
 	4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4,  4, 4, 4, 4, 
@@ -609,8 +613,8 @@ int main(int argc, char *argv[])
 	}
 	for (j = 0; j < 5; ++j) mat[k++] = 0;
 	// open file
-	fpt = gzopen(argv[optind],   "r"); kst = kseq_init(fpt);
-	fpq = gzopen(argv[optind+1], "r"); ksq = kseq_init(fpq);
+	fpt = xzopen(argv[optind],   "r"); kst = kseq_init(fpt);
+	fpq = xzopen(argv[optind+1], "r"); ksq = kseq_init(fpq);
 	// all-pair alignment
 	while (kseq_read(ksq) > 0) {
 		kswq_t *q[2] = {0, 0};
@@ -629,18 +633,18 @@ int main(int argc, char *argv[])
 			for (i = 0; i < (int)kst->seq.l; ++i) kst->seq.s[i] = seq_nt4_table[(int)kst->seq.s[i]];
 			r = ksw_align(ksq->seq.l, (uint8_t*)ksq->seq.s, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[0]);
 			if (r.score >= minsc)
-				printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, r.qb, r.qe+1, r.score, r.score2, r.te2);
+				err_printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, r.qb, r.qe+1, r.score, r.score2, r.te2);
 			if (rseq) {
 				r = ksw_align(ksq->seq.l, rseq, kst->seq.l, (uint8_t*)kst->seq.s, 5, mat, gapo, gape, xtra, &q[1]);
 				if (r.score >= minsc)
-					printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, (int)ksq->seq.l - r.qb, (int)ksq->seq.l - 1 - r.qe, r.score, r.score2, r.te2);
+					err_printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", kst->name.s, r.tb, r.te+1, ksq->name.s, (int)ksq->seq.l - r.qb, (int)ksq->seq.l - 1 - r.qe, r.score, r.score2, r.te2);
 			}
 		}
 		free(q[0]); free(q[1]);
 	}
 	free(rseq);
-	kseq_destroy(kst); gzclose(fpt);
-	kseq_destroy(ksq); gzclose(fpq);
+	kseq_destroy(kst); err_gzclose(fpt);
+	kseq_destroy(ksq); err_gzclose(fpq);
 	return 0;
 }
 #endif

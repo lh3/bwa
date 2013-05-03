@@ -34,6 +34,10 @@
 #include "bwt.h"
 #include "kvec.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 void bwt_gen_cnt_table(bwt_t *bwt)
 {
 	int i, j;
@@ -67,10 +71,6 @@ void bwt_cal_sa(bwt_t *bwt, int intv)
 	bwt->sa_intv = intv;
 	bwt->n_sa = (bwt->seq_len + intv) / intv;
 	bwt->sa = (bwtint_t*)calloc(bwt->n_sa, sizeof(bwtint_t));
-	if (bwt->sa == 0) {
-		fprintf(stderr, "[%s] Fail to allocate %.3fMB memory. Abort!\n", __func__, bwt->n_sa * sizeof(bwtint_t) / 1024.0/1024.0);
-		abort();
-	}
 	// calculate SA value
 	isa = 0; sa = bwt->seq_len;
 	for (i = 0; i < bwt->seq_len; ++i) {
@@ -354,22 +354,24 @@ void bwt_dump_bwt(const char *fn, const bwt_t *bwt)
 {
 	FILE *fp;
 	fp = xopen(fn, "wb");
-	fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
-	fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
-	fwrite(bwt->bwt, 4, bwt->bwt_size, fp);
-	fclose(fp);
+	err_fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
+	err_fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
+	err_fwrite(bwt->bwt, 4, bwt->bwt_size, fp);
+	err_fflush(fp);
+	err_fclose(fp);
 }
 
 void bwt_dump_sa(const char *fn, const bwt_t *bwt)
 {
 	FILE *fp;
 	fp = xopen(fn, "wb");
-	fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
-	fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
-	fwrite(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
-	fwrite(&bwt->seq_len, sizeof(bwtint_t), 1, fp);
-	fwrite(bwt->sa + 1, sizeof(bwtint_t), bwt->n_sa - 1, fp);
-	fclose(fp);
+	err_fwrite(&bwt->primary, sizeof(bwtint_t), 1, fp);
+	err_fwrite(bwt->L2+1, sizeof(bwtint_t), 4, fp);
+	err_fwrite(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
+	err_fwrite(&bwt->seq_len, sizeof(bwtint_t), 1, fp);
+	err_fwrite(bwt->sa + 1, sizeof(bwtint_t), bwt->n_sa - 1, fp);
+	err_fflush(fp);
+	err_fclose(fp);
 }
 
 static bwtint_t fread_fix(FILE *fp, bwtint_t size, void *a)
@@ -378,7 +380,7 @@ static bwtint_t fread_fix(FILE *fp, bwtint_t size, void *a)
 	bwtint_t offset = 0;
 	while (size) {
 		int x = bufsize < size? bufsize : size;
-		if ((x = fread(a + offset, 1, x, fp)) == 0) break;
+		if ((x = err_fread_noeof(a + offset, 1, x, fp)) == 0) break;
 		size -= x; offset += x;
 	}
 	return offset;
@@ -391,11 +393,11 @@ void bwt_restore_sa(const char *fn, bwt_t *bwt)
 	bwtint_t primary;
 
 	fp = xopen(fn, "rb");
-	fread(&primary, sizeof(bwtint_t), 1, fp);
+	err_fread_noeof(&primary, sizeof(bwtint_t), 1, fp);
 	xassert(primary == bwt->primary, "SA-BWT inconsistency: primary is not the same.");
-	fread(skipped, sizeof(bwtint_t), 4, fp); // skip
-	fread(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
-	fread(&primary, sizeof(bwtint_t), 1, fp);
+	err_fread_noeof(skipped, sizeof(bwtint_t), 4, fp); // skip
+	err_fread_noeof(&bwt->sa_intv, sizeof(bwtint_t), 1, fp);
+	err_fread_noeof(&primary, sizeof(bwtint_t), 1, fp);
 	xassert(primary == bwt->seq_len, "SA-BWT inconsistency: seq_len is not the same.");
 
 	bwt->n_sa = (bwt->seq_len + bwt->sa_intv) / bwt->sa_intv;
@@ -403,7 +405,7 @@ void bwt_restore_sa(const char *fn, bwt_t *bwt)
 	bwt->sa[0] = -1;
 
 	fread_fix(fp, sizeof(bwtint_t) * (bwt->n_sa - 1), bwt->sa + 1);
-	fclose(fp);
+	err_fclose(fp);
 }
 
 bwt_t *bwt_restore_bwt(const char *fn)
@@ -413,15 +415,15 @@ bwt_t *bwt_restore_bwt(const char *fn)
 
 	bwt = (bwt_t*)calloc(1, sizeof(bwt_t));
 	fp = xopen(fn, "rb");
-	fseek(fp, 0, SEEK_END);
-	bwt->bwt_size = (ftell(fp) - sizeof(bwtint_t) * 5) >> 2;
+	err_fseek(fp, 0, SEEK_END);
+	bwt->bwt_size = (err_ftell(fp) - sizeof(bwtint_t) * 5) >> 2;
 	bwt->bwt = (uint32_t*)calloc(bwt->bwt_size, 4);
-	fseek(fp, 0, SEEK_SET);
-	fread(&bwt->primary, sizeof(bwtint_t), 1, fp);
-	fread(bwt->L2+1, sizeof(bwtint_t), 4, fp);
+	err_fseek(fp, 0, SEEK_SET);
+	err_fread_noeof(&bwt->primary, sizeof(bwtint_t), 1, fp);
+	err_fread_noeof(bwt->L2+1, sizeof(bwtint_t), 4, fp);
 	fread_fix(fp, bwt->bwt_size<<2, bwt->bwt);
 	bwt->seq_len = bwt->L2[4];
-	fclose(fp);
+	err_fclose(fp);
 	bwt_gen_cnt_table(bwt);
 
 	return bwt;

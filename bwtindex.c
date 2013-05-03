@@ -39,6 +39,11 @@
 #include "divsufsort.h"
 #endif
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
+
 int is_bwt(ubyte_t *T, int n);
 
 int64_t bwa_seq_len(const char *fn_pac)
@@ -47,10 +52,10 @@ int64_t bwa_seq_len(const char *fn_pac)
 	int64_t pac_len;
 	ubyte_t c;
 	fp = xopen(fn_pac, "rb");
-	fseek(fp, -1, SEEK_END);
-	pac_len = ftell(fp);
-	fread(&c, 1, 1, fp);
-	fclose(fp);
+	err_fseek(fp, -1, SEEK_END);
+	pac_len = err_ftell(fp);
+	err_fread_noeof(&c, 1, 1, fp);
+	err_fclose(fp);
 	return (pac_len - 1) * 4 + (int)c;
 }
 
@@ -70,8 +75,8 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 	// prepare sequence
 	pac_size = (bwt->seq_len>>2) + ((bwt->seq_len&3) == 0? 0 : 1);
 	buf2 = (ubyte_t*)calloc(pac_size, 1);
-	fread(buf2, 1, pac_size, fp);
-	fclose(fp);
+	err_fread_noeof(buf2, 1, pac_size, fp);
+	err_fclose(fp);
 	memset(bwt->L2, 0, 5 * 4);
 	buf = (ubyte_t*)calloc(bwt->seq_len + 1, 1);
 	for (i = 0; i < bwt->seq_len; ++i) {
@@ -229,7 +234,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		fprintf(stderr, "[bwa_index] Pack FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 0);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		gzclose(fp);
+		err_gzclose(fp);
 	}
 	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
 	{
@@ -263,7 +268,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		fprintf(stderr, "[bwa_index] Pack forward-only FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 1);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
-		gzclose(fp);
+		err_gzclose(fp);
 	}
 	{
 		bwt_t *bwt;

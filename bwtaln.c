@@ -17,6 +17,10 @@
 #include <pthread.h>
 #endif
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 gap_opt_t *gap_init_opt()
 {
 	gap_opt_t *o;
@@ -306,7 +310,7 @@ int bwa_aln(int argc, char *argv[])
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
 		free(opt);
-		return 0;
+		return 1;
 	}
 	bwa_aln_core(prefix, argv[optind+1], opt);
 	free(opt); free(prefix);

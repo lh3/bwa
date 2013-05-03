@@ -7,6 +7,10 @@
 #include "ksw.h"
 #include "utils.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 int bwa_verbose = 3;
 char bwa_rg_id[256];
 
@@ -258,8 +262,8 @@ bwaidx_t *bwa_idx_load(const char *hint, int which)
 		idx->bns = bns_restore(prefix);
 		if (which & BWA_IDX_PAC) {
 			idx->pac = calloc(idx->bns->l_pac/4+1, 1);
-			fread(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
-			fclose(idx->bns->fp_pac);
+			err_fread_noeof(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
+			err_fclose(idx->bns->fp_pac);
 			idx->bns->fp_pac = 0;
 		}
 	}

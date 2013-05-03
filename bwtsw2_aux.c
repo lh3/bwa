@@ -22,6 +22,11 @@ KSEQ_DECLARE(gzFile)
 #define __left_lt(a, b) ((a).end > (b).end)
 KSORT_INIT(hit, bsw2hit_t, __left_lt)
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
+
 extern unsigned char nst_nt4_table[256];
 
 unsigned char nt_comp_table[256] = {
@@ -710,12 +715,12 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 	// print and reset
 	for (i = 0; i < _seq->n; ++i) {
 		bsw2seq1_t *p = _seq->seq + i;
-		if (p->sam) printf("%s", p->sam);
+		if (p->sam) err_printf("%s", p->sam);
 		free(p->name); free(p->seq); free(p->qual); free(p->sam);
 		p->tid = -1; p->l = 0;
 		p->name = p->seq = p->qual = p->sam = 0;
 	}
-	fflush(stdout);
+	err_fflush(stdout);
 	_seq->n = 0;
 }
 
@@ -729,13 +734,9 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	bseq1_t *bseq;
 
 	pac = calloc(bns->l_pac/4+1, 1);
-	if (pac == 0) {
-		fprintf(stderr, "[bsw2_aln] insufficient memory!\n");
-		return;
-	}
 	for (l = 0; l < bns->n_seqs; ++l)
-		printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[l].name, bns->anns[l].len);
-	fread(pac, 1, bns->l_pac/4+1, bns->fp_pac);
+		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[l].name, bns->anns[l].len);
+	err_fread_noeof(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 	fp = xzopen(fn, "r");
 	ks = kseq_init(fp);
 	_seq = calloc(1, sizeof(bsw2seq_t));
@@ -767,9 +768,9 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	free(pac);
 	free(_seq->seq); free(_seq);
 	kseq_destroy(ks);
-	gzclose(fp);
+	err_gzclose(fp);
 	if (fn2) {
 		kseq_destroy(ks2);
-		gzclose(fp2);
+		err_gzclose(fp2);
 	}
 }

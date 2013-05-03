@@ -50,6 +50,10 @@ int main() {
 
 #include <stdlib.h>
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 #define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 
 #define kvec_t(type) struct { size_t n, m; type *a; }
@@ -71,7 +75,7 @@ int main() {
 #define kv_push(type, v, x) do {									\
 		if ((v).n == (v).m) {										\
 			(v).m = (v).m? (v).m<<1 : 2;							\
-			(v).a = (type*)realloc((v).a, sizeof(type) * (v).m);	\
+			(v).a = (type*)realloc((v).a, sizeof(type) * (v).m); \
 		}															\
 		(v).a[(v).n++] = (x);										\
 	} while (0)

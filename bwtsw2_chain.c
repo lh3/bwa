@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include "bwtsw2.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 typedef struct {
 	uint32_t tbeg, tend;
 	int qbeg, qend;
