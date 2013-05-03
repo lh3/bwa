@@ -30,6 +30,7 @@ bwa_seqio_t *bwa_bam_open(const char *fn, int which)
 	bs->is_bam = 1;
 	bs->which = which;
 	bs->fp = bam_open(fn, "r");
+	if (0 == bs->fp) err_fatal_simple("Couldn't open bam file");
 	h = bam_header_read(bs->fp);
 	bam_header_destroy(h);
 	return bs;
@@ -48,8 +49,9 @@ bwa_seqio_t *bwa_seq_open(const char *fn)
 void bwa_seq_close(bwa_seqio_t *bs)
 {
 	if (bs == 0) return;
-	if (bs->is_bam) bam_close(bs->fp);
-	else {
+	if (bs->is_bam) {
+		if (0 != bam_close(bs->fp)) err_fatal_simple("Error closing bam file");
+	} else {
 		err_gzclose(bs->ks->f->f);
 		kseq_destroy(bs->ks);
 	}
@@ -94,11 +96,12 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 	int n_seqs, l, i;
 	long n_trimmed = 0, n_tot = 0;
 	bam1_t *b;
+	int res;
 
 	b = bam_init1();
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
-	while (bam_read1(bs->fp, b) >= 0) {
+	while ((res = bam_read1(bs->fp, b)) >= 0) {
 		uint8_t *s, *q;
 		int go = 0;
 		if ((bs->which & 1) && (b->core.flag & BAM_FREAD1)) go = 1;
@@ -130,6 +133,7 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 		p->name = strdup((const char*)bam1_qname(b));
 		if (n_seqs == n_needed) break;
 	}
+	if (res < 0 && res != -1) err_fatal_simple("Error reading bam file");
 	*n = n_seqs;
 	if (n_seqs && trim_qual >= 1)
 		fprintf(stderr, "[bwa_read_seq] %.1f%% bases are trimmed.\n", 100.0f * n_trimmed/n_tot);

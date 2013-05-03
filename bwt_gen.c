@@ -27,8 +27,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdint.h>
+#include <errno.h>
 #include "QSufSort.h"
-#include "utils.h"
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -1448,13 +1448,29 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 	packedFile = (FILE*)fopen(inputFileName, "rb");
 
 	if (packedFile == NULL) {
-		fprintf(stderr, "BWTIncConstructFromPacked() : Cannot open inputFileName!\n");
+		fprintf(stderr, "BWTIncConstructFromPacked() : Cannot open %s : %s\n",
+				inputFileName, strerror(errno));
 		exit(1);
 	}
 
-	err_fseek(packedFile, -1, SEEK_END);
-	packedFileLen = err_ftell(packedFile);
-	err_fread_noeof(&lastByteLength, sizeof(unsigned char), 1, packedFile);
+	if (fseek(packedFile, -1, SEEK_END) != 0) {
+		fprintf(stderr, "BWTIncConstructFromPacked() : Can't seek on %s : %s\n",
+				inputFileName, strerror(errno));
+		exit(1);
+	}
+	packedFileLen = ftell(packedFile);
+	if (packedFileLen == -1) {
+		fprintf(stderr, "BWTIncConstructFromPacked() : Can't ftell on %s : %s\n",
+				inputFileName, strerror(errno));
+		exit(1);
+	}
+	if (fread(&lastByteLength, sizeof(unsigned char), 1, packedFile) != 1) {
+		fprintf(stderr,
+				"BWTIncConstructFromPacked() : Can't read from %s : %s\n",
+				inputFileName,
+				ferror(packedFile)? strerror(errno) : "Unexpected end of file");
+		exit(1);
+	}
 	totalTextLength = TextLengthFromBytePacked(packedFileLen, BIT_PER_CHAR, lastByteLength);
 
 	bwtInc = BWTIncCreate(totalTextLength, initialMaxBuildSize, incMaxBuildSize);
@@ -1468,10 +1484,23 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 	}
 	textSizeInByte = textToLoad / CHAR_PER_BYTE;	// excluded the odd byte
 
-	err_fseek(packedFile, -2, SEEK_CUR);
-	err_fseek(packedFile, -((long)textSizeInByte), SEEK_CUR);
-	err_fread_noeof(bwtInc->textBuffer, sizeof(unsigned char), textSizeInByte + 1, packedFile);
-	err_fseek(packedFile, -((long)textSizeInByte + 1), SEEK_CUR);
+	if (fseek(packedFile, -((long)textSizeInByte + 2), SEEK_CUR) != 0) {
+		fprintf(stderr, "BWTIncConstructFromPacked() : Can't seek on %s : %s\n",
+				inputFileName, strerror(errno));
+		exit(1);
+	}
+	if (fread(bwtInc->textBuffer, sizeof(unsigned char), textSizeInByte + 1, packedFile) != textSizeInByte + 1) {
+		fprintf(stderr,
+				"BWTIncConstructFromPacked() : Can't read from %s : %s\n",
+				inputFileName,
+				ferror(packedFile)? strerror(errno) : "Unexpected end of file");
+		exit(1);
+	}
+	if (fseek(packedFile, -((long)textSizeInByte + 1), SEEK_CUR) != 0) {
+		fprintf(stderr, "BWTIncConstructFromPacked() : Can't seek on %s : %s\n",
+				inputFileName, strerror(errno));
+		exit(1);
+	}
 
 	ConvertBytePackedToWordPacked(bwtInc->textBuffer, bwtInc->packedText, ALPHABET_SIZE, textToLoad);
 	BWTIncConstruct(bwtInc, textToLoad);
@@ -1484,9 +1513,23 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 			textToLoad = totalTextLength - processedTextLength;
 		}
 		textSizeInByte = textToLoad / CHAR_PER_BYTE;
-		err_fseek(packedFile, -((long)textSizeInByte), SEEK_CUR);
-		err_fread_noeof(bwtInc->textBuffer, sizeof(unsigned char), textSizeInByte, packedFile);
-		err_fseek(packedFile, -((long)textSizeInByte), SEEK_CUR);
+		if (fseek(packedFile, -((long)textSizeInByte), SEEK_CUR) != 0) {
+			fprintf(stderr, "BWTIncConstructFromPacked() : Can't seek on %s : %s\n",
+					inputFileName, strerror(errno));
+			exit(1);
+		}
+		if (fread(bwtInc->textBuffer, sizeof(unsigned char), textSizeInByte, packedFile) != textSizeInByte) {
+			fprintf(stderr,
+				"BWTIncConstructFromPacked() : Can't read from %s : %s\n",
+				inputFileName,
+				ferror(packedFile)? strerror(errno) : "Unexpected end of file");
+			exit(1);
+		}
+		if (fseek(packedFile, -((long)textSizeInByte), SEEK_CUR) != 0) {
+			fprintf(stderr, "BWTIncConstructFromPacked() : Can't seek on %s : %s\n",
+					inputFileName, strerror(errno));
+			exit(1);
+		}
 		ConvertBytePackedToWordPacked(bwtInc->textBuffer, bwtInc->packedText, ALPHABET_SIZE, textToLoad);
 		BWTIncConstruct(bwtInc, textToLoad);
 		processedTextLength += textToLoad;
@@ -1531,15 +1574,28 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 
 	bwtFile = (FILE*)fopen(bwtFileName, "wb");
 	if (bwtFile == NULL) {
-		fprintf(stderr, "BWTSaveBwtCodeAndOcc(): Cannot open BWT code file!\n");
+		fprintf(stderr,
+				"BWTSaveBwtCodeAndOcc(): Cannot open %s for writing: %s\n",
+				bwtFileName, strerror(errno));
 		exit(1);
 	}
 
-	err_fwrite(&bwt->inverseSa0, sizeof(bgint_t), 1, bwtFile);
-	err_fwrite(bwt->cumulativeFreq + 1, sizeof(bgint_t), ALPHABET_SIZE, bwtFile);
 	bwtLength = BWTFileSizeInWord(bwt->textLength);
-	err_fwrite(bwt->bwtCode, sizeof(unsigned int), bwtLength, bwtFile);
-	err_fclose(bwtFile);
+
+	if (fwrite(&bwt->inverseSa0, sizeof(bgint_t), 1, bwtFile) != 1
+		|| fwrite(bwt->cumulativeFreq + 1,
+				  sizeof(bgint_t), ALPHABET_SIZE, bwtFile) != ALPHABET_SIZE
+		|| fwrite(bwt->bwtCode,
+				  sizeof(unsigned int), bwtLength, bwtFile) != bwtLength) {
+		fprintf(stderr, "BWTSaveBwtCodeAndOcc(): Error writing to %s : %s\n",
+				bwtFileName, strerror(errno));
+		exit(1);
+	}
+	if (fclose(bwtFile) != 0) {
+		fprintf(stderr, "BWTSaveBwtCodeAndOcc(): Error on closing %s : %s\n",
+				bwtFileName, strerror(errno));
+		exit(1);
+	}
 }
 
 void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)

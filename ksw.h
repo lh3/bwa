@@ -3,10 +3,6 @@
 
 #include <stdint.h>
 
-#ifdef USE_MALLOC_WRAPPERS
-#  include "malloc_wrap.h"
-#endif
-
 #define KSW_XBYTE  0x10000
 #define KSW_XSTOP  0x20000
 #define KSW_XSUBO  0x40000

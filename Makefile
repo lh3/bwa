@@ -38,9 +38,9 @@ depend:
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
 QSufSort.o: QSufSort.h
-bamlite.o: bamlite.h utils.h malloc_wrap.h
+bamlite.o: bamlite.h malloc_wrap.h
 bntseq.o: bntseq.h utils.h kseq.h malloc_wrap.h
-bwa.o: bntseq.h bwa.h bwt.h ksw.h malloc_wrap.h utils.h kseq.h
+bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h malloc_wrap.h kseq.h
 bwamem.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h ksw.h kvec.h
 bwamem.o: ksort.h utils.h kbtree.h
 bwamem_pair.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h kvec.h
@@ -51,7 +51,7 @@ bwase.o: bwase.h bntseq.h bwt.h bwtaln.h utils.h kstring.h malloc_wrap.h
 bwase.o: bwa.h ksw.h
 bwaseqio.o: bwtaln.h bwt.h utils.h bamlite.h malloc_wrap.h kseq.h
 bwt.o: utils.h bwt.h kvec.h malloc_wrap.h
-bwt_gen.o: QSufSort.h utils.h malloc_wrap.h
+bwt_gen.o: QSufSort.h malloc_wrap.h
 bwt_lite.o: bwt_lite.h malloc_wrap.h
 bwtaln.o: bwtaln.h bwt.h bwtgap.h utils.h bwa.h bntseq.h malloc_wrap.h
 bwtgap.o: bwtgap.h bwt.h bwtaln.h malloc_wrap.h
@@ -66,11 +66,11 @@ bwtsw2_pair.o: utils.h bwt.h bntseq.h bwtsw2.h bwt_lite.h kstring.h
 bwtsw2_pair.o: malloc_wrap.h ksw.h
 example.o: bwamem.h bwt.h bntseq.h bwa.h kseq.h malloc_wrap.h
 fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
-is.o: utils.h malloc_wrap.h
+is.o: malloc_wrap.h
 kopen.o: malloc_wrap.h
 kstring.o: kstring.h malloc_wrap.h
 ksw.o: ksw.h malloc_wrap.h
 main.o: utils.h
 malloc_wrap.o: malloc_wrap.h
-pemerge.o: ksw.h malloc_wrap.h kseq.h kstring.h bwa.h bntseq.h bwt.h utils.h
+pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
 utils.o: utils.h ksort.h malloc_wrap.h kseq.h

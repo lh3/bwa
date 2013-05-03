@@ -25,7 +25,6 @@
  */
 
 #include <stdlib.h>
-#include "utils.h"
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -211,7 +210,7 @@ int is_bwt(ubyte_t *T, int n)
 	int *SA, i, primary = 0;
 	SA = (int*)calloc(n+1, sizeof(int));
 
-	if (is_sa(T, SA, n)) err_fatal_simple("is_sa failed");
+	if (is_sa(T, SA, n)) return -1;
 
 	for (i = 0; i <= n; ++i) {
 		if (SA[i] == 0) primary = i;

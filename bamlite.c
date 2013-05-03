@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 #include "bamlite.h"
 
 #ifdef USE_MALLOC_WRAPPERS
@@ -162,3 +163,48 @@ int bam_read1(bamFile fp, bam1_t *b)
 	if (bam_is_be) swap_endian_data(c, b->data_len, b->data);
 	return 4 + block_len;
 }
+
+
+#ifdef USE_VERBOSE_ZLIB_WRAPPERS
+// Versions of gzopen, gzread and gzclose that print up error messages
+
+gzFile bamlite_gzopen(const char *fn, const char *mode) {
+	gzFile fp;
+	if (strcmp(fn, "-") == 0) {
+		fp = gzdopen(fileno((strstr(mode, "r"))? stdin : stdout), mode);
+		if (!fp) {
+			fprintf(stderr, "Couldn't open %s : %s",
+					(strstr(mode, "r"))? "stdin" : "stdout",
+					strerror(errno));
+		}
+		return fp;
+	}
+	if ((fp = gzopen(fn, mode)) == 0) {
+		fprintf(stderr, "Couldn't open %s : %s\n", fn,
+				errno ? strerror(errno) : "Out of memory");
+	}
+	return fp;
+}
+
+int bamlite_gzread(gzFile file, void *ptr, unsigned int len) {
+	int ret = gzread(file, ptr, len);
+	
+	if (ret < 0) {
+		int errnum = 0;
+		const char *msg = gzerror(file, &errnum);
+		fprintf(stderr, "gzread error: %s\n",
+				Z_ERRNO == errnum ? strerror(errno) : msg);
+	}
+	return ret;
+}
+
+int bamlite_gzclose(gzFile file) {
+	int ret = gzclose(file);
+	if (Z_OK != ret) {
+		fprintf(stderr, "gzclose error: %s\n",
+						  Z_ERRNO == ret ? strerror(errno) : zError(ret));
+	}
+	
+	return ret;
+}
+#endif /* USE_VERBOSE_ZLIB_WRAPPERS */
