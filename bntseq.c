@@ -200,6 +200,10 @@ static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_
 		bns->anns = (bntann1_t*)realloc(bns->anns, *m_seqs * sizeof(bntann1_t));
 	}
 	p = bns->anns + bns->n_seqs;
+	if (strchr(seq->name.s, ';')) {
+	  fputs("\n", stderr);
+	  err_fatal(__func__, "Error: Reference contains invalid character ';' in sequence name \"%s\"\n", seq->name.s);
+	}
 	p->name = strdup((char*)seq->name.s);
 	p->anno = seq->comment.s? strdup((char*)seq->comment.s) : strdup("(null)");
 	p->gi = 0; p->len = seq->seq.l;
