@@ -11,7 +11,6 @@
 struct __smem_i;
 typedef struct __smem_i smem_i;
 
-#define MEM_F_HARDCLIP  0x1
 #define MEM_F_PE        0x2
 #define MEM_F_NOPAIRING 0x4
 #define MEM_F_ALL       0x8

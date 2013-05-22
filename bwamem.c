@@ -671,7 +671,9 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		kputw(p->mapq, str); kputc('\t', str); // MAPQ
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
-				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[p->cigar[i]&0xf], str);
+				int c = p->cigar[i]&0xf;
+				if (c == 3 || c == 4) c = which? 4 : 3; // use hard clipping for supplementary alignments
+				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
 			}
 		} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
 	} else kputsn("*\t0\t0\t*", 7, str); // without coordinte
@@ -698,8 +700,8 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	} else if (!p->is_rev) { // the forward strand
 		int i, qb = 0, qe = s->l_seq;
 		if (p->n_cigar) {
-			if ((p->cigar[0]&0xf) == 4) qb += p->cigar[0]>>4;
-			if ((p->cigar[p->n_cigar-1]&0xf) == 4) qe -= p->cigar[p->n_cigar-1]>>4;
+			if (which && ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3)) qb += p->cigar[0]>>4;
+			if (which && ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3)) qe -= p->cigar[p->n_cigar-1]>>4;
 		}
 		ks_resize(str, str->l + (qe - qb) + 1);
 		for (i = qb; i < qe; ++i) str->s[str->l++] = "ACGTN"[(int)s->seq[i]];
@@ -730,23 +732,25 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
-	for (i = 0; i < n; ++i)
-		if (i != which && !(list[i].flag&0x20000)) break; // 0x20000: shadowed multi hit
-	if (i < n) { // there are other primary hits; output them
-		kputsn("\tXP:Z:", 6, str);
-		for (i = 0; i < n; ++i) {
-			const mem_aln_t *r = &list[i];
-			int k;
-			if (i == which || (list[i].flag&0x20000)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
-			kputs(bns->anns[r->rid].name, str); kputc(',', str);
-			kputc("+-"[r->is_rev], str);
-			kputl(r->pos+1, str); kputc(',', str);
-			for (k = 0; k < r->n_cigar; ++k) {
-				kputw(r->cigar[k]>>4, str); kputc("MIDSH"[r->cigar[k]&0xf], str);
+	if (!(p->flag & 0x20000)) { // not multi-hit
+		for (i = 0; i < n; ++i)
+			if (i != which && !(list[i].flag&0x20000)) break; // 0x20000: shadowed multi hit
+		if (i < n) { // there are other primary hits; output them
+			kputsn("\tSP:Z:", 6, str);
+			for (i = 0; i < n; ++i) {
+				const mem_aln_t *r = &list[i];
+				int k;
+				if (i == which || (list[i].flag&0x20000)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
+				kputs(bns->anns[r->rid].name, str); kputc(',', str);
+				kputl(r->pos+1, str); kputc(',', str);
+				kputc("+-"[r->is_rev], str); kputc(',', str);
+				for (k = 0; k < r->n_cigar; ++k) {
+					kputw(r->cigar[k]>>4, str); kputc("MIDSH"[r->cigar[k]&0xf], str);
+				}
+				kputc(',', str); kputw(r->mapq, str);
+				kputc(',', str); kputw(r->NM, str);
+				kputc(';', str);
 			}
-			kputc(',', str); kputw(r->mapq, str);
-			kputc(',', str); kputw(r->NM, str);
-			kputc(';', str);
 		}
 	}
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
@@ -791,7 +795,8 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
 		q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
-		if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
+		if (k && p->secondary < 0) // if supplementary
+			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
 		if (k && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
 	}
 	if (aa.n == 0) { // no alignments good enough; then write an unaligned record
@@ -866,9 +871,9 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x20000;
-	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) { // unfixable cross-reference alignment
-		a.rid = -1; a.pos = -1; a.flag |= 0x4;
-		return a;
+	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
+		fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Abort. Sorry.\n", __func__);
+		exit(1);
 	}
 	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
 	w2 = w2 < opt->w? w2 : opt->w;
@@ -890,10 +895,10 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2));
 		if (clip5) {
 			memmove(a.cigar+1, a.cigar, a.n_cigar * 4);
-			a.cigar[0] = clip5<<4 | (opt->flag&MEM_F_HARDCLIP? 4 : 3);
+			a.cigar[0] = clip5<<4 | 3;
 			++a.n_cigar;
 		}
-		if (clip3) a.cigar[a.n_cigar++] = clip3<<4 | (opt->flag&MEM_F_HARDCLIP? 4 : 3);
+		if (clip3) a.cigar[a.n_cigar++] = clip3<<4 | 3;
 	}
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;

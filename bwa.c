@@ -185,12 +185,8 @@ int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns,
 			} else abort(); // should not be here
 		}
 		free(cigar);
-		if (*qb == *qe || *rb == *re) { // TODO: this may happen in theory, but should be very very rare...
-			fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Sorry.\n", __func__);
-			exit(1);
-		}
 	}
-	return 0;
+	return (*qb == *qe || *rb == *re)? -2 : 0;
 }
 
 /*********************

@@ -1,4 +1,5 @@
 CC=			gcc
+#CC=			clang --analyze
 CFLAGS=		-g -Wall -O2
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=			ar

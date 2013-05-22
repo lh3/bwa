@@ -39,7 +39,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
-		else if (c == 'H') opt->flag |= MEM_F_HARDCLIP;
 		else if (c == 'a') opt->flag |= MEM_F_ALL;
 		else if (c == 'p') opt->flag |= MEM_F_PE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
@@ -82,7 +81,6 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -T INT     minimum score to output [%d]\n", opt->T);
 		fprintf(stderr, "       -a         output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
-		fprintf(stderr, "       -H         hard clipping\n");
 		fprintf(stderr, "       -M         mark shorter split hits as secondary (for Picard/GATK compatibility)\n");
 		fprintf(stderr, "\nNote: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
