@@ -146,57 +146,51 @@ ret_gen_cigar:
 
 int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
 {
-	int ib, ie, is_rev;
-	int64_t fb, fe, mid = -1;
+	int is_rev;
+	int64_t cb, ce, fm;
+	bntann1_t *ra;
 	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary; actually with BWA-MEM, we should never come to here
 		*qb = *qe = *rb = *re = -1;
 		return -1; // unable to fix
-	} else {
-		fb = bns_depos(bns, *rb < bns->l_pac? *rb : *re - 1, &is_rev);
-		ib = bns_pos2rid(bns, fb);
-		if (fb - bns->anns[ib].offset + (*re - *rb) <= bns->anns[ib].len) return 0; // no need to fix
-		fe = bns_depos(bns, *re - 1 < bns->l_pac? *re - 1 : *rb, &is_rev);
-		ie = bns_pos2rid(bns, fe);
-		if (ie - ib > 1) { // bridge three or more references
-			*qb = *qe = *rb = *re = -1;
-			return -2; // unable to fix
-		} else {
-			int l = bns->anns[ib].offset + bns->anns[ib].len - fb;
-			mid = is_rev? *re - l : *rb + l;
-		}
 	}
-	if (mid >= 0) {
+	fm = bns_depos(bns, (*rb + *re) >> 1, &is_rev); // coordinate of the middle point on the forward strand
+	ra = &bns->anns[bns_pos2rid(bns, fm)]; // annotation of chr corresponding to the middle point
+	cb = is_rev? (bns->l_pac<<1) - (ra->offset + ra->len) : ra->offset; // chr start on the mapping strand
+	ce = cb + ra->len; // chr end
+	if (cb > *rb || ce < *re) { // fix is needed
 		int i, score, n_cigar, y, NM;
 		uint32_t *cigar;
 		int64_t x;
+		cb = cb > *rb? cb : *rb;
+		ce = ce < *re? ce : *re;
 		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar, &NM);
 		for (i = 0, x = *rb, y = *qb; i < n_cigar; ++i) {
 			int op = cigar[i]&0xf, len = cigar[i]>>4;
 			if (op == 0) {
-				if (x <= mid && mid < x + len) {
-					if (mid - *rb > *re - mid) { // the first part is longer
-						if (x == mid) { // need to check the previous operation
-							assert(i); // mid != *rb should always stand
-							if ((cigar[i-1]&0xf) == 1) *qe = y - (cigar[i-1]>>4), *re = x;
-							else if ((cigar[i-1]&0xf) == 2) *qe = y, *re = x - (cigar[i-1]>>4);
-							else abort(); // should not be here
-						} else *qe = y + (mid - x), *re = mid;
-					} else *qb = y + (mid - x), *rb = mid;
+				if (x <= cb && cb < x + len)
+					*qb = y + (cb - x), *rb = cb;
+				if (x < ce && ce <= x + len) {
+					*qe = y + (ce - x), *re = ce;
 					break;
 				} else x += len, y += len;
-			} else if (op == 1) { // insertion
+			} else if (op == 1) {
 				y += len;
-			} else if (op == 2) { // deletion
-				if (x <= mid && mid < x + len) {
-					if (mid - *rb > *re - mid) *qe = y, *re = x;
-					else *qb = y, *rb = x + len;
+			} else if (op == 2) {
+				if (x <= cb && cb < x + len)
+					*qb = y, *rb = x + len;
+				if (x < ce && ce <= x + len) {
+					*qe = y, *re = x;
 					break;
 				} else x += len;
 			} else abort(); // should not be here
 		}
 		free(cigar);
+		if (*qb == *qe || *rb == *re) { // TODO: this may happen in theory, but should be very very rare...
+			fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Sorry.\n", __func__);
+			exit(1);
+		}
 	}
-	return 1;
+	return 0;
 }
 
 /*********************

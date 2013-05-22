@@ -789,10 +789,6 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
-		if (q->rid < 0) { // unfixable cross-reference alignment
-			--aa.n;
-			continue;
-		}
 		q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if ((opt->flag&MEM_F_NO_MULTI) && k && p->secondary < 0) q->flag |= 0x10000;
