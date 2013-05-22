@@ -732,15 +732,15 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
-	if (!(p->flag & 0x20000)) { // not multi-hit
+	if (!(p->flag & 0x100)) { // not multi-hit
 		for (i = 0; i < n; ++i)
-			if (i != which && !(list[i].flag&0x20000)) break; // 0x20000: shadowed multi hit
+			if (i != which && !(list[i].flag&0x100)) break;
 		if (i < n) { // there are other primary hits; output them
 			kputsn("\tSP:Z:", 6, str);
 			for (i = 0; i < n; ++i) {
 				const mem_aln_t *r = &list[i];
 				int k;
-				if (i == which || (list[i].flag&0x20000)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
+				if (i == which || (list[i].flag&0x100)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
 				kputs(bns->anns[r->rid].name, str); kputc(',', str);
 				kputl(r->pos+1, str); kputc(',', str);
 				kputc("+-"[r->is_rev], str); kputc(',', str);
@@ -793,7 +793,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
-		q->flag |= extra_flag | (p->secondary >= 0? 0x100 : 0); // flag secondary
+		q->flag |= extra_flag; // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (k && p->secondary < 0) // if supplementary
 			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
@@ -870,7 +870,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
-	if (ar->secondary >= 0) a.flag |= 0x20000;
+	if (ar->secondary >= 0) a.flag |= 0x100; // secondary alignment
 	if (bwa_fix_xref(opt->mat, opt->q, opt->r, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
 		fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Abort. Sorry.\n", __func__);
 		exit(1);
