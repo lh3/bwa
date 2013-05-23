@@ -3,7 +3,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.4-r395-beta"
+#define PACKAGE_VERSION "0.7.4-r396-beta"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);

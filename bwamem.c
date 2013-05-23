@@ -736,7 +736,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		for (i = 0; i < n; ++i)
 			if (i != which && !(list[i].flag&0x100)) break;
 		if (i < n) { // there are other primary hits; output them
-			kputsn("\tSP:Z:", 6, str);
+			kputsn("\tSA:Z:", 6, str);
 			for (i = 0; i < n; ++i) {
 				const mem_aln_t *r = &list[i];
 				int k;
