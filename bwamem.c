@@ -714,8 +714,8 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	} else { // the reverse strand
 		int i, qb = 0, qe = s->l_seq;
 		if (p->n_cigar) {
-			if ((p->cigar[0]&0xf) == 4) qe -= p->cigar[0]>>4;
-			if ((p->cigar[p->n_cigar-1]&0xf) == 4) qb += p->cigar[p->n_cigar-1]>>4;
+			if (which && ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3)) qe -= p->cigar[0]>>4;
+			if (which && ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3)) qb += p->cigar[p->n_cigar-1]>>4;
 		}
 		ks_resize(str, str->l + (qe - qb) + 1);
 		for (i = qe-1; i >= qb; --i) str->s[str->l++] = "TGCAN"[(int)s->seq[i]];
