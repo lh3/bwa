@@ -633,7 +633,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	gap_opt_t opt, opt0;
 	khint_t iter;
 	isize_info_t last_ii; // this is for the last batch of reads
-	char str[1024];
+	char str[1024], magic[2][4];
 	bwt_t *bwt;
 	uint8_t *pac;
 
@@ -648,6 +648,12 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	g_hash = kh_init(b128);
 	last_ii.avg = -1.0;
 
+	err_fread_noeof(magic[0], 1, 4, fp_sa[0]);
+	err_fread_noeof(magic[1], 1, 4, fp_sa[1]);
+	if (strncmp(magic[0], SAI_MAGIC, 4) != 0 || strncmp(magic[1], SAI_MAGIC, 4) != 0) {
+		fprintf(stderr, "[E::%s] Unmatched SAI magic. Please re-run `aln' with the same version of bwa.\n", __func__);
+		exit(1);
+	}
 	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
 	ks[0] = bwa_open_reads(opt.mode, fn_fa[0]);
 	opt0 = opt;

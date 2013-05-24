@@ -33,14 +33,15 @@
 #define FROM_D 2
 #define FROM_S 3
 
+#define SAI_MAGIC "SAI\1"
+
 typedef struct {
 	bwtint_t w;
 	int bid;
 } bwt_width_t;
 
 typedef struct {
-	uint32_t n_mm:16, n_gapo:8, n_gape:8;
-	int score;
+	uint64_t n_mm:8, n_gapo:8, n_gape:8, score:20, n_ins:10, n_del:10;
 	bwtint_t k, l;
 } bwt_aln1_t;
 
@@ -57,6 +58,7 @@ typedef uint16_t bwa_cigar_t;
 
 typedef struct {
 	uint32_t n_cigar:15, gap:8, mm:8, strand:1;
+	int ref_shift;
 	bwtint_t pos;
 	bwa_cigar_t *cigar;
 } bwt_multi1_t;
@@ -77,6 +79,7 @@ typedef struct {
 	// alignment information
 	bwtint_t sa, pos;
 	uint64_t c1:28, c2:28, seQ:8; // number of top1 and top2 hits; single-end mapQ
+	int ref_shift;
 	int n_cigar;
 	bwa_cigar_t *cigar;
 	// for multi-threading only

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
+#include <assert.h>
 #include "bwase.h"
 #include "bwtaln.h"
 #include "bntseq.h"
@@ -36,6 +37,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 			if (p->score > best) break;
 			if (drand48() * (p->l - p->k + 1 + cnt) > (double)cnt) {
 				s->n_mm = p->n_mm; s->n_gapo = p->n_gapo; s->n_gape = p->n_gape;
+				s->ref_shift = (int)p->n_del - (int)p->n_ins;
 				s->score = p->score;
 				s->sa = p->k + (bwtint_t)((p->l - p->k + 1) * drand48());
 			}
@@ -71,6 +73,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 				for (l = q->k; l <= q->l; ++l) {
 					s->multi[z].pos = l;
 					s->multi[z].gap = q->n_gapo + q->n_gape;
+					s->multi[z].ref_shift = (int)q->n_del - (int)q->n_ins;
 					s->multi[z++].mm = q->n_mm;
 				}
 				rest -= q->l - q->k + 1;
@@ -81,6 +84,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 					while (x < p) p -= p * j / (i--);
 					s->multi[z].pos = q->l - i;
 					s->multi[z].gap = q->n_gapo + q->n_gape;
+					s->multi[z].ref_shift = (int)q->n_del - (int)q->n_ins;
 					s->multi[z++].mm = q->n_mm;
 				}
 				rest = 0;
@@ -107,16 +111,15 @@ int bwa_approx_mapQ(const bwa_seq_t *p, int mm)
 	return (23 < g_log_n[n])? 0 : 23 - g_log_n[n];
 }
 
-bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int len, int *strand)
+bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int ref_len, int *strand)
 {
 	bwtint_t pos_f;
 	int is_rev;
-	pos_f = bns_depos(bns, bwt_sa(bwt, sapos), &is_rev); // pos_f
+	pos_f = bwt_sa(bwt, sapos); // position on the forward-reverse coordinate
+	if (pos_f < bns->l_pac && bns->l_pac < pos_f + ref_len) return (bwtint_t)-1;
+	pos_f = bns_depos(bns, pos_f, &is_rev); // position on the forward strand; this may be the first base or the last base
 	*strand = !is_rev;
-	/* NB: For gapped alignment, pacpos may not be correct, which will be fixed
-	 * in bwa_refine_gapped_core(). This line also determines the way "x" is
-	 * calculated in bwa_refine_gapped_core() when (ext < 0 && is_end == 0). */
-	if (is_rev) pos_f = pos_f + 1 < len? 0 : pos_f - len + 1; // mapped to the forward strand
+	if (is_rev) pos_f = pos_f + 1 < ref_len? 0 : pos_f - ref_len + 1; // position of the first base
 	return pos_f; // FIXME: it is possible that pos_f < bns->anns[ref_id].offset
 }
 
@@ -132,9 +135,11 @@ void bwa_cal_pac_pos_core(const bntseq_t *bns, const bwt_t *bwt, bwa_seq_t *seq,
 	if (seq->type != BWA_TYPE_UNIQUE && seq->type != BWA_TYPE_REPEAT) return;
 	max_diff = fnr > 0.0? bwa_cal_maxdiff(seq->len, BWA_AVG_ERR, fnr) : max_mm;
 	seq->seQ = seq->mapQ = bwa_approx_mapQ(seq, max_diff);
-	seq->pos = bwa_sa2pos(bns, bwt, seq->sa, seq->len, &strand);
+	//fprintf(stderr, "%d\n", seq->ref_shift);
+	seq->pos = bwa_sa2pos(bns, bwt, seq->sa, seq->len + seq->ref_shift, &strand);
 	seq->strand = strand;
 	seq->seQ = seq->mapQ = bwa_approx_mapQ(seq, max_diff);
+	if (seq->pos == (bwtint_t)-1) seq->type = BWA_TYPE_NO_MATCH;
 }
 
 void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_seq_t *seqs, int max_mm, float fnr)
@@ -150,9 +155,9 @@ void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_se
 		bwa_cal_pac_pos_core(bns, bwt, p, max_mm, fnr);
 		for (j = n_multi = 0; j < p->n_multi; ++j) {
 			bwt_multi1_t *q = p->multi + j;
-			q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len, &strand);
+			q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len + p->ref_shift, &strand);
 			q->strand = strand;
-			if (q->pos != p->pos)
+			if (q->pos != p->pos && q->pos != (bwtint_t)-1)
 				p->multi[n_multi++] = *q;
 		}
 		p->n_multi = n_multi;
@@ -162,64 +167,25 @@ void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_se
 
 #define SW_BW 50
 
-bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, ubyte_t *seq, bwtint_t *_pos, int *n_cigar, int is_rev)
+bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, ubyte_t *seq, int ref_shift, bwtint_t rb, int *n_cigar)
 {
 	bwa_cigar_t *cigar = 0;
 	uint32_t *cigar32 = 0;
 	ubyte_t *rseq;
-	int tle, qle, gtle, gscore;
-	int64_t k, rb, re, rlen;
+	int64_t k, re, rlen;
 	int8_t mat[25];
 
 	bwa_fill_scmat(1, 3, mat);
-	if (!is_rev) { // forward strand, the end position is correct
-		re = *_pos + len;
-		if (re > l_pac) re = l_pac;
-		rb = re - (len + SW_BW);
-		if (rb < 0) rb = 0;
-		rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
-		seq_reverse(len, seq, 0); // as we need to do left extension, we have to reverse both query and reference sequences
-		seq_reverse(rlen, rseq, 0);
-		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, 0, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
-		if (gscore > 0) tle = gtle, qle = len;
-		rb = re - tle; rlen = tle;
-		seq_reverse(len, seq, 0);
-		seq_reverse(rlen, rseq, 0);
-		if (rlen == 0) goto refine_gapped_err;
-		ksw_global(qle, &seq[len-qle], rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32);
-		if (qle < len) { // write soft clip
-			cigar = realloc(cigar, (*n_cigar + 1) * 4);
-			memmove(cigar + 1, cigar, *n_cigar * 4);
-			cigar[0] = (len - qle)<<4 | FROM_S;
-			++(*n_cigar);
-		}
-	} else { // reverse strand, the start position is correct
-		rb = *_pos; re = rb + len + SW_BW;
-		if (re > l_pac) re = l_pac;
-		rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
-		ksw_extend(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, 0, -1, len<<1, &qle, &tle, &gtle, &gscore, 0);
-		if (gscore > 0) tle = gtle, qle = len;
-		re = rb + tle; rlen = tle;
-		if (rlen == 0) goto refine_gapped_err;
-		ksw_global(qle, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension
-		if (qle < len) {
-			cigar = realloc(cigar, (*n_cigar + 1) * 4);
-			cigar[*n_cigar - 1] = (len - qle)<<4 | FROM_S;
-			++(*n_cigar);
-		}
-	}
-	*_pos = rb;
-
+	re = rb + len + ref_shift;
+	assert(re <= l_pac);
+	rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
+	assert(re - rb == rlen);
+	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension
 	cigar = (bwa_cigar_t*)cigar32;
 	for (k = 0; k < *n_cigar; ++k)
 		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
 	free(rseq);
 	return cigar;
-
-refine_gapped_err:
-	free(rseq);
-	*n_cigar = 0;
-	return 0;
 }
 
 char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_t *seq,
@@ -311,7 +277,7 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq)
 {
 	ubyte_t *pacseq;
-	int i, j;
+	int i, j, k;
 	kstring_t *str;
 
 	if (!_pacseq) {
@@ -322,15 +288,18 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *s = seqs + i;
 		seq_reverse(s->len, s->seq, 0); // IMPORTANT: s->seq is reversed here!!!
-		for (j = 0; j < s->n_multi; ++j) {
+		for (j = k = 0; j < s->n_multi; ++j) {
 			bwt_multi1_t *q = s->multi + j;
 			int n_cigar;
-			if (q->gap == 0) continue;
-			q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, &q->pos, &n_cigar, q->strand);
-			q->n_cigar = n_cigar;
+			if (q->gap) { // gapped alignment
+				q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, q->ref_shift, q->pos, &n_cigar);
+				q->n_cigar = n_cigar;
+				if (q->cigar) s->multi[k++] = *q;
+			} else s->multi[k++] = *q;
 		}
+		s->n_multi = k; // this squeezes out gapped alignments which failed the CIGAR generation
 		if (s->type == BWA_TYPE_NO_MATCH || s->type == BWA_TYPE_MATESW || s->n_gapo == 0) continue;
-		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, &s->pos, &s->n_cigar, s->strand);
+		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, s->ref_shift, s->pos, &s->n_cigar);
 		if (s->cigar == 0) s->type = BWA_TYPE_NO_MATCH;
 	}
 	// generate MD tag
@@ -339,8 +308,7 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		bwa_seq_t *s = seqs + i;
 		if (s->type != BWA_TYPE_NO_MATCH) {
 			int nm;
-			s->md = bwa_cal_md1(s->n_cigar, s->cigar, s->len, s->pos, s->strand? s->rseq : s->seq,
-								bns->l_pac, pacseq, str, &nm);
+			s->md = bwa_cal_md1(s->n_cigar, s->cigar, s->len, s->pos, s->strand? s->rseq : s->seq, bns->l_pac, pacseq, str, &nm);
 			s->nm = nm;
 		}
 	}
@@ -487,7 +455,6 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				for (i = 0; i < p->n_multi; ++i) {
 					bwt_multi1_t *q = p->multi + i;
 					int k;
-					if (q->cigar == 0) continue;
 					j = pos_end_multi(q, p->len) - q->pos;
 					nn = bns_cnt_ambi(bns, q->pos, j, &seqid);
 					err_printf("%s,%c%d,", bns->anns[seqid].name, q->strand? '-' : '+',
@@ -538,6 +505,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	bntseq_t *bns;
 	FILE *fp_sa;
 	gap_opt_t opt;
+	char magic[4];
 
 	// initialization
 	bwase_initialize();
@@ -546,6 +514,11 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	fp_sa = xopen(fn_sa, "r");
 
 	m_aln = 0;
+	err_fread_noeof(magic, 1, 4, fp_sa);
+	if (strncmp(magic, SAI_MAGIC, 4) != 0) {
+		fprintf(stderr, "[E::%s] Unmatched SAI magic. Please re-run `aln' with the same version of bwa.\n", __func__);
+		exit(1);
+	}
 	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa);
 	bwa_print_sam_hdr(bns, rg_line);
 	//bwa_print_sam_PG();
