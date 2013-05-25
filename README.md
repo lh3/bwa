@@ -20,7 +20,7 @@ Illumina reads.
 
 For all the algorithms, BWA first needs to construct the FM-index for the
 reference genome (the **index** command). Alignment algorithms are invoked with
-different sub-commands: **aln**/**samse**/**sampe** for BWA-backtrack,
+different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 **bwasw** for BWA-SW and **mem** for the BWA-MEM algorithm.
 
 ###Availability
