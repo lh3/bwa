@@ -167,20 +167,29 @@ void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_se
 
 #define SW_BW 50
 
-bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, ubyte_t *seq, int ref_shift, bwtint_t rb, int *n_cigar)
+bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, ubyte_t *seq, int ref_shift, bwtint_t *_rb, int *n_cigar)
 {
 	bwa_cigar_t *cigar = 0;
 	uint32_t *cigar32 = 0;
 	ubyte_t *rseq;
-	int64_t k, re, rlen;
+	int64_t k, rb, re, rlen;
 	int8_t mat[25];
 
 	bwa_fill_scmat(1, 3, mat);
-	re = rb + len + ref_shift;
+	rb = *_rb; re = rb + len + ref_shift;
 	assert(re <= l_pac);
 	rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
 	assert(re - rb == rlen);
-	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32); // right extension
+	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32);
+	assert(*n_cigar > 0);
+	if ((cigar32[*n_cigar - 1]&0xf) == 1) cigar32[*n_cigar - 1] = (cigar32[*n_cigar - 1]>>4<<4) | 4; // change endding ins to soft clipping
+	if ((cigar32[0]&0xf) == 1) cigar32[0] = (cigar32[0]>>4<<4) | 4; // change beginning ins to soft clipping
+	if ((cigar32[*n_cigar - 1]&0xf) == 2) --*n_cigar; // delete endding del
+	if ((cigar32[0]&0xf) == 2) { // delete beginning del
+		*_rb += cigar32[0]>>4;
+		--*n_cigar;
+		memmove(cigar32, cigar32+1, (*n_cigar) * 4);
+	}
 	cigar = (bwa_cigar_t*)cigar32;
 	for (k = 0; k < *n_cigar; ++k)
 		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
@@ -292,14 +301,14 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 			bwt_multi1_t *q = s->multi + j;
 			int n_cigar;
 			if (q->gap) { // gapped alignment
-				q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, q->ref_shift, q->pos, &n_cigar);
+				q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, q->ref_shift, &q->pos, &n_cigar);
 				q->n_cigar = n_cigar;
 				if (q->cigar) s->multi[k++] = *q;
 			} else s->multi[k++] = *q;
 		}
 		s->n_multi = k; // this squeezes out gapped alignments which failed the CIGAR generation
 		if (s->type == BWA_TYPE_NO_MATCH || s->type == BWA_TYPE_MATESW || s->n_gapo == 0) continue;
-		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, s->ref_shift, s->pos, &s->n_cigar);
+		s->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, s->strand? s->rseq : s->seq, s->ref_shift, &s->pos, &s->n_cigar);
 		if (s->cigar == 0) s->type = BWA_TYPE_NO_MATCH;
 	}
 	// generate MD tag
