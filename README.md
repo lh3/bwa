@@ -51,7 +51,7 @@ in forums such as [BioStar][8] and [SEQanswers][9].
 
 * Li H. (2013) Aligning sequence reads, clone sequences and assembly contigs
  with BWA-MEM. [arXiv:1303.3997v1][12] [q-bio.GN]. (if you use the BWA-MEM
- algorithm or the **fastmap** command)
+ algorithm or the **fastmap** command, or want to cite the whole BWA package)
 
 Please note that the last reference is a preprint hosted at [arXiv.org][13]. I
 do not have plan to submit it to a peer-reviewed journal in the near future.
