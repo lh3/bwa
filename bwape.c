@@ -296,7 +296,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 				int strand;
 				int max_diff = gopt->fnr > 0.0? bwa_cal_maxdiff(p[j]->len, BWA_AVG_ERR, gopt->fnr) : gopt->max_diff;
 				p[j]->seQ = p[j]->mapQ = bwa_approx_mapQ(p[j], max_diff);
-				p[j]->pos = bwa_sa2pos(bns, bwt, p[j]->sa, p[j]->len, &strand);
+				p[j]->pos = bwa_sa2pos(bns, bwt, p[j]->sa, p[j]->len + p[j]->ref_shift, &strand);
 				p[j]->strand = strand;
 			}
 		}
@@ -345,7 +345,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 							z->a = (bwtint_t*)malloc(sizeof(bwtint_t) * z->n);
 							for (l = r->k; l <= r->l; ++l) {
 								int strand;
-								z->a[l - r->k] = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand)<<1;
+								z->a[l - r->k] = bwa_sa2pos(bns, bwt, l, p[j]->len + p[j]->ref_shift, &strand)<<1;
 								z->a[l - r->k] |= strand;
 							}
 						}
@@ -357,7 +357,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 					} else { // then calculate on the fly
 						for (l = r->k; l <= r->l; ++l) {
 							int strand;
-							x.x = bwa_sa2pos(bns, bwt, l, p[j]->len, &strand);
+							x.x = bwa_sa2pos(bns, bwt, l, p[j]->len + p[j]->ref_shift, &strand);
 							x.y = k<<2 | strand<<1 | j;
 							kv_push(pair64_t, d->arr, x);
 						}
@@ -377,7 +377,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 					for (k = 0, n_multi = 0; k < p[j]->n_multi; ++k) {
 						int strand;
 						bwt_multi1_t *q = p[j]->multi + k;
-						q->pos = bwa_sa2pos(bns, bwt, q->pos, p[j]->len, &strand);
+						q->pos = bwa_sa2pos(bns, bwt, q->pos, p[j]->len + q->ref_shift, &strand);
 						q->strand = strand;
 						if (q->pos != p[j]->pos)
 							p[j]->multi[n_multi++] = *q;

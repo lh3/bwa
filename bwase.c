@@ -155,7 +155,7 @@ void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_se
 		bwa_cal_pac_pos_core(bns, bwt, p, max_mm, fnr);
 		for (j = n_multi = 0; j < p->n_multi; ++j) {
 			bwt_multi1_t *q = p->multi + j;
-			q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len + p->ref_shift, &strand);
+			q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len + q->ref_shift, &strand);
 			q->strand = strand;
 			if (q->pos != p->pos && q->pos != (bwtint_t)-1)
 				p->multi[n_multi++] = *q;
