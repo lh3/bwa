@@ -1,10 +1,10 @@
-Release 0.7.5 (28 May, 2013)
+Release 0.7.5 (29 May, 2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Changes in all components:
 
- * Improved error checking on memory allocation and file reading/writing.
-   Patches provided by Rob Davies.
+ * Improved error checking on memory allocation and file I/O. Patches provided
+   by Rob Davies.
 
  * Updated README.
 
@@ -46,7 +46,7 @@ In addition, if you use BWA-MEM or the fastmap command of BWA, please cite:
 
 Thank you.
 
-(0.7.5: 28 May 2013, r402)
+(0.7.5: 29 May 2013, r404)
 
 
 
