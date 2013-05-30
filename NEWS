@@ -1,3 +1,13 @@
+Release 0.7.5a (30 May, 2013)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Fixed a bug in BWA-backtrack which leads to off-by-one mapping errors in rare
+cases.
+
+(0.7.5a: 30 May 2013, r405)
+
+
+
 Release 0.7.5 (29 May, 2013)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

@@ -182,8 +182,8 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 	assert(re - rb == rlen);
 	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW, n_cigar, &cigar32);
 	assert(*n_cigar > 0);
-	if ((cigar32[*n_cigar - 1]&0xf) == 1) cigar32[*n_cigar - 1] = (cigar32[*n_cigar - 1]>>4<<4) | 4; // change endding ins to soft clipping
-	if ((cigar32[0]&0xf) == 1) cigar32[0] = (cigar32[0]>>4<<4) | 4; // change beginning ins to soft clipping
+	if ((cigar32[*n_cigar - 1]&0xf) == 1) cigar32[*n_cigar - 1] = (cigar32[*n_cigar - 1]>>4<<4) | 3; // change endding ins to soft clipping
+	if ((cigar32[0]&0xf) == 1) cigar32[0] = (cigar32[0]>>4<<4) | 3; // change beginning ins to soft clipping
 	if ((cigar32[*n_cigar - 1]&0xf) == 2) --*n_cigar; // delete endding del
 	if ((cigar32[0]&0xf) == 2) { // delete beginning del
 		*_rb += cigar32[0]>>4;
