@@ -54,7 +54,7 @@ int main_mem(int argc, char *argv[])
 		else return 1;
 	}
 	if (opt->n_threads < 1) opt->n_threads = 1;
-	if (optind + 1 >= argc) {
+	if (optind + 1 >= argc || optind + 3 < argc) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
 		fprintf(stderr, "Algorithm options:\n\n");

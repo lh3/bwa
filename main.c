@@ -46,10 +46,11 @@ static int usage()
 	fprintf(stderr, "         bwtupdate     update .bwt to the new format\n");
 	fprintf(stderr, "         bwt2sa        generate SA from BWT and Occ\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "Note: To use BWA, you need to first index the genome with `bwa index'. There are\n");
-	fprintf(stderr, "      three alignment algorithms in BWA: `mem', `bwasw' and `aln/samse/sampe'. If\n");
-	fprintf(stderr, "      you are not sure which to use, try `bwa mem' first. Please `man ./bwa.1' for\n");
-	fprintf(stderr, "      for the manual.\n\n");
+	fprintf(stderr,
+"Note: To use BWA, you need to first index the genome with `bwa index'.\n"
+"      There are three alignment algorithms in BWA: `mem', `bwasw', and\n"
+"      `aln/samse/sampe'. If you are not sure which to use, try `bwa mem'\n"
+"      first. Please `man ./bwa.1' for the manual.\n\n");
 	return 1;
 }
 
