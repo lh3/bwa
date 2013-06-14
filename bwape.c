@@ -706,6 +706,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 			}
 			bwa_print_sam1(bns, p[0], p[1], opt.mode, opt.max_top2);
 			bwa_print_sam1(bns, p[1], p[0], opt.mode, opt.max_top2);
+			if (strcmp(p[0]->name, p[1]->name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", p[0]->name, p[1]->name);
 		}
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
