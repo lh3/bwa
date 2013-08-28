@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "bwa.h"
 #include "bwamem.h"
 #include "kvec.h"
@@ -35,7 +36,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'O') opt->q = atoi(optarg);
 		else if (c == 'E') opt->r = atoi(optarg);
 		else if (c == 'T') opt->T = atoi(optarg);
-		else if (c == 'L') opt->pen_clip = atoi(optarg);
 		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
@@ -48,7 +48,13 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
 		else if (c == 'C') copy_comment = 1;
-		else if (c == 'R') {
+		else if (c == 'L') {
+			char *p;
+			opt->pen_clip5 = opt->pen_clip3 = strtol(optarg, &p, 10);
+			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
+				opt->pen_clip3 = strtol(p+1, &p, 10);
+			fprintf(stderr, "%d,%d\n", opt->pen_clip5, opt->pen_clip3);
+		} else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
 		} else if (c == 's') opt->split_width = atoi(optarg);
 		else return 1;
@@ -71,7 +77,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -B INT     penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT     gap open penalty [%d]\n", opt->q);
 		fprintf(stderr, "       -E INT     gap extension penalty; a gap of size k cost {-O} + {-E}*k [%d]\n", opt->r);
-		fprintf(stderr, "       -L INT     penalty for clipping [%d]\n", opt->pen_clip);
+		fprintf(stderr, "       -L INT     penalty for clipping [%d]\n", opt->pen_clip5);
 		fprintf(stderr, "       -U INT     penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p         first query file consists of interleaved paired-end sequences\n");

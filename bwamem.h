@@ -20,7 +20,7 @@ typedef struct __smem_i smem_i;
 typedef struct {
 	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
 	int pen_unpaired;       // phred-scaled penalty for unpaired reads
-	int pen_clip;           // clipping penalty. This score is not deducted from the DP score.
+	int pen_clip5,pen_clip3;// clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
 	int zdrop;              // Z-dropoff
 
