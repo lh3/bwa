@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <math.h>
 #include "bwa.h"
 #include "bwamem.h"
 #include "kvec.h"
@@ -28,7 +29,7 @@ int main_mem(int argc, char *argv[])
 	void *ko = 0, *ko2 = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
@@ -48,7 +49,10 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
 		else if (c == 'C') copy_comment = 1;
-		else if (c == 'L') {
+		else if (c == 'Q') {
+			opt->mapQ_coef_len = atoi(optarg);
+			opt->mapQ_coef_fac = opt->mapQ_coef_len > 0? log(opt->mapQ_coef_len) : 0;
+		} else if (c == 'L') {
 			char *p;
 			opt->pen_clip5 = opt->pen_clip3 = strtol(optarg, &p, 10);
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))

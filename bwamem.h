@@ -35,6 +35,8 @@ typedef struct {
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	float mapQ_coef_len;
+	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset

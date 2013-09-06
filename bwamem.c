@@ -63,6 +63,8 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_matesw = 100;
+	o->mapQ_coef_len = 100;
+	o->mapQ_coef_fac = log(o->mapQ_coef_len);
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -768,9 +770,18 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	sub = a->csub > sub? a->csub : sub;
 	if (sub >= a->score) return 0;
 	l = a->qe - a->qb > a->re - a->rb? a->qe - a->qb : a->re - a->rb;
-	mapq = a->score? (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499) : 0;
 	identity = 1. - (double)(l * opt->a - a->score) / (opt->a + opt->b) / l;
-	mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+	if (a->score == 0) {
+		mapq = 0;
+	} else if (opt->mapQ_coef_len > 0) {
+		double tmp;
+		tmp = 6.02 * (a->score - sub) / opt->a * identity;
+		if (l > opt->mapQ_coef_len) tmp *= log(l) / opt->mapQ_coef_fac;
+		mapq = (int)(tmp + .499);
+	} else {
+		mapq = (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499);
+		mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+	}
 	if (a->sub_n > 0) mapq -= (int)(4.343 * log(a->sub_n+1) + .499);
 	if (mapq > 60) mapq = 60;
 	if (mapq < 0) mapq = 0;
