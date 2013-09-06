@@ -63,8 +63,8 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_matesw = 100;
-	o->mapQ_coef_len = 100;
-	o->mapQ_coef_fac = log(o->mapQ_coef_len);
+//	o->mapQ_coef_len = 100; o->mapQ_coef_fac = log(o->mapQ_coef_len);
+	o->mapQ_coef_len = o->mapQ_coef_fac = 0;
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
