@@ -776,7 +776,7 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	} else if (opt->mapQ_coef_len > 0) {
 		double tmp;
 		tmp = l < opt->mapQ_coef_len? 1. : opt->mapQ_coef_fac / log(l);
-		tmp *= identity;
+		tmp *= a->seedcov < l? (double)a->seedcov / identity : 1;
 		mapq = (int)(6.02 * (a->score - sub) / opt->a * tmp * tmp + .499);
 	} else {
 		mapq = (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499);
