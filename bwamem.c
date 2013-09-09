@@ -63,6 +63,7 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_matesw = 100;
+	o->mask_level_redun = 0.95;
 //	o->mapQ_coef_len = 100; o->mapQ_coef_fac = log(o->mapQ_coef_len);
 	o->mapQ_coef_len = o->mapQ_coef_fac = 0;
 	bwa_fill_scmat(o->a, o->b, o->mat);
@@ -235,7 +236,7 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 	int i, j;
 	for (i = 0; i < chn->n; ++i) {
 		mem_chain_t *p = &chn->a[i];
-		err_printf("%d", p->n);
+		err_printf("CHAIN(%d) n=%d", i, p->n);
 		for (j = 0; j < p->n; ++j) {
 			bwtint_t pos;
 			int is_rev, ref_id;
@@ -365,13 +366,34 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
  * De-overlap single-end hits *
  ******************************/
 
+#define alnreg_slt2(a, b) ((a).re < (b).re)
+KSORT_INIT(mem_ars2, mem_alnreg_t, alnreg_slt2)
+
 #define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
 KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 
-int mem_sort_and_dedup(int n, mem_alnreg_t *a)
+int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 {
-	int m, i;
+	int m, i, j;
 	if (n <= 1) return n;
+	ks_introsort(mem_ars2, n, a);
+	for (i = 1; i < n; ++i) {
+		mem_alnreg_t *p = &a[i];
+		if (p->rb >= a[i-1].re) continue;
+		for (j = i - 1; j >= 0 && p->rb < a[j].re; --j) {
+			mem_alnreg_t *q = &a[j];
+			int64_t or, oq, mr, mq;
+			if (q->qe == q->qb) continue; // a[j] has been excluded
+			or = q->re - p->rb; // overlap length on the reference
+			oq = q->qb < p->qb? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
+			mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
+			mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
+			if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
+				if (q->score < p->score) q->qe = q->qb;
+				else p->qe = p->qb;
+			}
+		}
+	}
 	ks_introsort(mem_ars, n, a);
 	for (i = 1; i < n; ++i) { // mark identical hits
 		if (a[i].score == a[i-1].score && a[i].rb == a[i-1].rb && a[i].qb == a[i-1].qb)
@@ -477,7 +499,7 @@ int mem_chain2aln_short(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 	a.score = x.score;
 	a.csub = x.score2;
 	kv_push(mem_alnreg_t, *av, a);
-	if (bwa_verbose >= 4) printf("SHORT: [%d,%d) <=> [%ld,%ld)\n", a.qb, a.qe, (long)a.rb, (long)a.re);
+	if (bwa_verbose >= 4) printf("chain2aln(short): [%d,%d) <=> [%ld,%ld)\n", a.qb, a.qe, (long)a.rb, (long)a.re);
 	return 0;
 }
 
@@ -563,6 +585,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		a->w = aw[0] = aw[1] = opt->w;
 		a->score = a->truesc = -1;
 
+		if (bwa_verbose >= 4) err_printf("Extending from seed [%ld,%ld,%ld]\n", (long)s->len, (long)s->qbeg, (long)s->rbeg);
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
 			int qle, tle, gtle, gscore;
@@ -842,12 +865,13 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	for (i = 0; i < chn.n; ++i) {
 		mem_chain_t *p = &chn.a[i];
 		int ret;
+		if (bwa_verbose >= 4) err_printf("===> Processing chain(%d) <===\n", i);
 		ret = mem_chain2aln_short(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
 		if (ret > 0) mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
-	regs.n = mem_sort_and_dedup(regs.n, regs.a);
+	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
 	return regs;
 }
 
