@@ -389,11 +389,19 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 			mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
 			mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
 			if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
-				if (q->score < p->score) q->qe = q->qb;
-				else p->qe = p->qb;
+				if (p->score < q->score) {
+					p->qe = p->qb;
+					break;
+				} else q->qe = q->qb;
 			}
 		}
 	}
+	for (i = 0, m = 0; i < n; ++i) // exclude identical hits
+		if (a[i].qe > a[i].qb) {
+			if (m != i) a[m++] = a[i];
+			else ++m;
+		}
+	n = m;
 	ks_introsort(mem_ars, n, a);
 	for (i = 1; i < n; ++i) { // mark identical hits
 		if (a[i].score == a[i-1].score && a[i].rb == a[i-1].rb && a[i].qb == a[i-1].qb)
