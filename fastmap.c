@@ -57,7 +57,6 @@ int main_mem(int argc, char *argv[])
 			opt->pen_clip5 = opt->pen_clip3 = strtol(optarg, &p, 10);
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
 				opt->pen_clip3 = strtol(p+1, &p, 10);
-			fprintf(stderr, "%d,%d\n", opt->pen_clip5, opt->pen_clip3);
 		} else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
 		} else if (c == 's') opt->split_width = atoi(optarg);
