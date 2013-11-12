@@ -643,22 +643,21 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	for (i = 1; i != 256; ++i) g_log_n[i] = (int)(4.343 * log(i) + 0.5);
 	bns = bns_restore(prefix);
 	srand48(bns->seed);
-	fp_sa[0] = xopen(fn_sa[0], "r");
-	fp_sa[1] = xopen(fn_sa[1], "r");
 	g_hash = kh_init(b128);
 	last_ii.avg = -1.0;
 
-	err_fread_noeof(magic[0], 1, 4, fp_sa[0]);
-	err_fread_noeof(magic[1], 1, 4, fp_sa[1]);
-	if (strncmp(magic[0], SAI_MAGIC, 4) != 0 || strncmp(magic[1], SAI_MAGIC, 4) != 0) {
-		fprintf(stderr, "[E::%s] Unmatched SAI magic. Please re-run `aln' with the same version of bwa.\n", __func__);
-		exit(1);
+	for (i=0; i<2; i++) {
+		fp_sa[i] = xopen(fn_sa[i], "r");
+		err_fread_noeof(magic[i], 1, 4, fp_sa[i]);
+		if (strncmp(magic[i], SAI_MAGIC, 4) != 0) {
+			fprintf(stderr, "[E::%s] Unmatched SAI magic in file \"%s\". Please re-run `aln' with the same version of bwa.\n", __func__, fn_sa[i]);
+			exit(1);
+		}
+		err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa[i]);
+		ks[i] = bwa_open_reads(opt.mode, fn_fa[i]);
+		if(!i)
+			opt0 = opt;
 	}
-	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa[0]);
-	ks[0] = bwa_open_reads(opt.mode, fn_fa[0]);
-	opt0 = opt;
-	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa[1]); // overwritten!
-	ks[1] = bwa_open_reads(opt.mode, fn_fa[1]);
 	{ // for Illumina alignment only
 		if (popt->is_preload) {
 			strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);

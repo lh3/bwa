@@ -525,7 +525,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	m_aln = 0;
 	err_fread_noeof(magic, 1, 4, fp_sa);
 	if (strncmp(magic, SAI_MAGIC, 4) != 0) {
-		fprintf(stderr, "[E::%s] Unmatched SAI magic. Please re-run `aln' with the same version of bwa.\n", __func__);
+		fprintf(stderr, "[E::%s] Unmatched SAI magic in file \"%s\". Please re-run `aln' with the same version of bwa.\n", __func__, fn_sa);
 		exit(1);
 	}
 	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa);
