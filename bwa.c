@@ -277,9 +277,11 @@ void bwa_idx_destroy(bwaidx_t *idx)
 void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
 {
 	int i;
+	extern char *bwa_pg;
 	for (i = 0; i < bns->n_seqs; ++i)
 		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
 	if (rg_line) err_printf("%s\n", rg_line);
+	err_printf("%s\n", bwa_pg);
 }
 
 static char *bwa_escape(char *s)
