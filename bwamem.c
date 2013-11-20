@@ -920,7 +920,9 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		exit(1);
 	}
 	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
-	w2 = w2 < opt->w? w2 : opt->w;
+	if (bwa_verbose >= 4) fprintf(stderr, "Band width: infer=%d, opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
+	if (w2 > opt->w) w2 = w2 < ar->w? w2 : ar->w;
+	else w2 = opt->w;
 	a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 	a.NM = NM;
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
