@@ -108,6 +108,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 
 int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
+	extern int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun);
 	int i, r, skip[4], n = 0;
 	for (r = 0; r < 4; ++r)
 		skip[r] = pes[r].failed? 1 : 0;
@@ -166,6 +167,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 			}
 			++n;
 		}
+		if (n) ma->n = mem_sort_and_dedup(ma->n, ma->a, opt->mask_level_redun);
 		if (rev) free(rev);
 		free(ref);
 	}
