@@ -372,6 +372,9 @@ KSORT_INIT(mem_ars2, mem_alnreg_t, alnreg_slt2)
 #define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
 KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 
+#define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
+KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
+
 int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 {
 	int m, i, j;
@@ -415,13 +418,14 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 	return m;
 }
 
-void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
+void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
 { // similar to the loop in mem_chain_flt()
 	int i, k, tmp;
 	kvec_t(int) z;
 	if (n == 0) return;
 	kv_init(z);
-	for (i = 0; i < n; ++i) a[i].sub = 0, a[i].secondary = -1;
+	for (i = 0; i < n; ++i) a[i].sub = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
+	ks_introsort(mem_ars_hash, n, a);
 	tmp = opt->a + opt->b > opt->q + opt->r? opt->a + opt->b : opt->q + opt->r;
 	kv_push(int, z, 0);
 	for (i = 1; i < n; ++i) {
@@ -890,7 +894,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	seq = malloc(l_seq);
 	memcpy(seq, seq_, l_seq); // makes a copy of seq_
 	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
-	mem_mark_primary_se(opt, ar.n, ar.a);
+	mem_mark_primary_se(opt, ar.n, ar.a, lrand48());
 	free(seq);
 	return ar;
 }
@@ -967,6 +971,7 @@ typedef struct {
 	const mem_pestat_t *pes;
 	bseq1_t *seqs;
 	mem_alnreg_v *regs;
+	int64_t n_processed;
 } worker_t;
 
 static void worker1(void *data, int i, int tid)
@@ -985,30 +990,26 @@ static void worker2(void *data, int i, int tid)
 	extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2]);
 	worker_t *w = (worker_t*)data;
 	if (!(w->opt->flag&MEM_F_PE)) {
-		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a);
+		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
 		mem_reg2sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 		free(w->regs[i].a);
 	} else {
-		mem_sam_pe(w->opt, w->bns, w->pac, w->pes, i, &w->seqs[i<<1], &w->regs[i<<1]);
+		mem_sam_pe(w->opt, w->bns, w->pac, w->pes, (w->n_processed>>1) + i, &w->seqs[i<<1], &w->regs[i<<1]);
 		free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 	}
 }
 
-void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs, const mem_pestat_t *pes0)
+void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0)
 {
 	extern void kt_for(int n_threads, void (*func)(void*,int,int), void *data, int n);
-	int i;
 	worker_t w;
 	mem_alnreg_v *regs;
 	mem_pestat_t pes[4];
 
 	regs = malloc(n * sizeof(mem_alnreg_v));
-	for (i = 0; i < opt->n_threads; ++i) {
-		worker_t *p = &w;
-		p->opt = opt; p->bwt = bwt; p->bns = bns; p->pac = pac;
-		p->seqs = seqs; p->regs = regs;
-		p->pes = &pes[0];
-	}
+	w.opt = opt; w.bwt = bwt; w.bns = bns; w.pac = pac;
+	w.seqs = seqs; w.regs = regs; w.n_processed = n_processed;
+	w.pes = &pes[0];
 	kt_for(opt->n_threads, worker1, &w, (opt->flag&MEM_F_PE)? n>>1 : n); // find mapping positions
 	if (opt->flag&MEM_F_PE) { // infer insert sizes if not provided
 		if (pes0) memcpy(pes, pes0, 4 * sizeof(mem_pestat_t)); // if pes0 != NULL, set the insert-size distribution as pes0

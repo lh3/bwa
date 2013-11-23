@@ -27,6 +27,7 @@ int main_mem(int argc, char *argv[])
 	bwaidx_t *idx;
 	char *rg_line = 0;
 	void *ko = 0, *ko2 = 0;
+	int64_t n_processed = 0;
 
 	opt = mem_opt_init();
 	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:")) >= 0) {
@@ -137,7 +138,8 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n, seqs, 0);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, 0);
+		n_processed += n;
 		for (i = 0; i < n; ++i) {
 			err_fputs(seqs[i].sam, stdout);
 			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
