@@ -502,26 +502,34 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
 		h1 = beg == 0? -(gapo + gape * (i + 1)) : MINUS_INF;
 		for (j = beg; LIKELY(j < end); ++j) {
-			// This loop is organized in a similar way to ksw_extend() and ksw_sse2(), except:
-			// 1) not checking h>0; 2) recording direction for backtracking
+			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
+			// Cells are computed in the following order:
+			//   M(i,j)   = H(i-1,j-1) + S(i,j)
+			//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
+			//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
+			//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
+			// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
+			// However, a CIGAR like "10M3I3D10M" allowed by local() and extend() is disallowed by global().
+			// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
+			// In practice, this should happen very rarely given a reasonable scoring system.
 			eh_t *p = &eh[j];
-			int32_t h = p->h, e = p->e;
+			int32_t h, m = p->h, e = p->e;
 			uint8_t d; // direction
 			p->h = h1;
-			h += q[j];
-			d = h >= e? 0 : 1;
-			h = h >= e? h : e;
+			m += q[j];
+			d = m >= e? 0 : 1;
+			h = m >= e? m : e;
 			d = h >= f? d : 2;
 			h = h >= f? h : f;
 			h1 = h;
-			h -= gapoe;
+			m -= gapoe;
 			e -= gape;
-			d |= e > h? 1<<2 : 0;
-			e = e > h? e : h;
+			d |= e > m? 1<<2 : 0;
+			e  = e > m? e    : m;
 			p->e = e;
 			f -= gape;
-			d |= f > h? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
-			f = f > h? f : h;
+			d |= f > m? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
+			f  = f > m? f    : m;
 			zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
 		}
 		eh[end].h = h1; eh[end].e = MINUS_INF;
