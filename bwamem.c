@@ -215,6 +215,7 @@ static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *
 				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 				s.qbeg = p->info>>32;
 				s.len  = slen;
+				if (bwa_verbose >= 5) printf("SEED l=%d,qb=%d,rb=%ld\n", s.len, s.qbeg, (long)s.rbeg);
 				if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
 				if (kb_size(tree)) {
 					kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
