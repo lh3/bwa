@@ -30,7 +30,7 @@ int main_mem(int argc, char *argv[])
 	int64_t n_processed = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
@@ -49,6 +49,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'd') opt->zdrop = atoi(optarg);
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
+		else if (c == 'D') opt->chain_drop_ratio = atof(optarg);
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'Q') {
 			opt->mapQ_coef_len = atoi(optarg);
@@ -75,6 +76,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -r FLOAT   look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 //		fprintf(stderr, "       -s INT     look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT     skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
+		fprintf(stderr, "       -D FLOAT   drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->chain_drop_ratio);
 		fprintf(stderr, "       -S         skip mate rescue\n");
 		fprintf(stderr, "       -P         skip pairing; mate rescue performed unless -S also in use\n");
 		fprintf(stderr, "       -A INT     score for a sequence match [%d]\n", opt->a);
