@@ -924,14 +924,14 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		exit(1);
 	}
 	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
-	if (bwa_verbose >= 4) fprintf(stderr, "Band width: infer=%d, opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
+	if (bwa_verbose >= 4) printf("Band width: infer=%d, opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
 	if (w2 > opt->w) w2 = w2 < ar->w? w2 : ar->w;
 	else w2 = opt->w;
 	i = 0; a.cigar = 0;
 	do {
 		free(a.cigar);
 		a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
-		if (bwa_verbose >= 4) fprintf(stderr, "Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
+		if (bwa_verbose >= 4) printf("Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
 		w2 <<= 1;
 	} while (++i < 3 && score < ar->truesc - opt->a);
 	a.NM = NM;
