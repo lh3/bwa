@@ -19,8 +19,6 @@
 
 int g_log_n[256];
 
-void bwa_print_sam_PG();
-
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi)
 {
 	int i, cnt, best;
@@ -530,7 +528,6 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 	}
 	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa);
 	bwa_print_sam_hdr(bns, rg_line);
-	//bwa_print_sam_PG();
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
 	// core loop

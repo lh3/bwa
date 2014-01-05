@@ -57,11 +57,6 @@ static int usage()
 	return 1;
 }
 
-void bwa_print_sam_PG()
-{
-	err_printf("@PG\tID:bwa\tPN:bwa\tVN:%s\n", PACKAGE_VERSION);
-}
-
 int main(int argc, char *argv[])
 {
 	int i, ret;
