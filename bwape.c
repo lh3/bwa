@@ -49,7 +49,6 @@ int bwa_approx_mapQ(const bwa_seq_t *p, int mm);
 void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, int mode, int max_top2);
 bntseq_t *bwa_open_nt(const char *prefix);
 void bwa_print_sam_SQ(const bntseq_t *bns);
-void bwa_print_sam_PG();
 
 pe_opt_t *bwa_init_pe_opt()
 {
@@ -671,7 +670,6 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 	// core loop
 	bwa_print_sam_hdr(bns, rg_line);
-	bwa_print_sam_PG();
 	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt0.mode, opt0.trim_qual)) != 0) {
 		int cnt_chg;
 		isize_info_t ii;
