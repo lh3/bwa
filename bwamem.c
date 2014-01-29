@@ -215,6 +215,7 @@ static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *
 				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 				s.qbeg = p->info>>32;
 				s.len  = slen;
+				if (bwa_verbose >= 5) printf("SEED l=%d,qb=%d,rb=%ld\n", s.len, s.qbeg, (long)s.rbeg);
 				if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
 				if (kb_size(tree)) {
 					kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
@@ -231,12 +232,32 @@ static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *
 	}
 }
 
+int mem_chain_weight(const mem_chain_t *c)
+{
+	int64_t end;
+	int j, w = 0, tmp;
+	for (j = 0, end = 0; j < c->n; ++j) {
+		const mem_seed_t *s = &c->seeds[j];
+		if (s->qbeg >= end) w += s->len;
+		else if (s->qbeg + s->len > end) w += s->qbeg + s->len - end;
+		end = end > s->qbeg + s->len? end : s->qbeg + s->len;
+	}
+	tmp = w;
+	for (j = 0, end = 0; j < c->n; ++j) {
+		const mem_seed_t *s = &c->seeds[j];
+		if (s->rbeg >= end) w += s->len;
+		else if (s->rbeg + s->len > end) w += s->rbeg + s->len - end;
+		end = end > s->qbeg + s->len? end : s->qbeg + s->len;
+	}
+	return w < tmp? w : tmp;
+}
+
 void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 {
 	int i, j;
 	for (i = 0; i < chn->n; ++i) {
 		mem_chain_t *p = &chn->a[i];
-		err_printf("CHAIN(%d) n=%d", i, p->n);
+		err_printf("CHAIN(%d) n=%d w=%d", i, p->n, mem_chain_weight(p));
 		for (j = 0; j < p->n; ++j) {
 			bwtint_t pos;
 			int is_rev, ref_id;
@@ -293,22 +314,8 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	a = malloc(sizeof(flt_aux_t) * n_chn);
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &chains[i];
-		int64_t end;
-		int w = 0, tmp;
-		for (j = 0, end = 0; j < c->n; ++j) {
-			const mem_seed_t *s = &c->seeds[j];
-			if (s->qbeg >= end) w += s->len;
-			else if (s->qbeg + s->len > end) w += s->qbeg + s->len - end;
-			end = end > s->qbeg + s->len? end : s->qbeg + s->len;
-		}
-		tmp = w;
-		for (j = 0, end = 0; j < c->n; ++j) {
-			const mem_seed_t *s = &c->seeds[j];
-			if (s->rbeg >= end) w += s->len;
-			else if (s->rbeg + s->len > end) w += s->rbeg + s->len - end;
-			end = end > s->qbeg + s->len? end : s->qbeg + s->len;
-		}
-		w = w < tmp? w : tmp;
+		int w;
+		w = mem_chain_weight(c);
 		a[i].beg = c->seeds[0].qbeg;
 		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
 		a[i].w = w; a[i].p = c; a[i].p2 = 0;
@@ -903,7 +910,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
-	int i, w2, qb, qe, NM, score, is_rev;
+	int i, w2, qb, qe, NM, score, is_rev, last_sc = -(1<<30);
 	int64_t pos, rb, re;
 	uint8_t *query;
 
@@ -932,6 +939,8 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		free(a.cigar);
 		a.cigar = bwa_gen_cigar(opt->mat, opt->q, opt->r, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 		if (bwa_verbose >= 4) printf("Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
+		if (score == last_sc) break; // it is possible that global alignment and local alignment give different scores
+		last_sc = score;
 		w2 <<= 1;
 	} while (++i < 3 && score < ar->truesc - opt->a);
 	a.NM = NM;
