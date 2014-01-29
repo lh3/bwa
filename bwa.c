@@ -6,6 +6,7 @@
 #include "bwa.h"
 #include "ksw.h"
 #include "utils.h"
+#include "kstring.h"
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -91,6 +92,8 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 	uint8_t tmp, *rseq;
 	int i;
 	int64_t rlen;
+	kstring_t str;
+
 	*n_cigar = 0; *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
 	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
@@ -122,18 +125,30 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 		*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
 	}
 	{// compute NM
-		int k, x, y, n_mm = 0, n_gap = 0;
-		for (k = 0, x = y = 0; k < *n_cigar; ++k) {
+		int k, x, y, u, n_mm = 0, n_gap = 0;
+		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
+		for (k = 0, x = y = u = 0; k < *n_cigar; ++k) {
 			int op  = cigar[k]&0xf;
 			int len = cigar[k]>>4;
 			if (op == 0) { // match
-				for (i = 0; i < len; ++i)
-					if (query[x + i] != rseq[y + i]) ++n_mm;
+				for (i = 0; i < len; ++i) {
+					if (query[x + i] != rseq[y + i]) {
+						kputw(u, &str); kputc("ACGTN"[rseq[y+i]], &str);
+						++n_mm; u = 0;
+					} else ++u;
+				}
 				x += len; y += len;
-			} else if (op == 1) x += len, n_gap += len;
-			else if (op == 2) y += len, n_gap += len;
+			} else if (op == 2) { // deletion
+				kputw(u, &str); kputc('^', &str);
+				for (i = 0; i < len; ++i)
+					kputc("ACGTN"[rseq[y+i]], &str);
+				u = 0;
+				y += len, n_gap += len;
+			} else if (op == 1) x += len, n_gap += len; // insertion
 		}
+		kputw(u, &str); kputc(0, &str);
 		*NM = n_mm + n_gap;
+		cigar = (uint32_t*)str.s;
 	}
 	if (rb >= l_pac) // reverse back query
 		for (i = 0; i < l_query>>1; ++i)

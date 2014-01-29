@@ -772,7 +772,10 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	}
 
 	// print optional tags
-	if (p->n_cigar) { kputsn("\tNM:i:", 6, str); kputw(p->NM, str); }
+	if (p->n_cigar) {
+		kputsn("\tNM:i:", 6, str); kputw(p->NM, str);
+		kputsn("\tMD:Z:", 6, str); kputs((char*)(p->cigar + p->n_cigar), str);
+	}
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
@@ -910,7 +913,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
-	int i, w2, qb, qe, NM, score, is_rev, last_sc = -(1<<30);
+	int i, w2, qb, qe, NM, score, is_rev, last_sc = -(1<<30), l_MD;
 	int64_t pos, rb, re;
 	uint8_t *query;
 
@@ -943,27 +946,34 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		last_sc = score;
 		w2 <<= 1;
 	} while (++i < 3 && score < ar->truesc - opt->a);
+	l_MD = strlen((char*)(a.cigar + a.n_cigar)) + 1;
 	a.NM = NM;
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
 	a.is_rev = is_rev;
-	if (a.n_cigar > 0) {
+	if (a.n_cigar > 0) { // squeeze out leading or trailing deletions
 		if ((a.cigar[0]&0xf) == 2) {
 			pos += a.cigar[0]>>4;
 			--a.n_cigar;
-			memmove(a.cigar, a.cigar + 1, a.n_cigar * 4);
-		} else if ((a.cigar[a.n_cigar-1]&0xf) == 2) --a.n_cigar;
+			memmove(a.cigar, a.cigar + 1, a.n_cigar * 4 + l_MD);
+		} else if ((a.cigar[a.n_cigar-1]&0xf) == 2) {
+			--a.n_cigar;
+			memmove(a.cigar + a.n_cigar, a.cigar + a.n_cigar + 1, l_MD); // MD needs to be moved accordingly
+		}
 	}
 	if (qb != 0 || qe != l_query) { // add clipping to CIGAR
 		int clip5, clip3;
 		clip5 = is_rev? l_query - qe : qb;
 		clip3 = is_rev? qb : l_query - qe;
-		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2));
+		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2) + l_MD);
 		if (clip5) {
-			memmove(a.cigar+1, a.cigar, a.n_cigar * 4);
+			memmove(a.cigar+1, a.cigar, a.n_cigar * 4 + l_MD); // make room for 5'-end clipping
 			a.cigar[0] = clip5<<4 | 3;
 			++a.n_cigar;
 		}
-		if (clip3) a.cigar[a.n_cigar++] = clip3<<4 | 3;
+		if (clip3) {
+			memmove(a.cigar + a.n_cigar + 1, a.cigar + a.n_cigar, l_MD); // make room for 3'-end clipping
+			a.cigar[a.n_cigar++] = clip3<<4 | 3;
+		}
 	}
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;
