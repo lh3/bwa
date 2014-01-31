@@ -1,4 +1,4 @@
-.TH bwa 1 "24 May 2013" "bwa-0.7.5" "Bioinformatics tools"
+.TH bwa 1 "31 January 2014" "bwa-0.7.6" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -158,7 +158,7 @@ Number of threads [1]
 Minimum seed length. Matches shorter than
 .I INT
 will be missed. The alignment speed is usually insensitive to this value unless
-it significantly deviates 20. [19]
+it significantly deviates from 20. [19]
 .TP
 .BI -w \ INT
 Band width. Essentially, gaps longer than
@@ -210,12 +210,13 @@ Gap extension penalty. A gap of length k costs O + k*E (i.e.
 .B -O
 is for opening a zero-length gap). [1]
 .TP
-.BI -L \ INT
+.BI -L \ INT[,INT]
 Clipping penalty. When performing SW extension, BWA-MEM keeps track of the best
 score reaching the end of query. If this score is larger than the best SW score
 minus the clipping penalty, clipping will not be applied. Note that in this
 case, the SAM AS tag reports the best SW score; clipping penalty is not
-deducted. [5]
+deduced. If two numbers are provided, the first is for 5'-end clipping and
+second for 3'-end clipping. [5]
 .TP
 .BI -U \ INT
 Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
@@ -249,10 +250,6 @@ Append append FASTA/Q comment to SAM output. This option can be used to
 transfer read meta information (e.g. barcode) to the SAM output. Note that the
 FASTA/Q comment (the string after a space in the header line) must conform the SAM
 spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
-.TP
-.B -H
-Use hard clipping 'H' in the SAM output. This option may dramatically reduce
-the redundancy of output when mapping long contig or BAC sequences.
 .TP
 .B -M
 Mark shorter split hits as secondary (for Picard compatibility).
@@ -569,6 +566,7 @@ NM	Edit distance
 MD	Mismatching positions/bases
 AS	Alignment score
 BC	Barcode sequence
+SA	Supplementary alignments
 _
 X0	Number of best hits
 X1	Number of suboptimal hits found by BWA
