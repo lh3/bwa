@@ -128,8 +128,9 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 		int k, x, y, u, n_mm = 0, n_gap = 0;
 		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
 		for (k = 0, x = y = u = 0; k < *n_cigar; ++k) {
-			int op  = cigar[k]&0xf;
-			int len = cigar[k]>>4;
+			int op, len;
+			cigar = (uint32_t*)str.s;
+			op  = cigar[k]&0xf, len = cigar[k]>>4;
 			if (op == 0) { // match
 				for (i = 0; i < len; ++i) {
 					if (query[x + i] != rseq[y + i]) {
