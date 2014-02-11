@@ -17,6 +17,11 @@
 #include <pthread.h>
 #endif
 
+#ifdef HAVE_CILK
+#include <cilk/cilk.h>
+#include <cilk/cilk_api.h>
+#endif
+
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
 #endif
@@ -80,6 +85,67 @@ int bwt_cal_width(const bwt_t *bwt, int len, const ubyte_t *str, bwt_width_t *wi
 	return bid;
 }
 
+#ifdef HAVE_CILK
+typedef struct {
+	int max_l;
+	gap_stack_t *stack;
+	bwt_width_t *w, *seed_w;
+	gap_opt_t local_opt;
+} cilk_locals_t;
+#endif
+
+#ifdef HAVE_CILK
+void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt)
+{
+        int i, j, max_len;
+        gap_opt_t local_opt = *opt;
+        int nworkers = __cilkrts_get_nworkers(); 
+	cilk_locals_t* cilk_locals = (cilk_locals_t*)calloc(nworkers, sizeof(cilk_locals_t));
+ 
+        // initiate priority stack using program options
+        for (i = max_len = 0; i != n_seqs; ++i)
+                if (seqs[i].len > max_len) max_len = seqs[i].len;
+        if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff(max_len, BWA_AVG_ERR, opt->fnr);
+        if (local_opt.max_diff < local_opt.max_gapo) local_opt.max_gapo = local_opt.max_diff;
+        for (i = 0; i < nworkers; ++i){
+		cilk_locals_t* locals = cilk_locals + i;
+		locals->stack = gap_init_stack(local_opt.max_diff, local_opt.max_gapo, local_opt.max_gape, &local_opt);
+        	locals->seed_w = (bwt_width_t*)calloc(opt->seed_len+1, sizeof(bwt_width_t));
+		locals->local_opt = local_opt;
+        	locals->w = 0;
+	}
+
+        cilk_for (i = 0; i != n_seqs; ++i) {
+		cilk_locals_t* locals = cilk_locals + __cilkrts_get_worker_number(); 
+                bwa_seq_t *p = seqs + i;
+                p->sa = 0; p->type = BWA_TYPE_NO_MATCH; p->c1 = p->c2 = 0; p->n_aln = 0; p->aln = 0;
+                if (locals->max_l < p->len) {
+                        locals->max_l = p->len;
+                        locals->w = (bwt_width_t*)realloc(locals->w, (locals->max_l + 1) * sizeof(bwt_width_t));
+                        memset(locals->w, 0, (locals->max_l + 1) * sizeof(bwt_width_t));
+                }
+                bwt_cal_width(bwt, p->len, p->seq, locals->w);
+                if (opt->fnr > 0.0) locals->local_opt.max_diff = bwa_cal_maxdiff(p->len, BWA_AVG_ERR, opt->fnr);
+                locals->local_opt.seed_len = opt->seed_len < p->len? opt->seed_len : 0x7fffffff;
+                if (p->len > opt->seed_len)
+                        bwt_cal_width(bwt, opt->seed_len, p->seq + (p->len - opt->seed_len), locals->seed_w);
+                // core function
+                for (j = 0; j < p->len; ++j) // we need to complement
+                        p->seq[j] = p->seq[j] > 3? 4 : 3 - p->seq[j];
+                p->aln = bwt_match_gap(bwt, p->len, p->seq, locals->w, p->len <= opt->seed_len? 0 : locals->seed_w, &locals->local_opt, &p->n_aln, locals->stack);
+                //fprintf(stderr, "mm=%lld,ins=%lld,del=%lld,gapo=%lld\n", p->aln->n_mm, p->aln->n_ins, p->aln->n_del, p->aln->n_gapo);
+                // clean up the unused data in the record
+                free(p->name); free(p->seq); free(p->rseq); free(p->qual);
+                p->name = 0; p->seq = p->rseq = p->qual = 0;
+        }
+	for (i = 0; i < nworkers; ++i){
+		cilk_locals_t* locals = cilk_locals + i;
+        	free(locals->seed_w); free(locals->w);
+        	gap_destroy_stack(locals->stack);
+	}
+	free(cilk_locals);
+}
+#else
 void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, const gap_opt_t *opt)
 {
 	int i, j, max_l = 0, max_len;
@@ -124,6 +190,7 @@ void bwa_cal_sa_reg_gap(int tid, bwt_t *const bwt, int n_seqs, bwa_seq_t *seqs, 
 	free(seed_w); free(w);
 	gap_destroy_stack(stack);
 }
+#endif
 
 #ifdef HAVE_PTHREAD
 typedef struct {
@@ -269,6 +336,12 @@ int bwa_aln(int argc, char *argv[])
 		opt->max_gape = opte;
 		opt->mode &= ~BWA_MODE_GAPE;
 	}
+
+#ifdef HAVE_CILK
+	if (opt->n_threads != 1)
+		fprintf(stderr, "\nWarning: -t parameter is ignored in the Cilk version. The number of threads is by default chosen by the Cilk scheduler equal to the available numnber of cores. Please use the CILK_NWORKERS environment variable to set this manually.\n\n");
+	opt->n_threads = __cilkrts_get_nworkers();	
+#endif
 
 	if (optind + 2 > argc) {
 		fprintf(stderr, "\n");
