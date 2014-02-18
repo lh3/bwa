@@ -93,6 +93,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 	int i;
 	int64_t rlen;
 	kstring_t str;
+	const char *int2base;
 
 	*n_cigar = 0; *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
@@ -127,6 +128,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 	{// compute NM
 		int k, x, y, u, n_mm = 0, n_gap = 0;
 		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
+		int2base = rb < l_pac? "ACGTN" : "TGCAN";
 		for (k = 0, x = y = u = 0; k < *n_cigar; ++k) {
 			int op, len;
 			cigar = (uint32_t*)str.s;
@@ -134,7 +136,8 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			if (op == 0) { // match
 				for (i = 0; i < len; ++i) {
 					if (query[x + i] != rseq[y + i]) {
-						kputw(u, &str); kputc("ACGTN"[rseq[y+i]], &str);
+						kputw(u, &str);
+						kputc(int2base[rseq[y+i]], &str);
 						++n_mm; u = 0;
 					} else ++u;
 				}
@@ -142,7 +145,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			} else if (op == 2) { // deletion
 				kputw(u, &str); kputc('^', &str);
 				for (i = 0; i < len; ++i)
-					kputc("ACGTN"[rseq[y+i]], &str);
+					kputc(int2base[rseq[y+i]], &str);
 				u = 0;
 				y += len, n_gap += len;
 			} else if (op == 1) x += len, n_gap += len; // insertion
