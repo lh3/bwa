@@ -133,7 +133,6 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			int op, len;
 			cigar = (uint32_t*)str.s;
 			op  = cigar[k]&0xf, len = cigar[k]>>4;
-			if (op == 2 && (k == 0 || k == *n_cigar - 1)) continue; // skip the leading or trailing deletions
 			if (op == 0) { // match
 				for (i = 0; i < len; ++i) {
 					if (query[x + i] != rseq[y + i]) {
@@ -144,11 +143,13 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 				}
 				x += len; y += len;
 			} else if (op == 2) { // deletion
-				kputw(u, &str); kputc('^', &str);
-				for (i = 0; i < len; ++i)
-					kputc(int2base[rseq[y+i]], &str);
-				u = 0;
-				y += len, n_gap += len;
+				if (k > 0 && k < *n_cigar) { // don't do the following if D is the first or the last CIGAR
+					kputw(u, &str); kputc('^', &str);
+					for (i = 0; i < len; ++i)
+						kputc(int2base[rseq[y+i]], &str);
+					u = 0; n_gap += len;
+				}
+				y += len;
 			} else if (op == 1) x += len, n_gap += len; // insertion
 		}
 		kputw(u, &str); kputc(0, &str);
