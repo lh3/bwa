@@ -143,7 +143,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 				}
 				x += len; y += len;
 			} else if (op == 2) { // deletion
-				if (k > 0 && k < *n_cigar) { // don't do the following if D is the first or the last CIGAR
+				if (k > 0 && k < *n_cigar - 1) { // don't do the following if D is the first or the last CIGAR
 					kputw(u, &str); kputc('^', &str);
 					for (i = 0; i < len; ++i)
 						kputc(int2base[rseq[y+i]], &str);
