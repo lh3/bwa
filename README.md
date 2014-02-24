@@ -10,7 +10,6 @@ After cloning this repository, you have to check out the cilk branch (git checko
 
 	git clone https://github.com/exascience/bwa.git
 	cd bwa; git checkout cilk; make
-	cd bwa; make
 	./bwa aln ...
 
 ###Introduction
