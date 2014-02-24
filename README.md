@@ -1,10 +1,16 @@
+###Information about the BWA Cilk version
+
+This repository contains an adapted version of BWA where the main working loop in BWA aln is parallelised using the Cilk Plus language extension for C, instead of the original pthread version. Depending on work loads and machine configuration, this can yield a performance improvement of up to a factor two. See http://www.exascience.com/wp-content/uploads/2013/12/Herzeel-BWAReport.pdf for a technical report that summarises our findings. Note: The improvements only apply to BWA aln, not BWA mem!
+
+You need a recent Intel C compiler with built-in support for Cilk Plus to compile this code. See http://software.intel.com/en-us/intel-sdp-home for information about Intel compilers. The code is also likely to work with the experimental open source implementation of Cilk Plus for gcc available at https://www.cilkplus.org/download#gcc-development-branch - but we haven’t tested this ourselves.
+
+After cloning this repository, you have to check out the cilk branch (git checkout cilk). You can edit the Makefile to switch between Cilk and pthread execution. For Cilk Plus, the number of worker threads does not need to be specified at the command line, because the Cilk runtime will figure out the number of available cores itself. For scaling experiments, you can use the CILK_NWORKERS environment variable to specify the number of Cilk worker threads. Please check the Cilk Plus documentation at https://www.cilkplus.org/cilk-documentation-full for more details.
+
 ###Getting started
 
-	git clone https://github.com/lh3/bwa.git
-	cd bwa; make
-	./bwa index ref.fa
-	./bwa mem ref.fa read-se.fq.gz | gzip -3 > aln-se.sam.gz
-	./bwa mem ref.fa read1.fq read2.fq | gzip -3 > aln-pe.sam.gz
+	git clone https://github.com/exascience/bwa.git
+	cd bwa; git checkout cilk; make
+	./bwa aln ...
 
 ###Introduction
 
