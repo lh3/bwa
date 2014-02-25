@@ -1,3 +1,20 @@
+Release 0.7.7 (25 Feburary, 2014)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This release fixes incorrect MD tags in the BWA-MEM output.
+
+A note about short-read mapping to GRCh38. The new human reference genome
+GRCh38 contains 60Mbp program generated alpha repeat arrays, some of which are
+hard masked as they cannot be localized. These highly repetitive arrays make
+BWA-MEM ~50% slower. If you are concerned with the performance of BWA-MEM, you
+may consider to use option "-c2000 -m50". On simulated data, this setting helps
+the performance at a very minor cost on accuracy. I may consider to change the
+default in future releases.
+
+(0.7.7: 25 Feburary 2014, r441)
+
+
+
 Release 0.7.6 (31 Januaray, 2014)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

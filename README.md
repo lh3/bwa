@@ -26,7 +26,7 @@ different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 ###Availability
 
 BWA is released under [GPLv3][1]. The latest souce code is [freely
-available][2] at github. Released packages can [be downloaded ][3] at
+available][2] at github. Released packages can [be downloaded][3] at
 SourceForge. After you acquire the source code, simply use `make` to compile
 and copy the single executable `bwa` to the destination you want. The only
 dependency of BWA is [zlib][14].
@@ -73,3 +73,4 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 [12]: http://arxiv.org/abs/1303.3997
 [13]: http://arxiv.org/
 [14]: http://zlib.net/
+[15]: https://github.com/lh3/bwa/tree/mem
