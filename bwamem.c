@@ -111,7 +111,7 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 	itr->len = len;
 }
 
-const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
+const bwtintv_v *smem_next2(smem_i *itr, int split_len, int split_width, int start_width)
 {
 	int i, max, max_i, ori_start;
 	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = itr->sub->n = 0;
@@ -119,7 +119,7 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return 0;
 	ori_start = itr->start;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, 1, itr->matches, itr->tmpvec); // search for SMEM
+	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, start_width, itr->matches, itr->tmpvec); // search for SMEM
 	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
 	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
 		bwtintv_t *p = &itr->matches->a[i];
@@ -150,6 +150,11 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
 		kv_copy(bwtintv_t, *itr->matches, *a);
 	}
 	return itr->matches;
+}
+
+const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
+{
+	return smem_next2(itr, split_len, split_width, 1);
 }
 
 /********************************
@@ -200,8 +205,9 @@ static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *
 {
 	const bwtintv_v *a;
 	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
+	int start_width = (opt->flag & MEM_F_NO_EXACT)? 2 : 1;
 	split_len = split_len < itr->len? split_len : itr->len;
-	while ((a = smem_next(itr, split_len, opt->split_width)) != 0) { // to find all SMEM and some internal MEM
+	while ((a = smem_next2(itr, split_len, opt->split_width, start_width)) != 0) { // to find all SMEM and some internal MEM
 		int i;
 		for (i = 0; i < a->n; ++i) { // go through each SMEM/MEM up to itr->start
 			bwtintv_t *p = &a->a[i];
@@ -423,6 +429,13 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 			else ++m;
 		}
 	return m;
+}
+
+int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int qlen)
+{
+	if (!(opt->flag & MEM_F_NO_EXACT) || n == 0 || a->truesc != qlen * opt->a) return n;
+	memmove(a, a + 1, (n - 1) * sizeof(mem_alnreg_t));
+	return n - 1;
 }
 
 void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
@@ -894,6 +907,8 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	}
 	free(chn.a);
 	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
+	if (opt->flag & MEM_F_NO_EXACT)
+		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
 	return regs;
 }
 

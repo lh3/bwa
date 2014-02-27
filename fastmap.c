@@ -30,7 +30,7 @@ int main_mem(int argc, char *argv[])
 	int64_t n_processed = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
@@ -45,6 +45,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'p') opt->flag |= MEM_F_PE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
+		else if (c == 'e') opt->flag |= MEM_F_NO_EXACT;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'd') opt->zdrop = atoi(optarg);
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -81,6 +82,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -m INT     perform at most INT rounds of mate rescues for each read [%d]\n", opt->max_matesw);
 		fprintf(stderr, "       -S         skip mate rescue\n");
 		fprintf(stderr, "       -P         skip pairing; mate rescue performed unless -S also in use\n");
+		fprintf(stderr, "       -e         discard full-length exact matches\n");
 		fprintf(stderr, "       -A INT     score for a sequence match [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT     penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT     gap open penalty [%d]\n", opt->q);
