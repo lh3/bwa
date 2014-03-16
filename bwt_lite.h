@@ -17,9 +17,9 @@ extern "C" {
 #endif
 
 	bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq);
-	inline uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c);
-	inline void bwtl_occ4(const bwtl_t *bwt, uint32_t k, uint32_t cnt[4]);
-	inline void bwtl_2occ4(const bwtl_t *bwt, uint32_t k, uint32_t l, uint32_t cntk[4], uint32_t cntl[4]);
+	uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c);
+	void bwtl_occ4(const bwtl_t *bwt, uint32_t k, uint32_t cnt[4]);
+	void bwtl_2occ4(const bwtl_t *bwt, uint32_t k, uint32_t l, uint32_t cntk[4], uint32_t cntl[4]);
 	void bwtl_destroy(bwtl_t *bwt);
 
 #ifdef __cplusplus
