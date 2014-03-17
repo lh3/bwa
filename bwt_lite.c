@@ -56,7 +56,7 @@ bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq)
 	}
 	return b;
 }
-inline uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c)
+uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c)
 {
 	uint32_t n, b;
 	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];

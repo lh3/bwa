@@ -106,6 +106,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
 	}
 	if (l_query == re - rb && w_ == 0) { // no gap; no need to do DP
+		// FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
 		cigar = malloc(4);
 		cigar[0] = l_query<<4 | 0;
 		*n_cigar = 1;
@@ -113,8 +114,6 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			*score += mat[rseq[i]*5 + query[i]];
 	} else {
 		int w, max_gap, min_w;
-		//printf("[Q] "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
-		//printf("[R] "); for (i = 0; i < re - rb; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 		// set the band-width
 		max_gap = (int)((double)(((l_query+1)>>1) * mat[0] - q) / r + 1.);
 		max_gap = max_gap > 1? max_gap : 1;
@@ -123,6 +122,11 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 		min_w = abs(rlen - l_query) + 3;
 		w = w > min_w? w : min_w;
 		// NW alignment
+		if (bwa_verbose >= 4) {
+			printf("* Global bandwidth: %d\n", w);
+			printf("* Global ref:   "); for (i = 0; i < rlen; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
+			printf("* Global query: "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
+		}
 		*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
 	}
 	{// compute NM and MD
