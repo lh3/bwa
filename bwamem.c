@@ -687,7 +687,7 @@ static inline int infer_bw(int l1, int l2, int score, int a, int q, int r)
 {
 	int w;
 	if (l1 == l2 && l1 * a - score < (q + r - a)<<1) return 0; // to get equal alignment length, we need at least two gaps
-	w = ((double)((l1 < l2? l1 : l2) * a - score - q) / r + 1.);
+	w = ((double)((l1 < l2? l1 : l2) * a - score - q) / r + 2.);
 	if (w < abs(l1 - l2)) w = abs(l1 - l2);
 	return w;
 }
@@ -950,7 +950,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	w2 = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->q, opt->r);
 	if (bwa_verbose >= 4) printf("* Band width: inferred=%d, cmd_opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
 	if (w2 > opt->w) w2 = w2 < ar->w? w2 : ar->w;
-	else w2 = opt->w; // TODO: check if we need this line. Need to test on many reads.
+//	else w2 = opt->w; // TODO: check if we need this line on long reads. On 1-800bp reads, it does not matter and it should be.
 	i = 0; a.cigar = 0;
 	do {
 		free(a.cigar);
