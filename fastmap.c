@@ -17,18 +17,31 @@ extern unsigned char nst_nt4_table[256];
 void *kopen(const char *fn, int *_fd);
 int kclose(void *a);
 
+
+/* all pointers needed to open and process a fastq file */
+struct FastQHandler
+	{
+	char* path;//all fastq comma-separated
+	char* file;//current fastq
+	gzFile fp;
+	int fd;
+	void* ko;
+	kseq_t *ks;
+	int next;//start of next filename in path
+	};
+
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt;
-	int fd, fd2, i, c, n, copy_comment = 0;
-	gzFile fp, fp2 = 0;
-	kseq_t *ks, *ks2 = 0;
+	int  i, c, n, copy_comment = 0;
 	bseq1_t *seqs;
 	bwaidx_t *idx;
 	char *rg_line = 0;
-	void *ko = 0, *ko2 = 0;
 	int64_t n_processed = 0;
-
+	struct FastQHandler fastqinput[2];
+	int loop_fastq_done=0;
+	
+	memset(fastqinput,0,2*sizeof(struct FastQHandler));
 	opt = mem_opt_init();
 	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
@@ -104,61 +117,102 @@ int main_mem(int argc, char *argv[])
 
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
-
-	ko = kopen(argv[optind + 1], &fd);
-	if (ko == 0) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__, argv[optind + 1]);
-		return 1;
-	}
-	fp = gzdopen(fd, "r");
-	ks = kseq_init(fp);
-	if (optind + 2 < argc) {
+	
+	fastqinput[0].path = argv[optind + 1];
+	
+	if (optind + 2 < argc)
+		{
 		if (opt->flag&MEM_F_PE) {
 			if (bwa_verbose >= 2)
 				fprintf(stderr, "[W::%s] when '-p' is in use, the second query file will be ignored.\n", __func__);
-		} else {
-			ko2 = kopen(argv[optind + 2], &fd2);
-			if (ko2 == 0) {
-				if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__, argv[optind + 2]);
-				return 1;
 			}
-			fp2 = gzdopen(fd2, "r");
-			ks2 = kseq_init(fp2);
+		else
+			{
+			fastqinput[1].path = argv[optind + 2];
 			opt->flag |= MEM_F_PE;
-		}
-	}
-	bwa_print_sam_hdr(idx->bns, rg_line);
-	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
-		int64_t size = 0;
-		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
-			if (bwa_verbose >= 2)
-				fprintf(stderr, "[W::%s] odd number of reads in the PE mode; last read dropped\n", __func__);
-			n = n>>1<<1;
-		}
-		if (!copy_comment)
-			for (i = 0; i < n; ++i) {
-				free(seqs[i].comment); seqs[i].comment = 0;
 			}
-		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
-		if (bwa_verbose >= 3)
-			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, 0);
-		n_processed += n;
-		for (i = 0; i < n; ++i) {
-			err_fputs(seqs[i].sam, stdout);
-			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 		}
-		free(seqs);
-	}
+	
+	for(i=0;i< 2;++i) fastqinput[i].next =0;
+	
+	
+	bwa_print_sam_hdr(idx->bns, rg_line);
+	
+	do //loop over all comma separated files
+		{
+
+		//open each fastq 
+		for(i=0;i< 2;++i)
+			{
+			struct FastQHandler* handler=&fastqinput[i];
+			char *comma;
+			if(handler->path==NULL) continue;
+
+			handler->file=strdup(&handler->path[handler->next]);
+			comma= strchr(handler->file,',');
+			
+			if(comma!=NULL)
+				{
+				*comma=0;
+				handler->next+= 1+strlen(handler->file);
+				if( handler->path[handler->next]==0 || strcmp(&handler->path[handler->next],",")==0) loop_fastq_done=1; //empty string or single comma at the end
+				}
+			else
+				{
+				loop_fastq_done=1;
+				}
+				
+			handler->ko = kopen(handler->file, &(handler->fd));
+			if (handler->ko == 0) {
+				if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__,handler->file);
+				return 1;
+				}
+			handler->fp = gzdopen(handler->fd, "r");
+			handler->ks = kseq_init(handler->fp);
+			}
+		
+		while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, fastqinput[0].ks, fastqinput[1].ks)) != 0)
+			{
+			int64_t size = 0;
+			if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
+				if (bwa_verbose >= 2)
+					fprintf(stderr, "[W::%s] odd number of reads in the PE mode; last read dropped\n", __func__);
+				n = n>>1<<1;
+			}
+			if (!copy_comment)
+				for (i = 0; i < n; ++i) {
+					free(seqs[i].comment); seqs[i].comment = 0;
+				}
+			for (i = 0; i < n; ++i) size += seqs[i].l_seq;
+			if (bwa_verbose >= 3)
+				fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
+			mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac,  n_processed,n, seqs, 0);
+			n_processed += n;
+			for (i = 0; i < n; ++i) {
+				fputs(seqs[i].sam, stdout);
+				free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
+			}
+			free(seqs);
+			}
+		
+		//cleanup fastq
+		for(i=0;i< 2;++i)
+			{
+			struct FastQHandler* handler=&fastqinput[i];
+			if(handler->path==NULL) continue;
+			free(handler->file);
+			kseq_destroy(handler->ks);
+			err_gzclose(handler->fp);
+			kclose(handler->ko);
+			}
+		
+		
+		} while(loop_fastq_done!=1);
+	
 
 	free(opt);
 	bwa_idx_destroy(idx);
-	kseq_destroy(ks);
-	err_gzclose(fp); kclose(ko);
-	if (ks2) {
-		kseq_destroy(ks2);
-		err_gzclose(fp2); kclose(ko2);
-	}
+	
 	return 0;
 }
 
@@ -227,3 +281,4 @@ int main_fastmap(int argc, char *argv[])
 	err_gzclose(fp);
 	return 0;
 }
+
