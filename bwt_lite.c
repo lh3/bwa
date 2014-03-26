@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include "bwt_lite.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 int is_sa(const uint8_t *T, uint32_t *SA, int n);
 int is_bwt(uint8_t *T, int n);
 
@@ -52,7 +56,7 @@ bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq)
 	}
 	return b;
 }
-inline uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c)
+uint32_t bwtl_occ(const bwtl_t *bwt, uint32_t k, uint8_t c)
 {
 	uint32_t n, b;
 	if (k == bwt->seq_len) return bwt->L2[c+1] - bwt->L2[c];

@@ -6,6 +6,11 @@
 #include "bwa.h"
 #include "ksw.h"
 #include "utils.h"
+#include "kstring.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 int bwa_verbose = 3;
 char bwa_rg_id[256];
@@ -87,6 +92,9 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 	uint8_t tmp, *rseq;
 	int i;
 	int64_t rlen;
+	kstring_t str;
+	const char *int2base;
+
 	*n_cigar = 0; *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
 	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
@@ -98,6 +106,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
 	}
 	if (l_query == re - rb && w_ == 0) { // no gap; no need to do DP
+		// FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
 		cigar = malloc(4);
 		cigar[0] = l_query<<4 | 0;
 		*n_cigar = 1;
@@ -105,8 +114,6 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			*score += mat[rseq[i]*5 + query[i]];
 	} else {
 		int w, max_gap, min_w;
-		//printf("[Q] "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
-		//printf("[R] "); for (i = 0; i < re - rb; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 		// set the band-width
 		max_gap = (int)((double)(((l_query+1)>>1) * mat[0] - q) / r + 1.);
 		max_gap = max_gap > 1? max_gap : 1;
@@ -115,21 +122,43 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 		min_w = abs(rlen - l_query) + 3;
 		w = w > min_w? w : min_w;
 		// NW alignment
+		if (bwa_verbose >= 4) {
+			printf("* Global bandwidth: %d\n", w);
+			printf("* Global ref:   "); for (i = 0; i < rlen; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
+			printf("* Global query: "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
+		}
 		*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
 	}
-	{// compute NM
-		int k, x, y, n_mm = 0, n_gap = 0;
-		for (k = 0, x = y = 0; k < *n_cigar; ++k) {
-			int op  = cigar[k]&0xf;
-			int len = cigar[k]>>4;
+	{// compute NM and MD
+		int k, x, y, u, n_mm = 0, n_gap = 0;
+		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
+		int2base = rb < l_pac? "ACGTN" : "TGCAN";
+		for (k = 0, x = y = u = 0; k < *n_cigar; ++k) {
+			int op, len;
+			cigar = (uint32_t*)str.s;
+			op  = cigar[k]&0xf, len = cigar[k]>>4;
 			if (op == 0) { // match
-				for (i = 0; i < len; ++i)
-					if (query[x + i] != rseq[y + i]) ++n_mm;
+				for (i = 0; i < len; ++i) {
+					if (query[x + i] != rseq[y + i]) {
+						kputw(u, &str);
+						kputc(int2base[rseq[y+i]], &str);
+						++n_mm; u = 0;
+					} else ++u;
+				}
 				x += len; y += len;
-			} else if (op == 1) x += len, n_gap += len;
-			else if (op == 2) y += len, n_gap += len;
+			} else if (op == 2) { // deletion
+				if (k > 0 && k < *n_cigar - 1) { // don't do the following if D is the first or the last CIGAR
+					kputw(u, &str); kputc('^', &str);
+					for (i = 0; i < len; ++i)
+						kputc(int2base[rseq[y+i]], &str);
+					u = 0; n_gap += len;
+				}
+				y += len;
+			} else if (op == 1) x += len, n_gap += len; // insertion
 		}
+		kputw(u, &str); kputc(0, &str);
 		*NM = n_mm + n_gap;
+		cigar = (uint32_t*)str.s;
 	}
 	if (rb >= l_pac) // reverse back query
 		for (i = 0; i < l_query>>1; ++i)
@@ -142,57 +171,47 @@ ret_gen_cigar:
 
 int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
 {
-	int ib, ie, is_rev;
-	int64_t fb, fe, mid = -1;
+	int is_rev;
+	int64_t cb, ce, fm;
+	bntann1_t *ra;
 	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary; actually with BWA-MEM, we should never come to here
 		*qb = *qe = *rb = *re = -1;
 		return -1; // unable to fix
-	} else {
-		fb = bns_depos(bns, *rb < bns->l_pac? *rb : *re - 1, &is_rev);
-		ib = bns_pos2rid(bns, fb);
-		if (fb - bns->anns[ib].offset + (*re - *rb) <= bns->anns[ib].len) return 0; // no need to fix
-		fe = bns_depos(bns, *re - 1 < bns->l_pac? *re - 1 : *rb, &is_rev);
-		ie = bns_pos2rid(bns, fe);
-		if (ie - ib > 1) { // bridge three or more references
-			*qb = *qe = *rb = *re = -1;
-			return -2; // unable to fix
-		} else {
-			int l = bns->anns[ib].offset + bns->anns[ib].len - fb;
-			mid = is_rev? *re - l : *rb + l;
-		}
 	}
-	if (mid >= 0) {
+	fm = bns_depos(bns, (*rb + *re) >> 1, &is_rev); // coordinate of the middle point on the forward strand
+	ra = &bns->anns[bns_pos2rid(bns, fm)]; // annotation of chr corresponding to the middle point
+	cb = is_rev? (bns->l_pac<<1) - (ra->offset + ra->len) : ra->offset; // chr start on the mapping strand
+	ce = cb + ra->len; // chr end
+	if (cb > *rb || ce < *re) { // fix is needed
 		int i, score, n_cigar, y, NM;
 		uint32_t *cigar;
 		int64_t x;
+		cb = cb > *rb? cb : *rb;
+		ce = ce < *re? ce : *re;
 		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar, &NM);
 		for (i = 0, x = *rb, y = *qb; i < n_cigar; ++i) {
 			int op = cigar[i]&0xf, len = cigar[i]>>4;
 			if (op == 0) {
-				if (x <= mid && mid < x + len) {
-					if (mid - *rb > *re - mid) { // the first part is longer
-						if (x == mid) { // need to check the previous operation
-							assert(i); // mid != *rb should always stand
-							if ((cigar[i-1]&0xf) == 1) *qe = y - (cigar[i-1]>>4), *re = x;
-							else if ((cigar[i-1]&0xf) == 2) *qe = y, *re = x - (cigar[i-1]>>4);
-							else abort(); // should not be here
-						} else *qe = y + (mid - x), *re = mid;
-					} else *qb = y + (mid - x), *rb = mid;
+				if (x <= cb && cb < x + len)
+					*qb = y + (cb - x), *rb = cb;
+				if (x < ce && ce <= x + len) {
+					*qe = y + (ce - x), *re = ce;
 					break;
 				} else x += len, y += len;
-			} else if (op == 1) { // insertion
+			} else if (op == 1) {
 				y += len;
-			} else if (op == 2) { // deletion
-				if (x <= mid && mid < x + len) {
-					if (mid - *rb > *re - mid) *qe = y, *re = x;
-					else *qb = y, *rb = x + len;
+			} else if (op == 2) {
+				if (x <= cb && cb < x + len)
+					*qb = y, *rb = x + len;
+				if (x < ce && ce <= x + len) {
+					*qe = y, *re = x;
 					break;
 				} else x += len;
 			} else abort(); // should not be here
 		}
 		free(cigar);
 	}
-	return 1;
+	return (*qb == *qe || *rb == *re)? -2 : 0;
 }
 
 /*********************
@@ -258,8 +277,8 @@ bwaidx_t *bwa_idx_load(const char *hint, int which)
 		idx->bns = bns_restore(prefix);
 		if (which & BWA_IDX_PAC) {
 			idx->pac = calloc(idx->bns->l_pac/4+1, 1);
-			fread(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
-			fclose(idx->bns->fp_pac);
+			err_fread_noeof(idx->pac, 1, idx->bns->l_pac/4+1, idx->bns->fp_pac); // concatenated 2-bit encoded sequence
+			err_fclose(idx->bns->fp_pac);
 			idx->bns->fp_pac = 0;
 		}
 	}
@@ -283,9 +302,11 @@ void bwa_idx_destroy(bwaidx_t *idx)
 void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
 {
 	int i;
+	extern char *bwa_pg;
 	for (i = 0; i < bns->n_seqs; ++i)
 		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
 	if (rg_line) err_printf("%s\n", rg_line);
+	err_printf("%s\n", bwa_pg);
 }
 
 static char *bwa_escape(char *s)

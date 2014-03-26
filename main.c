@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <string.h>
+#include "kstring.h"
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.4-r389-beta"
+#define PACKAGE_VERSION "0.7.7-master-r445"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -23,6 +24,8 @@ int main_fastmap(int argc, char *argv[]);
 int main_mem(int argc, char *argv[]);
 
 int main_pemerge(int argc, char *argv[]);
+	
+char *bwa_pg;
 
 static int usage()
 {
@@ -46,23 +49,23 @@ static int usage()
 	fprintf(stderr, "         bwtupdate     update .bwt to the new format\n");
 	fprintf(stderr, "         bwt2sa        generate SA from BWT and Occ\n");
 	fprintf(stderr, "\n");
-	fprintf(stderr, "Note: To use BWA, you need to first index the genome with `bwa index'. There are\n");
-	fprintf(stderr, "      three alignment algorithms in BWA: `mem', `bwasw' and `aln/samse/sampe'. If\n");
-	fprintf(stderr, "      you are not sure which to use, try `bwa mem' first. Please `man ./bwa.1' for\n");
-	fprintf(stderr, "      for the manual.\n\n");
+	fprintf(stderr,
+"Note: To use BWA, you need to first index the genome with `bwa index'.\n"
+"      There are three alignment algorithms in BWA: `mem', `bwasw', and\n"
+"      `aln/samse/sampe'. If you are not sure which to use, try `bwa mem'\n"
+"      first. Please `man ./bwa.1' for the manual.\n\n");
 	return 1;
-}
-
-void bwa_print_sam_PG()
-{
-	printf("@PG\tID:bwa\tPN:bwa\tVN:%s\n", PACKAGE_VERSION);
 }
 
 int main(int argc, char *argv[])
 {
 	int i, ret;
 	double t_real;
+	kstring_t pg = {0,0,0};
 	t_real = realtime();
+	ksprintf(&pg, "@PG\tID:bwa\tPN:bwa\tVN:%s\tCL:%s", PACKAGE_VERSION, argv[0]);
+	for (i = 1; i < argc; ++i) ksprintf(&pg, " %s", argv[i]);
+	bwa_pg = pg.s;
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "fa2pac") == 0) ret = bwa_fa2pac(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwt") == 0) ret = bwa_pac2bwt(argc-1, argv+1);
@@ -92,5 +95,6 @@ int main(int argc, char *argv[])
 			fprintf(stderr, " %s", argv[i]);
 		fprintf(stderr, "\n[%s] Real time: %.3f sec; CPU: %.3f sec\n", __func__, realtime() - t_real, cputime());
 	}
+	free(bwa_pg);
 	return ret;
 }

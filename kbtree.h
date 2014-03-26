@@ -32,6 +32,10 @@
 #include <string.h>
 #include <stdint.h>
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 typedef struct {
 	int32_t is_internal:1, n:31;
 } kbnode_t;

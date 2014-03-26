@@ -14,6 +14,10 @@
 #include <sys/socket.h>
 #endif
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 #ifdef _WIN32
 #define _KO_NO_NET
 #endif
@@ -54,10 +58,26 @@ static int socket_connect(const char *host, const char *port)
 #undef __err_connect
 }
 
+static int write_bytes(int fd, const char *buf, size_t len)
+{
+	ssize_t bytes;
+	do {
+		bytes = write(fd, buf, len);
+		if (bytes >= 0) {
+			len -= bytes;
+		} else if (errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
+			return -1;
+		}
+	} while (len > 0);
+
+	return 0;
+}
+
 static int http_open(const char *fn)
 {
 	char *p, *proxy, *q, *http_host, *host, *port, *path, *buf;
 	int fd, ret, l;
+	ssize_t bytes = 0, bufsz = 0x10000;
 
 	/* parse URL; adapted from khttp_parse_url() in knetfile.c */
 	if (strstr(fn, "http://") != fn) return 0;
@@ -87,26 +107,35 @@ static int http_open(const char *fn)
 	/* connect; adapted from khttp_connect() in knetfile.c */
 	l = 0;
 	fd = socket_connect(host, port);
-	buf = calloc(0x10000, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
-	l += sprintf(buf + l, "GET %s HTTP/1.0\r\nHost: %s\r\n", path, http_host);
-	l += sprintf(buf + l, "\r\n");
-	write(fd, buf, l);
+	buf = calloc(bufsz, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
+	l += snprintf(buf + l, bufsz, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n",
+				 path, http_host);
+	if (write_bytes(fd, buf, l) != 0) {
+		close(fd);
+		fd = -1;
+		goto out;
+	}
 	l = 0;
-	while (read(fd, buf + l, 1)) { // read HTTP header; FIXME: bad efficiency
+ retry:
+	while (l < bufsz && (bytes = read(fd, buf + l, 1)) > 0) { // read HTTP header; FIXME: bad efficiency
 		if (buf[l] == '\n' && l >= 3)
 			if (strncmp(buf + l - 3, "\r\n\r\n", 4) == 0) break;
 		++l;
 	}
+	if (bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) goto retry;
+
 	buf[l] = 0;
-	if (l < 14) { // prematured header
+	if (bytes < 0 || l < 14) { // prematured header
 		close(fd);
 		fd = -1;
+		goto out;
 	}
 	ret = strtol(buf + 8, &p, 0); // HTTP return code
 	if (ret != 200) {
 		close(fd);
 		fd = -1;
 	}
+ out:
 	free(buf); free(http_host); free(host); free(port); free(path);
 	return fd;
 }
@@ -143,7 +172,7 @@ static int kftp_get_response(ftpaux_t *aux)
 static int kftp_send_cmd(ftpaux_t *aux, const char *cmd, int is_get)
 {
 	if (socket_wait(aux->ctrl_fd, 0) <= 0) return -1; // socket is not ready for writing
-	write(aux->ctrl_fd, cmd, strlen(cmd));
+	if (write_bytes(aux->ctrl_fd, cmd, strlen(cmd)) != 0) return -1;
 	return is_get? kftp_get_response(aux) : 0;
 }
 
@@ -262,7 +291,7 @@ void *kopen(const char *fn, int *_fd)
 				if (ispunct(*q) && *q != '.' && *q != '_' && *q != '-' && *q != ':')
 					break;
 			need_shell = (*q != 0);
-			pipe(pfd);
+			if (pipe(pfd) != 0) return 0;
 			pid = vfork();
 			if (pid == -1) { /* vfork() error */
 				close(pfd[0]); close(pfd[1]);

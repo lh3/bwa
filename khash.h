@@ -116,6 +116,10 @@ int main() {
 #include <string.h>
 #include <limits.h>
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 /* compipler specific configuration */
 
 #if UINT_MAX == 0xffffffffu

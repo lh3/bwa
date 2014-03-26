@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include "kstring.h"
 
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
+
 int ksprintf(kstring_t *s, const char *fmt, ...)
 {
 	va_list ap;

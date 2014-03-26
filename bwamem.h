@@ -11,7 +11,6 @@
 struct __smem_i;
 typedef struct __smem_i smem_i;
 
-#define MEM_F_HARDCLIP  0x1
 #define MEM_F_PE        0x2
 #define MEM_F_NOPAIRING 0x4
 #define MEM_F_ALL       0x8
@@ -21,7 +20,7 @@ typedef struct __smem_i smem_i;
 typedef struct {
 	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
 	int pen_unpaired;       // phred-scaled penalty for unpaired reads
-	int pen_clip;           // clipping penalty. This score is not deducted from the DP score.
+	int pen_clip5,pen_clip3;// clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
 	int zdrop;              // Z-dropoff
 
@@ -36,6 +35,9 @@ typedef struct {
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	float mask_level_redun;
+	float mapQ_coef_len;
+	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
@@ -52,6 +54,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
+	uint64_t hash;
 } mem_alnreg_t;
 
 typedef struct { size_t n, m; mem_alnreg_t *a; } mem_alnreg_v;
@@ -107,7 +110,7 @@ extern "C" {
 	 * @param pes0   insert-size info; if NULL, infer from data; if not NULL, it should be an array with 4 elements,
 	 *               corresponding to each FF, FR, RF and RR orientation. See mem_pestat() for more info.
 	 */
-	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int n, bseq1_t *seqs, const mem_pestat_t *pes0);
+	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0);
 
 	/**
 	 * Find the aligned regions for one query sequence

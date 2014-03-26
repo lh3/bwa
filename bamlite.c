@@ -2,7 +2,12 @@
 #include <ctype.h>
 #include <string.h>
 #include <stdio.h>
+#include <errno.h>
 #include "bamlite.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 /*********************
  * from bam_endian.c *
@@ -62,11 +67,11 @@ void bam_header_destroy(bam_header_t *header)
 	if (header == 0) return;
 	if (header->target_name) {
 		for (i = 0; i < header->n_targets; ++i)
-			free(header->target_name[i]);
+			if (header->target_name[i]) free(header->target_name[i]);
+		if (header->target_len) free(header->target_len);
 		free(header->target_name);
-		free(header->target_len);
 	}
-	free(header->text);
+	if (header->text) free(header->text);
 	free(header);
 }
 
@@ -80,28 +85,33 @@ bam_header_t *bam_header_read(bamFile fp)
 	magic_len = bam_read(fp, buf, 4);
 	if (magic_len != 4 || strncmp(buf, "BAM\001", 4) != 0) {
 		fprintf(stderr, "[bam_header_read] invalid BAM binary header (this is not a BAM file).\n");
-		return 0;
+		return NULL;
 	}
 	header = bam_header_init();
 	// read plain text and the number of reference sequences
-	bam_read(fp, &header->l_text, 4);
+	if (bam_read(fp, &header->l_text, 4) != 4) goto fail; 
 	if (bam_is_be) bam_swap_endian_4p(&header->l_text);
 	header->text = (char*)calloc(header->l_text + 1, 1);
-	bam_read(fp, header->text, header->l_text);
-	bam_read(fp, &header->n_targets, 4);
+	if (bam_read(fp, header->text, header->l_text) != header->l_text) goto fail;
+	if (bam_read(fp, &header->n_targets, 4) != 4) goto fail;
 	if (bam_is_be) bam_swap_endian_4p(&header->n_targets);
 	// read reference sequence names and lengths
 	header->target_name = (char**)calloc(header->n_targets, sizeof(char*));
 	header->target_len = (uint32_t*)calloc(header->n_targets, 4);
 	for (i = 0; i != header->n_targets; ++i) {
-		bam_read(fp, &name_len, 4);
+		if (bam_read(fp, &name_len, 4) != 4) goto fail;
 		if (bam_is_be) bam_swap_endian_4p(&name_len);
 		header->target_name[i] = (char*)calloc(name_len, 1);
-		bam_read(fp, header->target_name[i], name_len);
-		bam_read(fp, &header->target_len[i], 4);
+		if (bam_read(fp, header->target_name[i], name_len) != name_len) {
+			goto fail;
+		}
+		if (bam_read(fp, &header->target_len[i], 4) != 4) goto fail;
 		if (bam_is_be) bam_swap_endian_4p(&header->target_len[i]);
 	}
 	return header;
+ fail:
+	bam_header_destroy(header);
+	return NULL;
 }
 
 static void swap_endian_data(const bam1_core_t *c, int data_len, uint8_t *data)
@@ -153,3 +163,48 @@ int bam_read1(bamFile fp, bam1_t *b)
 	if (bam_is_be) swap_endian_data(c, b->data_len, b->data);
 	return 4 + block_len;
 }
+
+
+#ifdef USE_VERBOSE_ZLIB_WRAPPERS
+// Versions of gzopen, gzread and gzclose that print up error messages
+
+gzFile bamlite_gzopen(const char *fn, const char *mode) {
+	gzFile fp;
+	if (strcmp(fn, "-") == 0) {
+		fp = gzdopen(fileno((strstr(mode, "r"))? stdin : stdout), mode);
+		if (!fp) {
+			fprintf(stderr, "Couldn't open %s : %s",
+					(strstr(mode, "r"))? "stdin" : "stdout",
+					strerror(errno));
+		}
+		return fp;
+	}
+	if ((fp = gzopen(fn, mode)) == 0) {
+		fprintf(stderr, "Couldn't open %s : %s\n", fn,
+				errno ? strerror(errno) : "Out of memory");
+	}
+	return fp;
+}
+
+int bamlite_gzread(gzFile file, void *ptr, unsigned int len) {
+	int ret = gzread(file, ptr, len);
+	
+	if (ret < 0) {
+		int errnum = 0;
+		const char *msg = gzerror(file, &errnum);
+		fprintf(stderr, "gzread error: %s\n",
+				Z_ERRNO == errnum ? strerror(errno) : msg);
+	}
+	return ret;
+}
+
+int bamlite_gzclose(gzFile file) {
+	int ret = gzclose(file);
+	if (Z_OK != ret) {
+		fprintf(stderr, "gzclose error: %s\n",
+						  Z_ERRNO == ret ? strerror(errno) : zError(ret));
+	}
+	
+	return ret;
+}
+#endif /* USE_VERBOSE_ZLIB_WRAPPERS */

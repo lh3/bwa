@@ -4,11 +4,17 @@
 #include <string.h>
 #include <zlib.h>
 #include <pthread.h>
+#include <errno.h>
 #include "ksw.h"
 #include "kseq.h"
 #include "kstring.h"
 #include "bwa.h"
+#include "utils.h"
 KSEQ_DECLARE(gzFile)
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 #define MAX_SCORE_RATIO 0.9f
 #define MAX_ERR 8
@@ -140,14 +146,14 @@ pem_ret:
 
 static inline void print_bseq(const bseq1_t *s, int rn)
 {
-	putchar(s->qual? '@' : '>');
-	fputs(s->name, stdout);
+	err_putchar(s->qual? '@' : '>');
+	err_fputs(s->name, stdout);
 	if (rn == 1 || rn == 2) {
-		putchar('/'); putchar('0' + rn); putchar('\n');
-	} else puts(" merged");
-	puts(s->seq);
+		err_putchar('/'); err_putchar('0' + rn); err_putchar('\n');
+	} else err_puts(" merged");
+	err_puts(s->seq);
 	if (s->qual) {
-		puts("+"); puts(s->qual);
+		err_puts("+"); err_puts(s->qual);
 	}
 }
 
@@ -224,6 +230,7 @@ int main_pemerge(int argc, char *argv[])
 		else if (c == 'Q') opt->q_thres = atoi(optarg);
 		else if (c == 't') opt->n_threads = atoi(optarg);
 		else if (c == 'T') min_ovlp = atoi(optarg);
+		else return 1;
 	}
 	if (flag == 0) flag = 3;
 	opt->flag = flag;
@@ -243,9 +250,21 @@ int main_pemerge(int argc, char *argv[])
 	}
 
 	fp = strcmp(argv[optind], "-")? gzopen(argv[optind], "r") : gzdopen(fileno(stdin), "r");
+	if (NULL == fp) {
+		fprintf(stderr, "Couldn't open %s : %s\n",
+				strcmp(argv[optind], "-") ? argv[optind] : "stdin",
+				errno ? strerror(errno) : "Out of memory");
+		exit(EXIT_FAILURE);
+	}
 	ks = kseq_init(fp);
 	if (optind + 1 < argc) {
 		fp2 = strcmp(argv[optind+1], "-")? gzopen(argv[optind+1], "r") : gzdopen(fileno(stdin), "r");
+		if (NULL == fp) {
+			fprintf(stderr, "Couldn't open %s : %s\n",
+					strcmp(argv[optind+1], "-") ? argv[optind+1] : "stdin",
+					errno ? strerror(errno) : "Out of memory");
+			exit(EXIT_FAILURE);
+		}
 		ks2 = kseq_init(fp2);
 	}
 
@@ -259,11 +278,14 @@ int main_pemerge(int argc, char *argv[])
 	for (i = 1; i <= MAX_ERR; ++i)
 		fprintf(stderr, "%12ld %s\n", (long)cnt[i], err_msg[i]);
 	kseq_destroy(ks);
-	gzclose(fp);
+	err_gzclose(fp);
 	if (ks2) {
 		kseq_destroy(ks2);
-		gzclose(fp2);
+		err_gzclose(fp2);
 	}
 	free(opt);
+
+	err_fflush(stdout);
+
 	return 0;
 }

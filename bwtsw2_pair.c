@@ -2,12 +2,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "utils.h"
 #include "bwt.h"
 #include "bntseq.h"
 #include "bwtsw2.h"
 #include "kstring.h"
-#include "utils.h"
 #include "ksw.h"
+
+#ifdef USE_MALLOC_WRAPPERS
+#  include "malloc_wrap.h"
+#endif
 
 #define MIN_RATIO     0.8
 #define OUTLIER_BOUND 2.0
