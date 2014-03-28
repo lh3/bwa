@@ -376,11 +376,11 @@ typedef struct {
 	int32_t h, e;
 } eh_t;
 
-int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
+int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off)
 {
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, beg, end, max, max_i, max_j, max_gap, max_ie, gscore, max_off;
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
 	if (h0 < 0) h0 = 0;
 	// allocate memory
 	qp = malloc(qlen * m);
@@ -391,25 +391,28 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 		for (j = 0; j < qlen; ++j) qp[i++] = p[query[j]];
 	}
 	// fill the first row
-	eh[0].h = h0; eh[1].h = h0 > gapoe? h0 - gapoe : 0;
-	for (j = 2; j <= qlen && eh[j-1].h > gape; ++j)
-		eh[j].h = eh[j-1].h - gape;
+	eh[0].h = h0; eh[1].h = h0 > oe_ins? h0 - oe_ins : 0;
+	for (j = 2; j <= qlen && eh[j-1].h > e_ins; ++j)
+		eh[j].h = eh[j-1].h - e_ins;
 	// adjust $w if it is too large
 	k = m * m;
 	for (i = 0, max = 0; i < k; ++i) // get the max score
 		max = max > mat[i]? max : mat[i];
-	max_gap = (int)((double)(qlen * max + end_bonus - gapo) / gape + 1.);
-	max_gap = max_gap > 1? max_gap : 1;
-	w = w < max_gap? w : max_gap;
+	max_ins = (int)((double)(qlen * max + end_bonus - o_ins) / e_ins + 1.);
+	max_ins = max_ins > 1? max_ins : 1;
+	w = w < max_ins? w : max_ins;
+	max_del = (int)((double)(qlen * max + end_bonus - o_del) / e_del + 1.);
+	max_del = max_del > 1? max_del : 1;
+	w = w < max_del? w : max_del; // TODO: is this necessary?
 	// DP loop
 	max = h0, max_i = max_j = -1; max_ie = -1, gscore = -1;
 	max_off = 0;
 	beg = 0, end = qlen;
 	for (i = 0; LIKELY(i < tlen); ++i) {
-		int f = 0, h1, m = 0, mj = -1;
+		int t, f = 0, h1, m = 0, mj = -1;
 		int8_t *q = &qp[target[i] * qlen];
 		// compute the first column
-		h1 = h0 - (gapo + gape * (i + 1));
+		h1 = h0 - (o_del + e_del * (i + 1));
 		if (h1 < 0) h1 = 0;
 		// apply the band and the constraint (if provided)
 		if (beg < i - w) beg = i - w;
@@ -430,23 +433,31 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			h1 = h;             // save H(i,j) to h1 for the next column
 			mj = m > h? mj : j; // record the position where max score is achieved
 			m = m > h? m : h;   // m is stored at eh[mj+1]
-			h -= gapoe;
-			h = h > 0? h : 0;
-			e -= gape;
-			e = e > h? e : h;   // computed E(i+1,j)
+			t = h - oe_del;
+			t = t > 0? t : 0;
+			e -= e_del;
+			e = e > t? e : t;   // computed E(i+1,j)
 			p->e = e;           // save E(i+1,j) for the next row
-			f -= gape;
-			f = f > h? f : h;   // computed F(i,j+1)
+			t = h - oe_ins;
+			t = t > 0? t : 0;
+			f -= e_ins;
+			f = f > t? f : t;   // computed F(i,j+1)
 		}
 		eh[end].h = h1; eh[end].e = 0;
 		if (j == qlen) {
 			max_ie = gscore > h1? max_ie : i;
 			gscore = gscore > h1? gscore : h1;
 		}
-		if (m == 0 || (zdrop > 0 && max - m - abs((i - max_i) - (j - max_j)) * gape > zdrop)) break; // drop to zero, or below Z-dropoff
+		if (m == 0) break;
 		if (m > max) {
 			max = m, max_i = i, max_j = mj;
 			max_off = max_off > abs(mj - i)? max_off : abs(mj - i);
+		} else if (zdrop > 0) {
+			if (i - max_i > mj - max_j) {
+				if (max - m - ((i - max_i) - (mj - max_j)) * e_del > zdrop) break;
+			} else {
+				if (max - m - ((mj - max_j) - (i - max_i)) * e_ins > zdrop) break;
+			}
 		}
 		// update beg and end for the next round
 		for (j = mj; j >= beg && eh[j].h; --j);
@@ -462,6 +473,11 @@ int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	if (_gscore) *_gscore = gscore;
 	if (_max_off) *_max_off = max_off;
 	return max;
+}
+
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off)
+{
+	return ksw_extend2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, end_bonus, zdrop, h0, qle, tle, gtle, gscore, max_off);
 }
 
 /********************
@@ -482,11 +498,11 @@ static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, 
 	return cigar;
 }
 
-int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, uint32_t **cigar_)
+int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int w, int *n_cigar_, uint32_t **cigar_)
 {
 	eh_t *eh;
 	int8_t *qp; // query profile
-	int i, j, k, gapoe = gapo + gape, score, n_col;
+	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, score, n_col;
 	uint8_t *z; // backtrack matrix; in each cell: f<<4|e<<2|h; in principle, we can halve the memory, but backtrack will be a little more complex
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
@@ -502,16 +518,16 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	// fill the first row
 	eh[0].h = 0; eh[0].e = MINUS_INF;
 	for (j = 1; j <= qlen && j <= w; ++j)
-		eh[j].h = -(gapo + gape * j), eh[j].e = MINUS_INF;
+		eh[j].h = -(o_ins + e_ins * j), eh[j].e = MINUS_INF;
 	for (; j <= qlen; ++j) eh[j].h = eh[j].e = MINUS_INF; // everything is -inf outside the band
 	// DP loop
 	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
-		int32_t f = MINUS_INF, h1, beg, end;
+		int32_t f = MINUS_INF, h1, beg, end, t;
 		int8_t *q = &qp[target[i] * qlen];
 		uint8_t *zi = &z[i * n_col];
 		beg = i > w? i - w : 0;
 		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
-		h1 = beg == 0? -(gapo + gape * (i + 1)) : MINUS_INF;
+		h1 = beg == 0? -(o_del + e_del * (i + 1)) : MINUS_INF;
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 			// Cells are computed in the following order:
@@ -533,14 +549,15 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 			d = h >= f? d : 2;
 			h = h >= f? h : f;
 			h1 = h;
-			m -= gapoe;
-			e -= gape;
-			d |= e > m? 1<<2 : 0;
-			e  = e > m? e    : m;
+			t = m - oe_del;
+			e -= e_del;
+			d |= e > t? 1<<2 : 0;
+			e  = e > t? e    : t;
 			p->e = e;
-			f -= gape;
-			d |= f > m? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
-			f  = f > m? f    : m;
+			t = m - oe_ins;
+			f -= e_ins;
+			d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
+			f  = f > t? f    : t;
 			zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
 		}
 		eh[end].h = h1; eh[end].e = MINUS_INF;
@@ -564,6 +581,11 @@ int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, 
 	}
 	free(eh); free(qp); free(z);
 	return score;
+}
+
+int ksw_global(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int *n_cigar_, uint32_t **cigar_)
+{
+	return ksw_global2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, w, n_cigar_, cigar_);
 }
 
 /*******************************************
