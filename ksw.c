@@ -107,11 +107,11 @@ kswq_t *ksw_qinit(int size, int qlen, const uint8_t *query, int m, const int8_t 
 	return q;
 }
 
-kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, int xtra) // the first gap costs -(_o+_e)
+kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del, int _o_ins, int _e_ins, int xtra) // the first gap costs -(_o+_e)
 {
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
 	uint64_t *b;
-	__m128i zero, gapoe, gape, shift, *H0, *H1, *E, *Hmax;
+	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
 #define __max_16(ret, xx) do { \
@@ -128,8 +128,10 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 	endsc = (xtra&KSW_XSTOP)? xtra&0xffff : 0x10000;
 	m_b = n_b = 0; b = 0;
 	zero = _mm_set1_epi32(0);
-	gapoe = _mm_set1_epi8(_gapo + _gape);
-	gape = _mm_set1_epi8(_gape);
+	oe_del = _mm_set1_epi8(_o_del + _e_del);
+	e_del = _mm_set1_epi8(_e_del);
+	oe_ins = _mm_set1_epi8(_o_ins + _e_ins);
+	e_ins = _mm_set1_epi8(_e_ins);
 	shift = _mm_set1_epi8(q->shift);
 	H0 = q->H0; H1 = q->H1; E = q->E; Hmax = q->Hmax;
 	slen = q->slen;
@@ -141,7 +143,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, cmp, imax;
-		__m128i e, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+		__m128i e, h, t, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
 		for (j = 0; LIKELY(j < slen); ++j) {
@@ -159,13 +161,14 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 			max = _mm_max_epu8(max, h); // set max
 			_mm_store_si128(H1 + j, h); // save to H'(i,j)
 			// now compute E'(i+1,j)
-			h = _mm_subs_epu8(h, gapoe); // h=H'(i,j)-gapo
-			e = _mm_subs_epu8(e, gape); // e=E'(i,j)-gape
-			e = _mm_max_epu8(e, h); // e=E'(i+1,j)
+			e = _mm_subs_epu8(e, e_del); // e=E'(i,j) - e_del
+			t = _mm_subs_epu8(h, oe_del); // h=H'(i,j) - o_del - e_del
+			e = _mm_max_epu8(e, t); // e=E'(i+1,j)
 			_mm_store_si128(E + j, e); // save to E'(i+1,j)
 			// now compute F'(i,j+1)
-			f = _mm_subs_epu8(f, gape);
-			f = _mm_max_epu8(f, h);
+			f = _mm_subs_epu8(f, e_ins);
+			t = _mm_subs_epu8(h, oe_ins); // h=H'(i,j) - o_ins - e_ins
+			f = _mm_max_epu8(f, t);
 			// get H'(i-1,j) and prepare for the next j
 			h = _mm_load_si128(H0 + j); // h=H'(i-1,j)
 		}
@@ -176,8 +179,8 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, 
 				h = _mm_load_si128(H1 + j);
 				h = _mm_max_epu8(h, f); // h=H'(i,j)
 				_mm_store_si128(H1 + j, h);
-				h = _mm_subs_epu8(h, gapoe);
-				f = _mm_subs_epu8(f, gape);
+				h = _mm_subs_epu8(h, oe_ins);
+				f = _mm_subs_epu8(f, e_ins);
 				cmp = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_subs_epu8(f, h), zero));
 				if (UNLIKELY(cmp == 0xffff)) goto end_loop16;
 			}
@@ -225,11 +228,11 @@ end_loop16:
 	return r;
 }
 
-kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape, int xtra) // the first gap costs -(_o+_e)
+kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del, int _o_ins, int _e_ins, int xtra) // the first gap costs -(_o+_e)
 {
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
 	uint64_t *b;
-	__m128i zero, gapoe, gape, *H0, *H1, *E, *Hmax;
+	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
 #define __max_8(ret, xx) do { \
@@ -245,8 +248,10 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 	endsc = (xtra&KSW_XSTOP)? xtra&0xffff : 0x10000;
 	m_b = n_b = 0; b = 0;
 	zero = _mm_set1_epi32(0);
-	gapoe = _mm_set1_epi16(_gapo + _gape);
-	gape = _mm_set1_epi16(_gape);
+	oe_del = _mm_set1_epi16(_o_del + _e_del);
+	e_del = _mm_set1_epi16(_e_del);
+	oe_ins = _mm_set1_epi16(_o_ins + _e_ins);
+	e_ins = _mm_set1_epi16(_e_ins);
 	H0 = q->H0; H1 = q->H1; E = q->E; Hmax = q->Hmax;
 	slen = q->slen;
 	for (i = 0; i < slen; ++i) {
@@ -257,7 +262,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, imax;
-		__m128i e, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+		__m128i e, t, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 2);
 		for (j = 0; LIKELY(j < slen); ++j) {
@@ -267,12 +272,13 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 			h = _mm_max_epi16(h, f);
 			max = _mm_max_epi16(max, h);
 			_mm_store_si128(H1 + j, h);
-			h = _mm_subs_epu16(h, gapoe);
-			e = _mm_subs_epu16(e, gape);
-			e = _mm_max_epi16(e, h);
+			e = _mm_subs_epu16(e, e_del);
+			t = _mm_subs_epu16(h, oe_del);
+			e = _mm_max_epi16(e, t);
 			_mm_store_si128(E + j, e);
-			f = _mm_subs_epu16(f, gape);
-			f = _mm_max_epi16(f, h);
+			f = _mm_subs_epu16(f, e_ins);
+			t = _mm_subs_epu16(h, oe_ins);
+			f = _mm_max_epi16(f, t);
 			h = _mm_load_si128(H0 + j);
 		}
 		for (k = 0; LIKELY(k < 16); ++k) {
@@ -281,8 +287,8 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _gapo, int _gape,
 				h = _mm_load_si128(H1 + j);
 				h = _mm_max_epi16(h, f);
 				_mm_store_si128(H1 + j, h);
-				h = _mm_subs_epu16(h, gapoe);
-				f = _mm_subs_epu16(f, gape);
+				h = _mm_subs_epu16(h, oe_ins);
+				f = _mm_subs_epu16(f, e_ins);
 				if(UNLIKELY(!_mm_movemask_epi8(_mm_cmpgt_epi16(f, h)))) goto end_loop8;
 			}
 		}
@@ -326,35 +332,40 @@ end_loop8:
 	return r;
 }
 
-static void revseq(int l, uint8_t *s)
+static inline void revseq(int l, uint8_t *s)
 {
 	int i, t;
 	for (i = 0; i < l>>1; ++i)
 		t = s[i], s[i] = s[l - 1 - i], s[l - 1 - i] = t;
 }
 
-kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+kswr_t ksw_align2(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int o_del, int e_del, int o_ins, int e_ins, int xtra, kswq_t **qry)
 {
 	int size;
 	kswq_t *q;
 	kswr_t r, rr;
-	kswr_t (*func)(kswq_t*, int, const uint8_t*, int, int, int);
+	kswr_t (*func)(kswq_t*, int, const uint8_t*, int, int, int, int, int);
 
 	q = (qry && *qry)? *qry : ksw_qinit((xtra&KSW_XBYTE)? 1 : 2, qlen, query, m, mat);
 	if (qry && *qry == 0) *qry = q;
 	func = q->size == 2? ksw_i16 : ksw_u8;
 	size = q->size;
-	r = func(q, tlen, target, gapo, gape, xtra);
+	r = func(q, tlen, target, o_del, e_del, o_ins, e_ins, xtra);
 	if (qry == 0) free(q);
 	if ((xtra&KSW_XSTART) == 0 || ((xtra&KSW_XSUBO) && r.score < (xtra&0xffff))) return r;
 	revseq(r.qe + 1, query); revseq(r.te + 1, target); // +1 because qe/te points to the exact end, not the position after the end
 	q = ksw_qinit(size, r.qe + 1, query, m, mat);
-	rr = func(q, tlen, target, gapo, gape, KSW_XSTOP | r.score);
+	rr = func(q, tlen, target, o_del, e_del, o_ins, e_ins, KSW_XSTOP | r.score);
 	revseq(r.qe + 1, query); revseq(r.te + 1, target);
 	free(q);
 	if (r.score == rr.score)
 		r.tb = r.te - rr.te, r.qb = r.qe - rr.qe;
 	return r;
+}
+
+kswr_t ksw_align(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int xtra, kswq_t **qry)
+{
+	return ksw_align2(qlen, query, tlen, target, m, mat, gapo, gape, gapo, gape, xtra, qry);
 }
 
 /********************
