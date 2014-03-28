@@ -86,7 +86,7 @@ void bwa_fill_scmat(int a, int b, int8_t mat[25])
 }
 
 // Generate CIGAR when the alignment end points are known
-uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
+uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, int e_ins, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
 {
 	uint32_t *cigar = 0;
 	uint8_t tmp, *rseq;
@@ -113,9 +113,11 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 		for (i = 0, *score = 0; i < l_query; ++i)
 			*score += mat[rseq[i]*5 + query[i]];
 	} else {
-		int w, max_gap, min_w;
+		int w, max_gap, max_ins, max_del, min_w;
 		// set the band-width
-		max_gap = (int)((double)(((l_query+1)>>1) * mat[0] - q) / r + 1.);
+		max_ins = (int)((double)(((l_query+1)>>1) * mat[0] - o_ins) / e_ins + 1.);
+		max_del = (int)((double)(((l_query+1)>>1) * mat[0] - o_del) / e_del + 1.);
+		max_gap = max_ins > max_del? max_ins : max_del;
 		max_gap = max_gap > 1? max_gap : 1;
 		w = (max_gap + abs(rlen - l_query) + 1) >> 1;
 		w = w < w_? w : w_;
@@ -127,7 +129,7 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 			printf("* Global ref:   "); for (i = 0; i < rlen; ++i) putchar("ACGTN"[(int)rseq[i]]); putchar('\n');
 			printf("* Global query: "); for (i = 0; i < l_query; ++i) putchar("ACGTN"[(int)query[i]]); putchar('\n');
 		}
-		*score = ksw_global(l_query, query, rlen, rseq, 5, mat, q, r, w, n_cigar, &cigar);
+		*score = ksw_global2(l_query, query, rlen, rseq, 5, mat, o_del, e_del, o_ins, e_ins, w, n_cigar, &cigar);
 	}
 	{// compute NM and MD
 		int k, x, y, u, n_mm = 0, n_gap = 0;
@@ -169,7 +171,12 @@ ret_gen_cigar:
 	return cigar;
 }
 
-int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
+uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
+{
+	return bwa_gen_cigar2(mat, q, r, q, r, w_, l_pac, pac, l_query, query, rb, re, score, n_cigar, NM);
+}
+
+int bwa_fix_xref2(const int8_t mat[25], int o_del, int e_del, int o_ins, int e_ins, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
 {
 	int is_rev;
 	int64_t cb, ce, fm;
@@ -188,7 +195,7 @@ int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns,
 		int64_t x;
 		cb = cb > *rb? cb : *rb;
 		ce = ce < *re? ce : *re;
-		cigar = bwa_gen_cigar(mat, q, r, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar, &NM);
+		cigar = bwa_gen_cigar2(mat, o_del, e_del, o_ins, e_ins, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar, &NM);
 		for (i = 0, x = *rb, y = *qb; i < n_cigar; ++i) {
 			int op = cigar[i]&0xf, len = cigar[i]>>4;
 			if (op == 0) {
@@ -212,6 +219,11 @@ int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns,
 		free(cigar);
 	}
 	return (*qb == *qe || *rb == *re)? -2 : 0;
+}
+
+int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
+{
+	return bwa_fix_xref2(mat, q, r, q, r, w, bns, pac, query, qb, qe, rb, re);
 }
 
 /*********************

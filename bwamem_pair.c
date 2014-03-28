@@ -145,7 +145,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 			kswr_t aln;
 			mem_alnreg_t b;
 			int tmp, xtra = KSW_XSUBO | KSW_XSTART | (l_ms * opt->a < 250? KSW_XBYTE : 0) | opt->min_seed_len;
-			aln = ksw_align(l_ms, seq, len, ref, 5, opt->mat, opt->q, opt->r, xtra, 0);
+			aln = ksw_align2(l_ms, seq, len, ref, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, xtra, 0);
 			memset(&b, 0, sizeof(mem_alnreg_t));
 			if (aln.score >= opt->min_seed_len && aln.qb >= 0) { // something goes wrong if aln.qb < 0
 				b.qb = is_rev? l_ms - (aln.qe + 1) : aln.qb;                                                                                                                                                                              
@@ -219,7 +219,9 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 		y[v.a[i].y&3] = i;
 	}
 	if (u.n) { // found at least one proper pair
-		int tmp = opt->a + opt->b > opt->q + opt->r? opt->a + opt->b : opt->q + opt->r;
+		int tmp = opt->a + opt->b;
+		tmp = tmp > opt->o_del + opt->e_del? tmp : opt->o_del + opt->e_del;
+		tmp = tmp > opt->o_ins + opt->e_ins? tmp : opt->o_ins + opt->e_ins;
 		ks_introsort_128(u.n, u.a);
 		i = u.a[u.n-1].y >> 32; k = u.a[u.n-1].y << 32 >> 32;
 		z[v.a[i].y&1] = v.a[i].y<<32>>34; // index of the best pair

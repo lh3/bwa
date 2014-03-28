@@ -19,7 +19,9 @@ typedef struct __smem_i smem_i;
 #define MEM_F_NO_EXACT  0x40
 
 typedef struct {
-	int a, b, q, r;         // match score, mismatch penalty and gap open/extension penalty. A gap of size k costs q+k*r
+	int a, b;               // match score and mismatch penalty
+	int o_del, e_del;
+	int o_ins, e_ins;
 	int pen_unpaired;       // phred-scaled penalty for unpaired reads
 	int pen_clip5,pen_clip3;// clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
