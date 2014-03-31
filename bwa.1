@@ -267,6 +267,13 @@ supported throughout BWA. Ideally, a value 0 for disabling all the output to
 stderr; 1 for outputting errors only; 2 for warnings and errors; 3 for
 all normal messages; 4 or higher for debugging. When this option takes value
 4, the output is not SAM. [3]
+.TP
+.BI -I \ FLOAT[,FLOAT[,INT[,INT]]]
+Specify the mean, standard deviation (10% of the mean if absent), max (4 sigma
+from the mean if absent) and min (4 sigma if absent) of the insert size
+distribution. Only applicable to the FR orientation. By default, BWA-MEM infers
+these numbers and the pair orientations given enough reads. [inferred]
+
 .RE
 
 .TP
