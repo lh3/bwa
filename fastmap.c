@@ -20,7 +20,7 @@ int kclose(void *a);
 
 int main_mem(int argc, char *argv[])
 {
-	mem_opt_t *opt;
+	mem_opt_t *opt, opt0;
 	int fd, fd2, i, c, n, copy_comment = 0;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
@@ -35,13 +35,15 @@ int main_mem(int argc, char *argv[])
 	for (i = 0; i < 4; ++i) pes[i].failed = 1;
 
 	opt = mem_opt_init();
+	opt0.a = opt0.b = opt0.o_del = opt0.e_del = opt0.o_ins = opt0.e_ins = opt0.pen_unpaired = -1;
+	opt0.pen_clip5 = opt0.pen_clip3 = opt0.zdrop = opt0.T = -1;
 	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
-		else if (c == 'A') opt->a = atoi(optarg);
-		else if (c == 'B') opt->b = atoi(optarg);
-		else if (c == 'T') opt->T = atoi(optarg);
-		else if (c == 'U') opt->pen_unpaired = atoi(optarg);
+		else if (c == 'A') opt->a = atoi(optarg), opt0.a = 1;
+		else if (c == 'B') opt->b = atoi(optarg), opt0.b = 1;
+		else if (c == 'T') opt->T = atoi(optarg), opt0.T = 1;
+		else if (c == 'U') opt->pen_unpaired = atoi(optarg), opt0.pen_unpaired = 1;
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
 		else if (c == 'a') opt->flag |= MEM_F_ALL;
@@ -50,7 +52,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
 		else if (c == 'e') opt->flag |= MEM_F_NO_EXACT;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
-		else if (c == 'd') opt->zdrop = atoi(optarg);
+		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
 		else if (c == 'D') opt->chain_drop_ratio = atof(optarg);
@@ -61,14 +63,17 @@ int main_mem(int argc, char *argv[])
 			opt->mapQ_coef_len = atoi(optarg);
 			opt->mapQ_coef_fac = opt->mapQ_coef_len > 0? log(opt->mapQ_coef_len) : 0;
 		} else if (c == 'O') {
+			opt0.o_del = opt0.o_ins = 1;
 			opt->o_del = opt->o_ins = strtol(optarg, &p, 10);
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
 				opt->o_ins = strtol(p+1, &p, 10);
 		} else if (c == 'E') {
+			opt0.e_del = opt0.e_ins = 1;
 			opt->e_del = opt->e_ins = strtol(optarg, &p, 10);
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
 				opt->e_ins = strtol(p+1, &p, 10);
 		} else if (c == 'L') {
+			opt0.pen_clip5 = opt0.pen_clip3 = 1;
 			opt->pen_clip5 = opt->pen_clip3 = strtol(optarg, &p, 10);
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
 				opt->pen_clip3 = strtol(p+1, &p, 10);
@@ -88,6 +93,9 @@ int main_mem(int argc, char *argv[])
 				pes[1].high = (int)(strtod(p+1, &p) + .499);
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
 				pes[1].low  = (int)(strtod(p+1, &p) + .499);
+			if (bwa_verbose >= 3)
+				fprintf(stderr, "[M::%s] mean insert size: %.3f, stddev: %.3f, max: %d, min: %d\n",
+						__func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);
 		}
 		else return 1;
 	}
@@ -108,7 +116,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -S            skip mate rescue\n");
 		fprintf(stderr, "       -P            skip pairing; mate rescue performed unless -S also in use\n");
 		fprintf(stderr, "       -e            discard full-length exact matches\n");
-		fprintf(stderr, "       -A INT        score for a sequence match [%d]\n", opt->a);
+		fprintf(stderr, "       -A INT        score for a sequence match, which scales [-TdBOELU] unless overridden [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT        penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT[,INT]  gap open penalties for deletions and insertions [%d,%d]\n", opt->o_del, opt->o_ins);
 		fprintf(stderr, "       -E INT[,INT]  gap extension penalty; a gap of size k cost '{-O} + {-E}*k' [%d,%d]\n", opt->e_del, opt->e_ins);
@@ -132,6 +140,18 @@ int main_mem(int argc, char *argv[])
 		return 1;
 	}
 
+	if (opt0.a == 1) { // matching score is changed
+		if (opt0.b != 1) opt->b *= opt->a;
+		if (opt0.T != 1) opt->T *= opt->a;
+		if (opt0.o_del != 1) opt->o_del *= opt->a;
+		if (opt0.e_del != 1) opt->e_del *= opt->a;
+		if (opt0.o_ins != 1) opt->o_ins *= opt->a;
+		if (opt0.e_ins != 1) opt->e_ins *= opt->a;
+		if (opt0.zdrop != 1) opt->zdrop *= opt->a;
+		if (opt0.pen_clip5 != 1) opt->pen_clip5 *= opt->a;
+		if (opt0.pen_clip3 != 1) opt->pen_clip3 *= opt->a;
+		if (opt0.pen_unpaired != 1) opt->pen_unpaired *= opt->a;
+	}
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
 

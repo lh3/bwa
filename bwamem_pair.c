@@ -282,7 +282,6 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		if (n_sub > 0) q_pe -= (int)(4.343 * log(n_sub+1) + .499);
 		if (q_pe < 0) q_pe = 0;
 		if (q_pe > 60) q_pe = 60;
-		//printf("[1] %ld, %d, %d\n", (long)id, q_pe, n_sub);
 		// the following assumes no split hits
 		if (o > score_un) { // paired alignment is preferred
 			mem_alnreg_t *c[2];
