@@ -144,7 +144,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 		if (len == re - rb) { // no funny things happening
 			kswr_t aln;
 			mem_alnreg_t b;
-			int tmp, xtra = KSW_XSUBO | KSW_XSTART | (l_ms * opt->a < 250? KSW_XBYTE : 0) | opt->min_seed_len;
+			int tmp, xtra = KSW_XSUBO | KSW_XSTART | (l_ms * opt->a < 250? KSW_XBYTE : 0) | (opt->min_seed_len * opt->a);
 			aln = ksw_align2(l_ms, seq, len, ref, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, xtra, 0);
 			memset(&b, 0, sizeof(mem_alnreg_t));
 			if (aln.score >= opt->min_seed_len && aln.qb >= 0) { // something goes wrong if aln.qb < 0
@@ -235,6 +235,8 @@ int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_
 	return ret;
 }
 
+#define raw_mapq(diff, a) ((int)(6.02 * (diff) / (a) + .499))
+
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2])
 {
 	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id);
@@ -276,10 +278,11 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
 		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		subo = subo > score_un? subo : score_un;
-		q_pe = (o - subo) * 6;
+		q_pe = raw_mapq(o - subo, opt->a);
 		if (n_sub > 0) q_pe -= (int)(4.343 * log(n_sub+1) + .499);
 		if (q_pe < 0) q_pe = 0;
 		if (q_pe > 60) q_pe = 60;
+		//printf("[1] %ld, %d, %d\n", (long)id, q_pe, n_sub);
 		// the following assumes no split hits
 		if (o > score_un) { // paired alignment is preferred
 			mem_alnreg_t *c[2];
@@ -293,8 +296,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			q_se[1] = q_se[1] > q_pe? q_se[1] : q_pe < q_se[1] + 40? q_pe : q_se[1] + 40;
 			extra_flag |= 2;
 			// cap at the tandem repeat score
-			q_se[0] = q_se[0] < (c[0]->score - c[0]->csub) * 6? q_se[0] : (c[0]->score - c[0]->csub) * 6;
-			q_se[1] = q_se[1] < (c[1]->score - c[1]->csub) * 6? q_se[1] : (c[1]->score - c[1]->csub) * 6;
+			q_se[0] = q_se[0] < raw_mapq(c[0]->score - c[0]->csub, opt->a)? q_se[0] : raw_mapq(c[0]->score - c[0]->csub, opt->a);
+			q_se[1] = q_se[1] < raw_mapq(c[1]->score - c[1]->csub, opt->a)? q_se[1] : raw_mapq(c[1]->score - c[1]->csub, opt->a);
 		} else { // the unpaired alignment is preferred
 			z[0] = z[1] = 0;
 			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
