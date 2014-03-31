@@ -1,4 +1,4 @@
-.TH bwa 1 "25 Feburary 2014" "bwa-0.7.7" "Bioinformatics tools"
+.TH bwa 1 "31 March 2014" "bwa-0.7.8" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -148,9 +148,10 @@ not work with split alignments. One may consider to use option
 .B -M
 to flag shorter split hits as secondary.
 
-.B OPTIONS:
 .RS
 .TP 10
+.B ALGORITHM OPTIONS:
+.TP
 .BI -t \ INT
 Number of threads [1]
 .TP
@@ -202,11 +203,14 @@ Matching score. [1]
 .BI -B \ INT
 Mismatch penalty. The sequence error rate is approximately: {.75 * exp[-log(4) * B/A]}. [4]
 .TP
-.BI -O \ INT
-Gap open penalty. [6]
+.BI -O \ INT[,INT]
+Gap open penalty. If two numbers are specified, the first is the penalty of
+openning a deletion and the second for openning an insertion. [6]
 .TP
-.BI -E \ INT
-Gap extension penalty. A gap of length k costs O + k*E (i.e.
+.BI -E \ INT[,INT]
+Gap extension penalty. If two numbers are specified, the first is the penalty
+of extending a deletion and second for extending an insertion. A gap of length
+k costs O + k*E (i.e.
 .B -O
 is for opening a zero-length gap). [1]
 .TP
@@ -224,6 +228,9 @@ Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
 and scores a paired as scoreRead1+scoreRead2-insertPenalty. It compares these
 two scores to determine whether we should force pairing. A larger value leads to
 more aggressive read pair. [17]
+
+.TP
+.B INPUT/OUTPUT OPTIONS:
 .TP
 .B -p
 Assume the first input query file is interleaved paired-end FASTA/Q. See the
