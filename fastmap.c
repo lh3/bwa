@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
 #include <math.h>
 #include "bwa.h"
@@ -28,9 +29,13 @@ int main_mem(int argc, char *argv[])
 	char *p, *rg_line = 0;
 	void *ko = 0, *ko2 = 0;
 	int64_t n_processed = 0;
+	mem_pestat_t pes[4], *pes0 = 0;
+
+	memset(pes, 0, 4 * sizeof(mem_pestat_t));
+	for (i = 0; i < 4; ++i) pes[i].failed = 1;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
@@ -50,6 +55,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'r') opt->split_factor = atof(optarg);
 		else if (c == 'D') opt->chain_drop_ratio = atof(optarg);
 		else if (c == 'm') opt->max_matesw = atoi(optarg);
+		else if (c == 's') opt->split_width = atoi(optarg);
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'Q') {
 			opt->mapQ_coef_len = atoi(optarg);
@@ -68,7 +74,21 @@ int main_mem(int argc, char *argv[])
 				opt->pen_clip3 = strtol(p+1, &p, 10);
 		} else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
-		} else if (c == 's') opt->split_width = atoi(optarg);
+		} else if (c == 'I') { // specify the insert size distribution
+			pes0 = pes;
+			pes[1].failed = 0;
+			pes[1].avg = strtod(optarg, &p);
+			pes[1].std = pes[1].avg * .1;
+			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
+				pes[1].std = strtod(p+1, &p);
+			pes[1].high = (int)(pes[1].avg + 4. * pes[1].std + .499);
+			pes[1].low  = (int)(pes[1].avg - 4. * pes[1].std + .499);
+			if (pes[1].low < 1) pes[1].low = 1;
+			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
+				pes[1].high = (int)(strtod(p+1, &p) + .499);
+			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
+				pes[1].low  = (int)(strtod(p+1, &p) + .499);
+		}
 		else return 1;
 	}
 	if (opt->n_threads < 1) opt->n_threads = 1;
@@ -102,7 +122,10 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -T INT        minimum score to output [%d]\n", opt->T);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
-		fprintf(stderr, "       -M            mark shorter split hits as secondary (for Picard/GATK compatibility)\n");
+		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
+		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
+		fprintf(stderr, "                     specify the mean, standard deviation (10%% of mean), max (4 sigma from the mean)\n");
+		fprintf(stderr, "                     and min of the insert size distribution. FR orientation only. [inferred]\n");
 		fprintf(stderr, "\nNote: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
 		free(opt);
@@ -149,7 +172,7 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, 0);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
 			err_fputs(seqs[i].sam, stdout);
