@@ -162,6 +162,65 @@ const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
 	return smem_next2(itr, split_len, split_width, 1);
 }
 
+/***************************
+ * Collection SA invervals *
+ ***************************/
+
+#define intv_lt(a, b) ((a).info < (b).info)
+KSORT_INIT(mem_intv, bwtintv_t, intv_lt)
+
+typedef struct {
+	bwtintv_v mem, mem1, *tmpv[2];
+} smem_aux_t;
+
+static smem_aux_t *smem_aux_init()
+{
+	smem_aux_t *a;
+	a = calloc(1, sizeof(smem_aux_t));
+	a->tmpv[0] = calloc(1, sizeof(bwtintv_v));
+	a->tmpv[1] = calloc(1, sizeof(bwtintv_v));
+	return a;
+}
+
+static void smem_aux_destroy(smem_aux_t *a)
+{	
+	free(a->tmpv[0]->a); free(a->tmpv[1]->a);
+	free(a->mem.a); free(a->mem1.a);
+	free(a);
+}
+
+static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq, smem_aux_t *a)
+{
+	int i, k, x = 0, old_n;
+	int start_width = (opt->flag & MEM_F_NO_EXACT)? 2 : 1;
+	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
+	a->mem.n = 0;
+	// first pass: find all SMEMs
+	while (x < len) {
+		if (seq[x] < 4) {
+			x = bwt_smem1(bwt, len, seq, x, start_width, &a->mem1, a->tmpv);
+			for (i = 0; i < a->mem1.n; ++i) {
+				bwtintv_t *p = &a->mem1.a[i];
+				int slen = (uint32_t)p->info - (p->info>>32); // seed length
+				if (slen >= opt->min_seed_len && p->x[2] <= opt->max_occ)
+					kv_push(bwtintv_t, a->mem, *p);
+			}
+		} else ++x;
+	}
+	// second pass: find MEMs inside a long SMEM
+	old_n = a->mem.n;
+	for (k = 0; k < old_n; ++k) {
+		bwtintv_t *p = &a->mem.a[k];
+		int start = p->info>>32, end = (int32_t)p->info;
+		if (end - start < split_len || p->x[2] > opt->split_width) continue;
+		bwt_smem1(bwt, len, seq, (start + end)>>1, p->x[2]+1, &a->mem1, a->tmpv);
+		for (i = 0; i < a->mem1.n; ++i)
+			kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
+	}
+	// sort
+	ks_introsort(mem_intv, a->mem.n, a->mem.a);
+}
+
 /********************************
  * Chaining while finding SMEMs *
  ********************************/
@@ -211,51 +270,6 @@ static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, c
 	return 0; // request to add a new chain
 }
 
-static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *tree, smem_i *itr)
-{
-	const bwtintv_v *a;
-	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
-	int start_width = (opt->flag & MEM_F_NO_EXACT)? 2 : 1;
-	split_len = split_len < itr->len? split_len : itr->len;
-	while ((a = smem_next2(itr, split_len, opt->split_width, start_width)) != 0) { // to find all SMEM and some internal MEM
-		int i;
-		for (i = 0; i < a->n; ++i) { // go through each SMEM/MEM up to itr->start
-			bwtintv_t *p = &a->a[i];
-			int slen = (uint32_t)p->info - (p->info>>32); // seed length
-			int64_t k;
-			if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue; // ignore if too short or too repetitive
-			for (k = 0; k < p->x[2]; ++k) {
-				mem_chain_t tmp, *lower, *upper;
-				mem_seed_t s;
-				int to_add = 0;
-				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
-				s.qbeg = p->info>>32;
-				s.len  = slen;
-				if (bwa_verbose >= 5) {
-					bwtint_t pos;
-					int is_rev, ref_id;
-					pos = bns_depos(global_bns, s.rbeg, &is_rev);
-					if (is_rev) pos -= s.len - 1;
-					bns_cnt_ambi(global_bns, pos, s.len, &ref_id);
-					printf("* Found SEED: length=%d,query_beg=%d,ref_beg=%ld; %s:%c%ld\n", s.len, s.qbeg, (long)s.rbeg, \
-							global_bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - global_bns->anns[ref_id].offset) + 1);
-				}
-				if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
-				if (kb_size(tree)) {
-					kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
-					if (!lower || !test_and_merge(opt, l_pac, lower, &s)) to_add = 1;
-				} else to_add = 1;
-				if (to_add) { // add the seed as a new chain
-					tmp.n = 1; tmp.m = 4;
-					tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
-					tmp.seeds[0] = s;
-					kb_putp(chn, tree, &tmp);
-				}
-			}
-		}
-	}
-}
-
 int mem_chain_weight(const mem_chain_t *c)
 {
 	int64_t end;
@@ -296,16 +310,52 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 
 mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int len, const uint8_t *seq)
 {
+	int i;
 	mem_chain_v chain;
-	smem_i *itr;
 	kbtree_t(chn) *tree;
+	smem_aux_t *aux;
 
 	kv_init(chain);
 	if (len < opt->min_seed_len) return chain; // if the query is shorter than the seed length, no match
 	tree = kb_init(chn, KB_DEFAULT_SIZE);
-	itr = smem_itr_init(bwt);
-	smem_set_query(itr, len, seq);
-	mem_insert_seed(opt, l_pac, tree, itr);
+
+	aux = smem_aux_init();
+	mem_collect_intv(opt, bwt, len, seq, aux);
+	for (i = 0; i < aux->mem.n; ++i) {
+		bwtintv_t *p = &aux->mem.a[i];
+		int slen = (uint32_t)p->info - (p->info>>32); // seed length
+		int64_t k;
+		if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue; // ignore if too short or too repetitive
+		for (k = 0; k < p->x[2]; ++k) {
+			mem_chain_t tmp, *lower, *upper;
+			mem_seed_t s;
+			int to_add = 0;
+			s.rbeg = tmp.pos = bwt_sa(bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
+			s.qbeg = p->info>>32;
+			s.len  = slen;
+			if (bwa_verbose >= 5) {
+				bwtint_t pos;
+				int is_rev, ref_id;
+				pos = bns_depos(global_bns, s.rbeg, &is_rev);
+				if (is_rev) pos -= s.len - 1;
+				bns_cnt_ambi(global_bns, pos, s.len, &ref_id);
+				printf("* Found SEED: length=%d,query_beg=%d,ref_beg=%ld; %s:%c%ld\n", s.len, s.qbeg, (long)s.rbeg, \
+						global_bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - global_bns->anns[ref_id].offset) + 1);
+			}
+			if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
+			if (kb_size(tree)) {
+				kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
+				if (!lower || !test_and_merge(opt, l_pac, lower, &s)) to_add = 1;
+			} else to_add = 1;
+			if (to_add) { // add the seed as a new chain
+				tmp.n = 1; tmp.m = 4;
+				tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
+				tmp.seeds[0] = s;
+				kb_putp(chn, tree, &tmp);
+			}
+		}
+	}
+	smem_aux_destroy(aux);
 
 	kv_resize(mem_chain_t, chain, kb_size(tree));
 
@@ -313,7 +363,6 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int
 	__kb_traverse(mem_chain_t, tree, traverse_func);
 	#undef traverse_func
 
-	smem_itr_destroy(itr);
 	kb_destroy(chn, tree);
 	return chain;
 }
