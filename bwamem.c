@@ -917,7 +917,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		mem_aln_t *q;
 		if (p->score < opt->T) continue;
 		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
-		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * .5) continue;
+		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->chain_drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
 		q->flag |= extra_flag; // flag secondary
@@ -966,6 +966,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
 	if (opt->flag & MEM_F_NO_EXACT)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
+	if (bwa_verbose >= 4) err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
 	return regs;
 }
 
