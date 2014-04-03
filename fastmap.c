@@ -37,7 +37,7 @@ int main_mem(int argc, char *argv[])
 	opt = mem_opt_init();
 	opt0.a = opt0.b = opt0.o_del = opt0.e_del = opt0.o_ins = opt0.e_ins = opt0.pen_unpaired = -1;
 	opt0.pen_clip5 = opt0.pen_clip3 = opt0.zdrop = opt0.T = -1;
-	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg), opt0.a = 1;
@@ -58,6 +58,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'D') opt->chain_drop_ratio = atof(optarg);
 		else if (c == 'm') opt->max_matesw = atoi(optarg);
 		else if (c == 's') opt->split_width = atoi(optarg);
+		else if (c == 'N') opt->max_chain_gap = atoi(optarg);
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'Q') {
 			opt->mapQ_coef_len = atoi(optarg);
@@ -215,7 +216,7 @@ int main_mem(int argc, char *argv[])
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, split_width = 0;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -223,9 +224,8 @@ int main_fastmap(int argc, char *argv[])
 	const bwtintv_v *a;
 	bwaidx_t *idx;
 
-	while ((c = getopt(argc, argv, "w:l:ps:")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:p")) >= 0) {
 		switch (c) {
-			case 's': split_width = atoi(optarg); break;
 			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
@@ -233,7 +233,7 @@ int main_fastmap(int argc, char *argv[])
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-p] [-s splitWidth=%d] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", split_width, min_len, min_iwidth);
+		fprintf(stderr, "Usage: bwa fastmap [-p] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
 		return 1;
 	}
 
@@ -250,7 +250,7 @@ int main_fastmap(int argc, char *argv[])
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
-		while ((a = smem_next(itr, min_len<<1, split_width)) != 0) {
+		while ((a = smem_next(itr)) != 0) {
 			for (i = 0; i < a->n; ++i) {
 				bwtintv_t *p = &a->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;

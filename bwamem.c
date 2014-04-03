@@ -116,7 +116,7 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 	itr->len = len;
 }
 
-const bwtintv_v *smem_next2(smem_i *itr, int split_len, int split_width, int start_width)
+const bwtintv_v *smem_next(smem_i *itr)
 {
 	int i, max, max_i, ori_start;
 	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = itr->sub->n = 0;
@@ -124,42 +124,14 @@ const bwtintv_v *smem_next2(smem_i *itr, int split_len, int split_width, int sta
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return 0;
 	ori_start = itr->start;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, start_width, itr->matches, itr->tmpvec); // search for SMEM
+	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, 1, itr->matches, itr->tmpvec); // search for SMEM
 	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
 	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
 		bwtintv_t *p = &itr->matches->a[i];
 		int len = (uint32_t)p->info - (p->info>>32);
 		if (max < len) max = len, max_i = i;
 	}
-	if (split_len > 0 && max >= split_len && itr->matches->a[max_i].x[2] <= split_width) { // if the longest SMEM is unique and long
-		int j;
-		bwtintv_v *a = itr->tmpvec[0]; // reuse tmpvec[0] for merging
-		bwtintv_t *p = &itr->matches->a[max_i];
-		bwt_smem1(itr->bwt, itr->len, itr->query, ((uint32_t)p->info + (p->info>>32))>>1, itr->matches->a[max_i].x[2]+1, itr->sub, itr->tmpvec); // starting from the middle of the longest MEM
-		i = j = 0; a->n = 0;
-		while (i < itr->matches->n && j < itr->sub->n) { // ordered merge
-			int64_t xi = itr->matches->a[i].info>>32<<32 | (itr->len - (uint32_t)itr->matches->a[i].info);
-			int64_t xj = itr->sub->a[j].info>>32<<32 | (itr->len - (uint32_t)itr->sub->a[j].info);
-			if (xi < xj) {
-				kv_push(bwtintv_t, *a, itr->matches->a[i]);
-				++i;
-			} else if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1 && (uint32_t)itr->sub->a[j].info > ori_start) {
-				kv_push(bwtintv_t, *a, itr->sub->a[j]);
-				++j;
-			} else ++j;
-		}
-		for (; i < itr->matches->n; ++i) kv_push(bwtintv_t, *a, itr->matches->a[i]);
-		for (; j < itr->sub->n; ++j)
-			if ((uint32_t)itr->sub->a[j].info - (itr->sub->a[j].info>>32) >= max>>1 && (uint32_t)itr->sub->a[j].info > ori_start)
-				kv_push(bwtintv_t, *a, itr->sub->a[j]);
-		kv_copy(bwtintv_t, *itr->matches, *a);
-	}
 	return itr->matches;
-}
-
-const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width)
-{
-	return smem_next2(itr, split_len, split_width, 1);
 }
 
 /***************************
@@ -410,7 +382,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 			int e_min = a[j].end < a[i].end? a[j].end : a[i].end;
 			if (e_min > b_max) { // have overlap
 				int min_l = a[i].end - a[i].beg < a[j].end - a[j].beg? a[i].end - a[i].beg : a[j].end - a[j].beg;
-				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
+				if (e_min - b_max >= min_l * opt->mask_level && min_l < opt->max_chain_gap) { // significant overlap
 					if (a[j].p2 == 0) a[j].p2 = a[i].p;
 					if (a[i].w < a[j].w * opt->chain_drop_ratio && a[j].w - a[i].w >= opt->min_seed_len<<1)
 						break;
