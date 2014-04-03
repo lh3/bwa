@@ -42,6 +42,8 @@
  * When there are gaps, l should be the length of alignment matches (i.e. the M operator in CIGAR)
  */
 
+static const bntseq_t *global_bns = 0; // for debugging only
+
 mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
@@ -182,14 +184,17 @@ typedef struct { size_t n, m; mem_chain_t *a;  } mem_chain_v;
 #define chain_cmp(a, b) (((b).pos < (a).pos) - ((a).pos < (b).pos))
 KBTREE_INIT(chn, mem_chain_t, chain_cmp)
 
+// return 1 if the seed is merged into the chain
 static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, const mem_seed_t *p)
 {
 	int64_t qend, rend, x, y;
 	const mem_seed_t *last = &c->seeds[c->n-1];
 	qend = last->qbeg + last->len;
 	rend = last->rbeg + last->len;
-	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
+	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend) {
+		if (bwa_verbose >= 5) printf("** contained\n");
 		return 1; // contained seed; do nothing
+	}
 	if ((last->rbeg < l_pac || c->seeds[0].rbeg < l_pac) && p->rbeg >= l_pac) return 0; // don't chain if on different strand
 	x = p->qbeg - last->qbeg; // always non-negtive
 	y = p->rbeg - last->rbeg;
@@ -199,8 +204,10 @@ static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, c
 			c->seeds = realloc(c->seeds, c->m * sizeof(mem_seed_t));
 		}
 		c->seeds[c->n++] = *p;
+		if (bwa_verbose >= 5) printf("** appended\n");
 		return 1;
-	}
+	} else if (bwa_verbose >= 5)
+		printf("** new chain: %ld, %ld, %ld, %ld\n", (long)y, (long)abs(x-y), (long)(x - last->len), (long)(y - last->len));
 	return 0; // request to add a new chain
 }
 
@@ -224,7 +231,15 @@ static void mem_insert_seed(const mem_opt_t *opt, int64_t l_pac, kbtree_t(chn) *
 				s.rbeg = tmp.pos = bwt_sa(itr->bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 				s.qbeg = p->info>>32;
 				s.len  = slen;
-				if (bwa_verbose >= 5) printf("* Found SEED: length=%d,query_beg=%d,ref_beg=%ld\n", s.len, s.qbeg, (long)s.rbeg);
+				if (bwa_verbose >= 5) {
+					bwtint_t pos;
+					int is_rev, ref_id;
+					pos = bns_depos(global_bns, s.rbeg, &is_rev);
+					if (is_rev) pos -= s.len - 1;
+					bns_cnt_ambi(global_bns, pos, s.len, &ref_id);
+					printf("* Found SEED: length=%d,query_beg=%d,ref_beg=%ld; %s:%c%ld\n", s.len, s.qbeg, (long)s.rbeg, \
+							global_bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - global_bns->anns[ref_id].offset) + 1);
+				}
 				if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
 				if (kb_size(tree)) {
 					kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
@@ -1070,6 +1085,7 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	double ctime, rtime;
 
 	ctime = cputime(); rtime = realtime();
+	global_bns = bns;
 	regs = malloc(n * sizeof(mem_alnreg_v));
 	w.opt = opt; w.bwt = bwt; w.bns = bns; w.pac = pac;
 	w.seqs = seqs; w.regs = regs; w.n_processed = n_processed;
