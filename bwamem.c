@@ -69,7 +69,7 @@ mem_opt_t *mem_opt_init()
 	o->n_threads = 1;
 	o->max_matesw = 100;
 	o->mask_level_redun = 0.95;
-	o->min_HSP_score = 0;
+	o->min_chain_weight = 0;
 	o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
 //	o->mapQ_coef_len = o->mapQ_coef_fac = 0;
 	bwa_fill_scmat(o->a, o->b, o->mat);
@@ -357,6 +357,15 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	flt_aux_t *a;
 	int i, j, n;
 	if (n_chn <= 1) return n_chn; // no need to filter
+	for (i = j = 0; i < n_chn; ++i) {
+		mem_chain_t *c = &chains[i];
+		int w;
+		w = mem_chain_weight(c);
+		if (w >= opt->min_chain_weight)
+			chains[j++] = *c;
+	}
+	n_chn = j;
+	if (n_chn == 0) return 0;
 	a = malloc(sizeof(flt_aux_t) * n_chn);
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &chains[i];
@@ -526,10 +535,13 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
 
 #define MEM_SHORT_EXT 50
 #define MEM_SHORT_LEN 200
+
+#define MEM_HSP_COEF 1.5
+
 #define MAX_BAND_TRY  2
 
 /* mem_test_chain_sw() uses SSE2-SW to align a short chain with 50bp added to
- * each end of the chain. If the SW score is below opt->min_HSP_score, it will
+ * each end of the chain. If the SW score is below min_HSP_score, it will
  * return 0, informing the caller to discard the chain. This heuristic is
  * somewhat similar to BLAST which drops a seed hit if ungapped extension is
  * below a certain score (true for old BLAST; don't know how BLAST+ works).
@@ -547,6 +559,7 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
 int mem_test_chain_sw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c)
 {
 	int i, qb, qe;
+	int min_HSP_score = (int)(opt->min_chain_weight * opt->a * MEM_HSP_COEF + .499);
 	int64_t rb, re, rlen;
 	uint8_t *rseq = 0;
 	kswr_t x;
@@ -579,7 +592,7 @@ int mem_test_chain_sw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, i
 	assert(rlen == re - rb);
 	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0);
 	free(rseq);
-	if (x.score >= opt->min_HSP_score) return 1;
+	if (x.score >= min_HSP_score) return 1;
 	if (bwa_verbose >= 4) printf("** give up the chain due to small HSP score %d.\n", x.score);
 	return 0;
 }
@@ -1014,7 +1027,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 		mem_chain_t *p = &chn.a[i];
 		int ret;
 		if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-		if (opt->min_HSP_score > 0) ret = mem_test_chain_sw(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p);
+		if (opt->min_chain_weight > 0) ret = mem_test_chain_sw(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p);
 		else ret = mem_chain2aln_short(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
 		if (ret > 0) mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);

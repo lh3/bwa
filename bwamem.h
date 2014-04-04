@@ -30,13 +30,13 @@ typedef struct {
 	int T;                  // output score threshold; only affecting output
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
+	int min_chain_weight;
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
 	int split_width;        // split into a seed if its occurence is smaller than this value
 	int max_occ;            // skip a seed if its occurence is larger than this value
 	int max_chain_gap;      // do not chain seed if it is max_chain_gap-bp away from the closest seed
 	int n_threads;          // number of threads
 	int chunk_size;         // process chunk_size-bp sequences in a batch
-	int min_HSP_score;      // used in mem_test_chain(); disabled by default
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
 	float mask_level_redun;
