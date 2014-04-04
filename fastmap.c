@@ -37,7 +37,7 @@ int main_mem(int argc, char *argv[])
 	opt = mem_opt_init();
 	opt0.a = opt0.b = opt0.o_del = opt0.e_del = opt0.o_ins = opt0.e_ins = opt0.pen_unpaired = -1;
 	opt0.pen_clip5 = opt0.pen_clip3 = opt0.zdrop = opt0.T = -1;
-	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:u:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg), opt0.a = 1;
@@ -56,6 +56,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg);
 		else if (c == 'D') opt->chain_drop_ratio = atof(optarg);
+		else if (c == 'u') opt->min_HSP_score = atoi(optarg);
 		else if (c == 'm') opt->max_matesw = atoi(optarg);
 		else if (c == 's') opt->split_width = atoi(optarg);
 		else if (c == 'N') opt->max_chain_gap = atoi(optarg);
@@ -101,6 +102,7 @@ int main_mem(int argc, char *argv[])
 		else return 1;
 	}
 	if (opt->n_threads < 1) opt->n_threads = 1;
+	if (opt->T < opt->min_HSP_score) opt->T = opt->min_HSP_score;
 	if (optind + 1 >= argc || optind + 3 < argc) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
@@ -123,6 +125,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -E INT[,INT]  gap extension penalty; a gap of size k cost '{-O} + {-E}*k' [%d,%d]\n", opt->e_del, opt->e_ins);
 		fprintf(stderr, "       -L INT[,INT]  penalty for 5'- and 3'-end clipping [%d,%d]\n", opt->pen_clip5, opt->pen_clip3);
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
+		fprintf(stderr, "       -u INT        drop a chain if local SW score below INT; 0 to disable [%d]\n", opt->min_HSP_score);
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -136,7 +139,9 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
 		fprintf(stderr, "                     FR orientation only. [inferred]\n");
-		fprintf(stderr, "\nNote: Please read the man page for detailed description of the command line and options.\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Note: Please read the man page for detailed description of the command line and options.\n");
+		fprintf(stderr, "      `-k18 -u200 -w200 -c1000 -r10 -A3 -O3 -E1' is recommended for PacBio reads as of early 2014.\n");
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;
