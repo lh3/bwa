@@ -425,20 +425,20 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			//   E(i+1,j) = max{H(i,j)-gapo, E(i,j)} - gape
 			//   F(i,j+1) = max{H(i,j)-gapo, F(i,j)} - gape
 			eh_t *p = &eh[j];
-			int h = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
+			int h, M = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
 			p->h = h1;          // set H(i,j-1) for the next row
-			h += q[j];
-			h = h > e? h : e;
+			M += q[j];          // separating H and M to disallow a cigar like "100M3I3D20M"
+			h = M > e? M : e;
 			h = h > f? h : f;
 			h1 = h;             // save H(i,j) to h1 for the next column
 			mj = m > h? mj : j; // record the position where max score is achieved
 			m = m > h? m : h;   // m is stored at eh[mj+1]
-			t = h - oe_del;
+			t = M - oe_del;
 			t = t > 0? t : 0;
 			e -= e_del;
 			e = e > t? e : t;   // computed E(i+1,j)
 			p->e = e;           // save E(i+1,j) for the next row
-			t = h - oe_ins;
+			t = M - oe_ins;
 			t = t > 0? t : 0;
 			f -= e_ins;
 			f = f > t? f : t;   // computed F(i,j+1)
@@ -536,7 +536,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
 			//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
 			// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
-			// However, a CIGAR like "10M3I3D10M" allowed by local() and extend() is disallowed by global().
+			// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
 			// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
 			// In practice, this should happen very rarely given a reasonable scoring system.
 			eh_t *p = &eh[j];

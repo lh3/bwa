@@ -30,6 +30,7 @@ typedef struct {
 	int T;                  // output score threshold; only affecting output
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
+	int min_chain_weight;
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
 	int split_width;        // split into a seed if its occurence is smaller than this value
 	int max_occ;            // skip a seed if its occurence is larger than this value
@@ -86,7 +87,7 @@ extern "C" {
 	smem_i *smem_itr_init(const bwt_t *bwt);
 	void smem_itr_destroy(smem_i *itr);
 	void smem_set_query(smem_i *itr, int len, const uint8_t *query);
-	const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width);
+	const bwtintv_v *smem_next(smem_i *itr);
 
 	mem_opt_t *mem_opt_init(void);
 	void mem_fill_scmat(int a, int b, int8_t mat[25]);
