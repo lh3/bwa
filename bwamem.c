@@ -1036,7 +1036,13 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
 	if (opt->flag & MEM_F_NO_EXACT)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
-	if (bwa_verbose >= 4) err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+	if (bwa_verbose >= 4) {
+		err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
+		for (i = 0; i < regs.n; ++i) {
+			mem_alnreg_t *p = &regs.a[i];
+			printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
+		}
+	}
 	return regs;
 }
 
