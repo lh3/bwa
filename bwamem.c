@@ -145,7 +145,8 @@ typedef struct {
 } mem_seed_t;
 
 typedef struct {
-	int n, m;
+	int n, m, first;
+	uint32_t w:30, kept:2;
 	int64_t pos;
 	mem_seed_t *seeds;
 } mem_chain_t;
@@ -164,10 +165,8 @@ static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, c
 	const mem_seed_t *last = &c->seeds[c->n-1];
 	qend = last->qbeg + last->len;
 	rend = last->rbeg + last->len;
-	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend) {
-		if (bwa_verbose >= 5) printf("** contained\n");
+	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
 		return 1; // contained seed; do nothing
-	}
 	if ((last->rbeg < l_pac || c->seeds[0].rbeg < l_pac) && p->rbeg >= l_pac) return 0; // don't chain if on different strand
 	x = p->qbeg - last->qbeg; // always non-negtive
 	y = p->rbeg - last->rbeg;
@@ -177,10 +176,8 @@ static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, c
 			c->seeds = realloc(c->seeds, c->m * sizeof(mem_seed_t));
 		}
 		c->seeds[c->n++] = *p;
-		if (bwa_verbose >= 5) printf("** appended\n");
 		return 1;
-	} else if (bwa_verbose >= 5)
-		printf("** new chain: %ld, %ld, %ld, %ld\n", (long)y, (long)abs(x-y), (long)(x - last->len), (long)(y - last->len));
+	}
 	return 0; // request to add a new chain
 }
 
@@ -247,15 +244,6 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int
 			s.rbeg = tmp.pos = bwt_sa(bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 			s.qbeg = p->info>>32;
 			s.len  = slen;
-			if (bwa_verbose >= 5) {
-				bwtint_t pos;
-				int is_rev, ref_id;
-				pos = bns_depos(global_bns, s.rbeg, &is_rev);
-				if (is_rev) pos -= s.len - 1;
-				bns_cnt_ambi(global_bns, pos, s.len, &ref_id);
-				printf("* Found SEED: length=%d,query_beg=%d,ref_beg=%ld; %s:%c%ld\n", s.len, s.qbeg, (long)s.rbeg, \
-						global_bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - global_bns->anns[ref_id].offset) + 1);
-			}
 			if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
 			if (kb_size(tree)) {
 				kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
@@ -285,84 +273,59 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int
  * Filtering chains *
  ********************/
 
-typedef struct {
-	int beg, end, w;
-	void *p, *p2;
-} flt_aux_t;
+#define chn_beg(ch) ((ch).seeds->qbeg)
+#define chn_end(ch) ((ch).seeds[(ch).n-1].qbeg + (ch).seeds[(ch).n-1].len)
 
 #define flt_lt(a, b) ((a).w > (b).w)
-KSORT_INIT(mem_flt, flt_aux_t, flt_lt)
+KSORT_INIT(mem_flt, mem_chain_t, flt_lt)
 
-int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
+int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a)
 {
-	flt_aux_t *a;
-	int i, j, n;
-	if (n_chn <= 1) return n_chn; // no need to filter
-	for (i = j = 0; i < n_chn; ++i) { // filter out chains with small weight
-		mem_chain_t *c = &chains[i];
-		int w;
-		w = mem_chain_weight(c);
-		if (w >= opt->min_chain_weight)
-			chains[j++] = *c;
+	int i, k;
+	kvec_t(int) chains = {0,0,0}; // this keeps int indices of the non-overlapping chains
+	if (n_chn == 0) return 0; // no need to filter
+	// compute the weight of each chain and drop chains with small weight
+	for (i = k = 0; i < n_chn; ++i) {
+		mem_chain_t *c = &a[i];
+		c->first = -1; c->kept = 0;
+		c->w = mem_chain_weight(c);
+		if (c->w < opt->min_chain_weight) free(c->seeds);
+		else a[k++] = *c;
 	}
-	n_chn = j;
-	if (n_chn == 0) return 0;
-	a = malloc(sizeof(flt_aux_t) * n_chn);
-	for (i = 0; i < n_chn; ++i) {
-		mem_chain_t *c = &chains[i];
-		int w;
-		w = mem_chain_weight(c);
-		a[i].beg = c->seeds[0].qbeg;
-		a[i].end = c->seeds[c->n-1].qbeg + c->seeds[c->n-1].len;
-		a[i].w = w; a[i].p = c; a[i].p2 = 0;
-	}
+	n_chn = k;
 	ks_introsort(mem_flt, n_chn, a);
-	{ // reorder chains such that the best chain appears first
-		mem_chain_t *swap;
-		swap = malloc(sizeof(mem_chain_t) * n_chn);
-		for (i = 0; i < n_chn; ++i) {
-			swap[i] = *((mem_chain_t*)a[i].p);
-			a[i].p = &chains[i]; // as we will memcpy() below, a[i].p is changed
-		}
-		memcpy(chains, swap, sizeof(mem_chain_t) * n_chn);
-		free(swap);
-	}
-	for (i = 1, n = 1; i < n_chn; ++i) {
-		for (j = 0; j < n; ++j) {
-			int b_max = a[j].beg > a[i].beg? a[j].beg : a[i].beg;
-			int e_min = a[j].end < a[i].end? a[j].end : a[i].end;
+	// pairwise chain comparisons
+	kv_push(int, chains, 0);
+	for (i = 1; i < n_chn; ++i) {
+		for (k = 0; k < chains.n; ++k) {
+			int j = chains.a[k];
+			int b_max = chn_beg(a[j]) > chn_beg(a[i])? chn_beg(a[j]) : chn_beg(a[i]);
+			int e_min = chn_end(a[j]) < chn_end(a[i])? chn_end(a[j]) : chn_end(a[i]);
 			if (e_min > b_max) { // have overlap
-				int min_l = a[i].end - a[i].beg < a[j].end - a[j].beg? a[i].end - a[i].beg : a[j].end - a[j].beg;
+				int li = chn_end(a[i]) - chn_beg(a[i]);
+				int lj = chn_end(a[j]) - chn_beg(a[j]);
+				int min_l = li < lj? li : lj;
 				if (e_min - b_max >= min_l * opt->mask_level && min_l < opt->max_chain_gap) { // significant overlap
-					if (a[j].p2 == 0) a[j].p2 = a[i].p;
+					if (a[j].first < 0) a[j].first = i; // keep the first shadowed hit s.t. mapq can be more accurate
 					if (a[i].w < a[j].w * opt->chain_drop_ratio && a[j].w - a[i].w >= opt->min_seed_len<<1)
 						break;
 				}
 			}
 		}
-		if (j == n) a[n++] = a[i]; // if have no significant overlap with better chains, keep it.
+		if (k == chains.n) kv_push(int, chains, i);
 	}
-	for (i = 0; i < n; ++i) { // mark chains to be kept
-		mem_chain_t *c = (mem_chain_t*)a[i].p;
-		if (c->n > 0) c->n = -c->n;
-		c = (mem_chain_t*)a[i].p2;
-		if (c && c->n > 0) c->n = -c->n;
+	for (i = 0; i < chains.n; ++i) {
+		mem_chain_t *c = &a[chains.a[i]];
+		c->kept = 2;
+		if (c->first >= 0) a[c->first].kept = 1;
 	}
-	free(a);
-	for (i = 0; i < n_chn; ++i) { // free discarded chains
-		mem_chain_t *c = &chains[i];
-		if (c->n >= 0) {
-			free(c->seeds);
-			c->n = c->m = 0;
-		} else c->n = -c->n;
+	free(chains.a);
+	for (i = k = 0; i < n_chn; ++i) { // free discarded chains
+		mem_chain_t *c = &a[i];
+		if (c->kept == 0) free(c->seeds);
+		else a[k++] = a[i];
 	}
-	for (i = n = 0; i < n_chn; ++i) { // squeeze out discarded chains
-		if (chains[i].n > 0) {
-			if (n != i) chains[n++] = chains[i];
-			else ++n;
-		}
-	}
-	return n;
+	return k;
 }
 
 /******************************
