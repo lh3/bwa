@@ -77,65 +77,6 @@ mem_opt_t *mem_opt_init()
 }
 
 /***************************
- * SMEM iterator interface *
- ***************************/
-
-struct __smem_i {
-	const bwt_t *bwt;
-	const uint8_t *query;
-	int start, len;
-	bwtintv_v *matches; // matches; to be returned by smem_next()
-	bwtintv_v *sub;     // sub-matches inside the longest match; temporary
-	bwtintv_v *tmpvec[2]; // temporary arrays
-};
-
-smem_i *smem_itr_init(const bwt_t *bwt)
-{
-	smem_i *itr;
-	itr = calloc(1, sizeof(smem_i));
-	itr->bwt = bwt;
-	itr->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
-	itr->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
-	itr->matches   = calloc(1, sizeof(bwtintv_v));
-	itr->sub       = calloc(1, sizeof(bwtintv_v));
-	return itr;
-}
-
-void smem_itr_destroy(smem_i *itr)
-{
-	free(itr->tmpvec[0]->a); free(itr->tmpvec[0]);
-	free(itr->tmpvec[1]->a); free(itr->tmpvec[1]);
-	free(itr->matches->a);   free(itr->matches);
-	free(itr->sub->a);       free(itr->sub);
-	free(itr);
-}
-
-void smem_set_query(smem_i *itr, int len, const uint8_t *query)
-{
-	itr->query = query;
-	itr->start = 0;
-	itr->len = len;
-}
-
-const bwtintv_v *smem_next(smem_i *itr)
-{
-	int i, max, max_i, ori_start;
-	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = itr->sub->n = 0;
-	if (itr->start >= itr->len || itr->start < 0) return 0;
-	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
-	if (itr->start == itr->len) return 0;
-	ori_start = itr->start;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, 1, itr->matches, itr->tmpvec); // search for SMEM
-	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
-	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
-		bwtintv_t *p = &itr->matches->a[i];
-		int len = (uint32_t)p->info - (p->info>>32);
-		if (max < len) max = len, max_i = i;
-	}
-	return itr->matches;
-}
-
-/***************************
  * Collection SA invervals *
  ***************************/
 
@@ -165,7 +106,7 @@ static void smem_aux_destroy(smem_aux_t *a)
 static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq, smem_aux_t *a)
 {
 	int i, k, x = 0, old_n;
-	int start_width = (opt->flag & MEM_F_NO_EXACT)? 2 : 1;
+	int start_width = (opt->flag & MEM_F_SELF_OVLP)? 2 : 1;
 	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
 	a->mem.n = 0;
 	// first pass: find all SMEMs
@@ -357,7 +298,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *chains)
 	flt_aux_t *a;
 	int i, j, n;
 	if (n_chn <= 1) return n_chn; // no need to filter
-	for (i = j = 0; i < n_chn; ++i) {
+	for (i = j = 0; i < n_chn; ++i) { // filter out chains with small weight
 		mem_chain_t *c = &chains[i];
 		int w;
 		w = mem_chain_weight(c);
@@ -482,7 +423,7 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 
 int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int qlen)
 {
-	if (!(opt->flag & MEM_F_NO_EXACT) || n == 0 || a->truesc != qlen * opt->a) return n;
+	if (!(opt->flag & MEM_F_SELF_OVLP) || n == 0 || a->truesc != qlen * opt->a) return n;
 	memmove(a, a + 1, (n - 1) * sizeof(mem_alnreg_t));
 	return n - 1;
 }
@@ -1034,7 +975,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	}
 	free(chn.a);
 	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
-	if (opt->flag & MEM_F_NO_EXACT)
+	if (opt->flag & MEM_F_SELF_OVLP)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
 	if (bwa_verbose >= 4) {
 		err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
@@ -1046,19 +987,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	return regs;
 }
 
-mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq_)
-{ // the difference from mem_align1_core() is that this routine: 1) calls mem_mark_primary_se(); 2) does not modify the input sequence
-	mem_alnreg_v ar;
-	char *seq;
-	seq = malloc(l_seq);
-	memcpy(seq, seq_, l_seq); // makes a copy of seq_
-	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
-	mem_mark_primary_se(opt, ar.n, ar.a, lrand48());
-	free(seq);
-	return ar;
-}
 
-// This routine is only used for the API purpose
 mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
@@ -1087,7 +1016,6 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	w2 = w2 > tmp? w2 : tmp;
 	if (bwa_verbose >= 4) printf("* Band width: inferred=%d, cmd_opt=%d, alnreg=%d\n", w2, opt->w, ar->w);
 	if (w2 > opt->w) w2 = w2 < ar->w? w2 : ar->w;
-//	else w2 = opt->w; // TODO: check if we need this line on long reads. On 1-800bp reads, it does not matter and it should be.
 	i = 0; a.cigar = 0;
 	do {
 		free(a.cigar);
@@ -1161,11 +1089,16 @@ static void worker1(void *data, int i, int tid)
 static void worker2(void *data, int i, int tid)
 {
 	extern int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2]);
+	extern void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a);
 	worker_t *w = (worker_t*)data;
 	if (!(w->opt->flag&MEM_F_PE)) {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read '%s' <=====\n", w->seqs[i].name);
-		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
-		mem_reg2sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+		if (w->opt->flag & MEM_F_ALN_REG) {
+			mem_reg2ovlp(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i]);
+		} else {
+			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
+			mem_reg2sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+		}
 		free(w->regs[i].a);
 	} else {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read pair '%s' <=====\n", w->seqs[i<<1|0].name);

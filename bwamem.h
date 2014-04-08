@@ -16,7 +16,8 @@ typedef struct __smem_i smem_i;
 #define MEM_F_ALL       0x8
 #define MEM_F_NO_MULTI  0x10
 #define MEM_F_NO_RESCUE 0x20
-#define MEM_F_NO_EXACT  0x40
+#define MEM_F_SELF_OVLP 0x40
+#define MEM_F_ALN_REG   0x80
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
