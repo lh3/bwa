@@ -245,7 +245,7 @@ int main_mem(int argc, char *argv[])
 		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
-			err_fputs(seqs[i].sam, stdout);
+			if (seqs[i].sam) err_fputs(seqs[i].sam, stdout);
 			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 		}
 		free(seqs);
