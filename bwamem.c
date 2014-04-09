@@ -63,15 +63,15 @@ mem_opt_t *mem_opt_init()
 	o->max_chain_gap = 10000;
 	o->max_ins = 10000;
 	o->mask_level = 0.50;
-	o->chain_drop_ratio = 0.50;
+	o->drop_ratio = 0.50;
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_matesw = 100;
 	o->mask_level_redun = 0.95;
 	o->min_chain_weight = 0;
+	o->max_chain_extend = 1<<30;
 	o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
-//	o->mapQ_coef_len = o->mapQ_coef_fac = 0;
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -98,7 +98,8 @@ static smem_aux_t *smem_aux_init()
 
 static void smem_aux_destroy(smem_aux_t *a)
 {	
-	free(a->tmpv[0]->a); free(a->tmpv[1]->a);
+	free(a->tmpv[0]->a); free(a->tmpv[0]);
+	free(a->tmpv[1]->a); free(a->tmpv[1]);
 	free(a->mem.a); free(a->mem1.a);
 	free(a);
 }
@@ -135,9 +136,9 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 	ks_introsort(mem_intv, a->mem.n, a->mem.a);
 }
 
-/********************************
- * Chaining while finding SMEMs *
- ********************************/
+/************
+ * Chaining *
+ ************/
 
 typedef struct {
 	int64_t rbeg;
@@ -295,8 +296,10 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a)
 	n_chn = k;
 	ks_introsort(mem_flt, n_chn, a);
 	// pairwise chain comparisons
+	a[0].kept = 3;
 	kv_push(int, chains, 0);
 	for (i = 1; i < n_chn; ++i) {
+		int large_ovlp = 0;
 		for (k = 0; k < chains.n; ++k) {
 			int j = chains.a[k];
 			int b_max = chn_beg(a[j]) > chn_beg(a[i])? chn_beg(a[j]) : chn_beg(a[i]);
@@ -306,25 +309,35 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a)
 				int lj = chn_end(a[j]) - chn_beg(a[j]);
 				int min_l = li < lj? li : lj;
 				if (e_min - b_max >= min_l * opt->mask_level && min_l < opt->max_chain_gap) { // significant overlap
+					large_ovlp = 1;
 					if (a[j].first < 0) a[j].first = i; // keep the first shadowed hit s.t. mapq can be more accurate
-					if (a[i].w < a[j].w * opt->chain_drop_ratio && a[j].w - a[i].w >= opt->min_seed_len<<1)
+					if (a[i].w < a[j].w * opt->drop_ratio && a[j].w - a[i].w >= opt->min_seed_len<<1)
 						break;
 				}
 			}
 		}
-		if (k == chains.n) kv_push(int, chains, i);
+		if (k == chains.n) {
+			kv_push(int, chains, i);
+			a[i].kept = large_ovlp? 2 : 3;
+		}
 	}
 	for (i = 0; i < chains.n; ++i) {
 		mem_chain_t *c = &a[chains.a[i]];
-		c->kept = 2;
 		if (c->first >= 0) a[c->first].kept = 1;
 	}
 	free(chains.a);
+	for (i = k = 0; i < n_chn; ++i) { // don't extend more than opt->max_chain_extend .kept=1/2 chains
+		if (a[i].kept == 0 || a[i].kept == 3) continue;
+		if (++k >= opt->max_chain_extend) break;
+	}
+	for (; i < n_chn; ++i)
+		if (a[i].kept < 3) a[i].kept = 0;
 	for (i = k = 0; i < n_chn; ++i) { // free discarded chains
 		mem_chain_t *c = &a[i];
 		if (c->kept == 0) free(c->seeds);
 		else a[k++] = a[i];
 	}
+	n_chn = k;
 	return k;
 }
 
@@ -890,7 +903,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		mem_aln_t *q;
 		if (p->score < opt->T) continue;
 		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
-		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->chain_drop_ratio) continue;
+		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
 		q->flag |= extra_flag; // flag secondary
@@ -950,8 +963,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	return regs;
 }
 
-
-mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
+mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar, const char *name)
 {
 	mem_aln_t a;
 	int i, w2, tmp, qb, qe, NM, score, is_rev, last_sc = -(1<<30), l_MD;
@@ -971,8 +983,10 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x100; // secondary alignment
 	if (bwa_fix_xref2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
-		fprintf(stderr, "[E::%s] If you see this message, please let the developer know. Abort. Sorry.\n", __func__);
-		exit(1);
+		if (name) fprintf(stderr, "[E::%s] Internal code inconsistency for read '%s'. Please contact the developer. Sorry.\n", __func__, name);
+		else fprintf(stderr, "[E::%s] Internal code inconsistency. Please contact the developer. Sorry.\n", __func__);
+		a.rid = -1; a.pos = -1; a.flag |= 0x4;
+		return a;
 	}
 	tmp = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_del, opt->e_del);
 	w2  = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_ins, opt->e_ins);
@@ -1022,6 +1036,11 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
 	free(query);
 	return a;
+}
+
+mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
+{
+	return mem_reg2aln2(opt, bns, pac, l_query, query_, ar, 0);
 }
 
 typedef struct {
