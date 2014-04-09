@@ -53,7 +53,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -67,15 +67,17 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'p') opt->flag |= MEM_F_PE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
-		else if (c == 'e') opt->flag |= MEM_F_NO_EXACT;
+		else if (c == 'e') opt->flag |= MEM_F_SELF_OVLP;
+		else if (c == 'F') opt->flag |= MEM_F_ALN_REG;
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
 		else if (c == 'r') opt->split_factor = atof(optarg), opt0.split_factor = 1.;
-		else if (c == 'D') opt->chain_drop_ratio = atof(optarg), opt0.chain_drop_ratio = 1.;
+		else if (c == 'D') opt->drop_ratio = atof(optarg), opt0.drop_ratio = 1.;
 		else if (c == 'm') opt->max_matesw = atoi(optarg), opt0.max_matesw = 1;
 		else if (c == 's') opt->split_width = atoi(optarg), opt0.split_width = 1;
-		else if (c == 'N') opt->max_chain_gap = atoi(optarg), opt0.max_chain_gap = 1;
+		else if (c == 'G') opt->max_chain_gap = atoi(optarg), opt0.max_chain_gap = 1;
+		else if (c == 'N') opt->max_chain_extend = atoi(optarg), opt0.max_chain_extend = 1;
 		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'Q') {
@@ -131,7 +133,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -r FLOAT      look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 //		fprintf(stderr, "       -s INT        look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT        skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
-		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->chain_drop_ratio);
+		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->drop_ratio);
 		fprintf(stderr, "       -W INT        discard a chain if seeded bases shorter than INT [0]\n");
 		fprintf(stderr, "       -m INT        perform at most INT rounds of mate rescues for each read [%d]\n", opt->max_matesw);
 		fprintf(stderr, "       -S            skip mate rescue\n");
@@ -145,6 +147,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
 		fprintf(stderr, "                     pacbio: -k17 -W40 -w200 -c1000 -r10 -A2 -B7 -O2 -E1 -L0\n");
+		fprintf(stderr, "                     pbread: -k13 -W30 -w100 -c1000 -r10 -A2 -B5 -O2 -E1 -N20 -FeaD.01\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -166,21 +169,31 @@ int main_mem(int argc, char *argv[])
 	}
 
 	if (mode) {
-		if (strcmp(mode, "pacbio") == 0) {
+		if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
 			if (!opt0.a) opt->a = 2, opt0.a = 1;
 			update_a(opt, &opt0);
-			if (!opt0.b) opt->b = 7;
 			if (!opt0.o_del) opt->o_del = 2;
 			if (!opt0.e_del) opt->e_del = 1;
 			if (!opt0.o_ins) opt->o_ins = 2;
 			if (!opt0.e_ins) opt->e_ins = 1;
-			if (!opt0.w) opt->w = 200;
-			if (!opt0.min_seed_len) opt->min_seed_len = 17;
-			if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
 			if (!opt0.max_occ) opt->max_occ = 1000;
-			if (!opt0.pen_clip5) opt->pen_clip5 = 0;
-			if (!opt0.pen_clip3) opt->pen_clip3 = 0;
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
+			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
+				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
+				if (!opt0.b) opt->b = 5;
+				if (!opt0.w) opt->w = 100;
+				if (!opt0.min_seed_len) opt->min_seed_len = 13;
+				if (!opt0.min_chain_weight) opt->min_chain_weight = 30;
+				if (!opt0.max_chain_extend) opt->max_chain_extend = 20;
+				if (opt0.drop_ratio == 0.) opt->drop_ratio = .01;
+			} else {
+				if (!opt0.b) opt->b = 7;
+				if (!opt0.w) opt->w = 200;
+				if (!opt0.min_seed_len) opt->min_seed_len = 17;
+				if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
+				if (!opt0.pen_clip5) opt->pen_clip5 = 0;
+				if (!opt0.pen_clip3) opt->pen_clip3 = 0;
+			}
 		} else {
 			fprintf(stderr, "[E::%s] unknown read type '%s'\n", __func__, mode);
 			return 1; // FIXME memory leak
@@ -213,7 +226,8 @@ int main_mem(int argc, char *argv[])
 			opt->flag |= MEM_F_PE;
 		}
 	}
-	bwa_print_sam_hdr(idx->bns, rg_line);
+	if (!(opt->flag & MEM_F_ALN_REG))
+		bwa_print_sam_hdr(idx->bns, rg_line);
 	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
@@ -231,7 +245,7 @@ int main_mem(int argc, char *argv[])
 		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
-			err_fputs(seqs[i].sam, stdout);
+			if (seqs[i].sam) err_fputs(seqs[i].sam, stdout);
 			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 		}
 		free(seqs);

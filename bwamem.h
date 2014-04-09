@@ -16,7 +16,8 @@ typedef struct __smem_i smem_i;
 #define MEM_F_ALL       0x8
 #define MEM_F_NO_MULTI  0x10
 #define MEM_F_NO_RESCUE 0x20
-#define MEM_F_NO_EXACT  0x40
+#define MEM_F_SELF_OVLP 0x40
+#define MEM_F_ALN_REG   0x80
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
@@ -31,6 +32,7 @@ typedef struct {
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
 	int min_chain_weight;
+	int max_chain_extend;
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
 	int split_width;        // split into a seed if its occurence is smaller than this value
 	int max_occ;            // skip a seed if its occurence is larger than this value
@@ -38,7 +40,7 @@ typedef struct {
 	int n_threads;          // number of threads
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
-	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	float drop_ratio;       // drop a chain if its seed coverage is below drop_ratio times the seed coverage of a better chain overlapping with the small chain
 	float mask_level_redun;
 	float mapQ_coef_len;
 	int mapQ_coef_fac;
