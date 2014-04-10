@@ -905,7 +905,11 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
-		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
+		*q = mem_reg2aln2(opt, bns, pac, s->l_seq, s->seq, p, s->name);
+		if (q->rid < 0) {
+			--aa.n;
+			continue;
+		}
 		q->flag |= extra_flag; // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (k && p->secondary < 0) // if supplementary
@@ -983,10 +987,9 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x100; // secondary alignment
 	if (bwa_fix_xref2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
-		if (name) fprintf(stderr, "[E::%s] Internal code inconsistency for read '%s'. Please contact the developer. Sorry.\n", __func__, name);
-		else fprintf(stderr, "[E::%s] Internal code inconsistency. Please contact the developer. Sorry.\n", __func__);
-		a.rid = -1; a.pos = -1; a.flag |= 0x4;
-		return a;
+		if (bwa_verbose >= 2 && name)
+			fprintf(stderr, "[W::%s] A cross-chr hit of read '%s' has been dropped.\n", __func__, name);
+		goto err_reg2aln;
 	}
 	tmp = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_del, opt->e_del);
 	w2  = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_ins, opt->e_ins);
@@ -1002,6 +1005,11 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 		last_sc = score;
 		w2 <<= 1;
 	} while (++i < 3 && score < ar->truesc - opt->a);
+	if (score < 0) {
+		if (bwa_verbose >= 2 && name)
+			fprintf(stderr, "[W::%s] A hit to read '%s' has been dropped.\n", __func__, name);
+		goto err_reg2aln;
+	}
 	l_MD = strlen((char*)(a.cigar + a.n_cigar)) + 1;
 	a.NM = NM;
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
@@ -1034,6 +1042,13 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 	a.rid = bns_pos2rid(bns, pos);
 	a.pos = pos - bns->anns[a.rid].offset;
 	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
+	free(query);
+	return a;
+
+err_reg2aln:
+	free(a.cigar);
+	memset(&a, 0, sizeof(mem_aln_t));
+	a.rid = -1; a.pos = -1; a.flag |= 0x4;
 	free(query);
 	return a;
 }
