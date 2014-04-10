@@ -148,6 +148,7 @@ extern "C" {
 	 * @return       CIGAR, strand, mapping quality and forward-strand position
 	 */
 	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar);
+	mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar, const char *name);
 
 	/**
 	 * Infer the insert size distribution from interleaved alignment regions

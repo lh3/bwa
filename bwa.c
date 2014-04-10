@@ -178,9 +178,10 @@ uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pa
 
 int bwa_fix_xref2(const int8_t mat[25], int o_del, int e_del, int o_ins, int e_ins, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
 {
-	int is_rev;
-	int64_t cb, ce, fm;
+	int is_rev, ori_ql = *qe - *qb;
+	int64_t cb, ce, fm, ori_rl = *re - *rb;
 	bntann1_t *ra;
+	assert(ori_ql > 0 && ori_rl > 0);
 	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary; actually with BWA-MEM, we should never come to here
 		*qb = *qe = *rb = *re = -1;
 		return -1; // unable to fix
@@ -218,7 +219,7 @@ int bwa_fix_xref2(const int8_t mat[25], int o_del, int e_del, int o_ins, int e_i
 		}
 		free(cigar);
 	}
-	return (*qb == *qe || *rb == *re)? -2 : 0;
+	return (*qe - *qb < .33 * ori_ql || *re - *rb < .33 * ori_rl)? -2 : 0;
 }
 
 int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
