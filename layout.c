@@ -11,6 +11,9 @@
 #include "kseq.h"
 KSTREAM_INIT(gzFile, gzread, 0x10000)
 
+#include "ksort.h"
+KSORT_INIT_GENERIC(uint64_t)
+
 static int lo_verbose = 3;
 
 /***********************
@@ -26,14 +29,13 @@ typedef struct {
 	float min_aln_ratio;
 } lo_opt_t;
 
-KHASH_MAP_INIT_INT(int, int)
-typedef khash_t(int) inthash_t;
+typedef kvec_t(uint64_t) uint64_v;
 
 typedef struct {
 	int id;
 	int contained;
 	char *name;
-	inthash_t *nei[2];
+	uint64_v *nei[2];
 } vertex_t;
 
 typedef kvec_t(vertex_t) vertex_v;
@@ -122,7 +124,7 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 					z->id = kh_size(g->n);
 					z->name = strdup(p);
 					z->contained = 0;
-					z->nei[0] = z->nei[1] = 0; // don't initialize the hash table right now
+					z->nei[0] = z->nei[1] = 0; // don't initialize the neighbor list right now
 					k = kh_put(name, g->n, z->name, &absent);
 					assert(absent);
 					kh_val(g->n, k) = z->id;
@@ -165,8 +167,8 @@ void lo_graph_destroy(ograph_t *g)
 {
 	int i;
 	for (i = 0; i < g->v.n; ++i) {
-		if (g->v.a[i].nei[0]) kh_destroy(int, g->v.a[i].nei[0]);
-		if (g->v.a[i].nei[1]) kh_destroy(int, g->v.a[i].nei[1]);
+		if (g->v.a[i].nei[0]) free(g->v.a[i].nei[0]->a);
+		if (g->v.a[i].nei[1]) free(g->v.a[i].nei[1]->a);
 		free(g->v.a[i].name);
 	}
 	free(g->v.a);
@@ -187,7 +189,7 @@ static inline void lo_flip_edge(edgeinfo_t *e)
 	lo_swap(tmp, e->l[0], e->l[1]);
 	lo_swap(tmp, e->s[0], e->s[1]);
 	lo_swap(tmp, e->e[0], e->e[1]);
-	e->type = (e->type|1)<<1 | (e->type|2)>>1;
+	e->type = (e->type&1)<<1 | (e->type&2)>>1;
 }
 
 void lo_rm_contained(ograph_t *g)
@@ -228,27 +230,26 @@ void lo_rm_contained(ograph_t *g)
 
 void lo_populate_nei(ograph_t *g)
 {
-	int i, absent;
-	khint_t k, l;
+	int i;
+	khint_t k;
 	for (i = 0; i < g->v.n; ++i) {
 		if (g->v.a[i].contained) continue;
-		g->v.a[i].nei[0] = kh_init(int);
-		g->v.a[i].nei[1] = kh_init(int);
+		g->v.a[i].nei[0] = calloc(1, sizeof(uint64_v));
+		g->v.a[i].nei[1] = calloc(1, sizeof(uint64_v));
 	}
 	for (k = 0; k != kh_end(g->e); ++k) {
 		int id[2];
 		edgeinfo_t *e;
-		vertex_t *v;
 		if (!kh_exist(g->e, k)) continue;
 		id[0] = kh_key(g->e, k)>>32;
 		id[1] = (uint32_t)kh_key(g->e, k);
 		e = &kh_val(g->e, k);
-		v = &g->v.a[id[0]];
-		l = kh_put(int, v->nei[!(e->type>>1)], id[1]<<1|(e->type&1), &absent);
-		kh_val(v->nei[!(e->type>>1)], l) = e->d[0];
-		v = &g->v.a[id[1]];
-		l = kh_put(int, v->nei[e->type&1], id[0]<<1|(e->type>>1^1), &absent);
-		kh_val(v->nei[e->type&1], l) = e->d[1];
+		kv_push(uint64_t, *g->v.a[id[0]].nei[e->type>>1^1], (uint64_t)e->d[0]<<32 | id[1]<<1 | (e->type&1));
+		kv_push(uint64_t, *g->v.a[id[1]].nei[e->type&1],    (uint64_t)e->d[1]<<32 | id[0]<<1 | (e->type>>1^1));
+	}
+	for (i = 0; i < g->v.n; ++i) {
+		if (g->v.a[i].nei[0]) ks_introsort(uint64_t, g->v.a[i].nei[0]->n, g->v.a[i].nei[0]->a);
+		if (g->v.a[i].nei[1]) ks_introsort(uint64_t, g->v.a[i].nei[1]->n, g->v.a[i].nei[1]->a);
 	}
 }
 
@@ -265,7 +266,8 @@ int main_layout(int argc, char *argv[])
 	int c;
 
 	lo_opt_init(&opt);
-	while ((c = getopt(argc, argv, "")) >= 0) {
+	while ((c = getopt(argc, argv, "v:")) >= 0) {
+		if (c == 'v') lo_verbose = atoi(optarg);
 	}
 	if (argc == optind && isatty(fileno(stdin))) {
 		fprintf(stderr, "Usage: bwa layout <in.ovlp>\n");
