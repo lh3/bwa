@@ -91,13 +91,14 @@ int lo_infer_edge_type(const lo_opt_t *opt, int l[2], int s[2], int e[2], int d[
 	el  = r[0] < 0? t[0][0] : t[0][1];
 	el += r[1] < 0? t[1][1] : t[1][0];
 	x[0] += el, x[1] += el;
+	d[0] = d[1] = -1;
 	if ((float)a[0] / x[0] >= opt->min_aln_ratio && (float)a[1] / x[1] >= opt->min_aln_ratio) {
 		if ((r[0] >= opt->min_ext && r[1] >= opt->min_ext) || (r[0] <= -opt->min_ext && r[1] <= -opt->min_ext)) { // suffix-prefix match
 			type = s[0] < e[0]? 0 : 2;
-			if (r[0] < 0) type ^= 3; // reverse the direction
+			if (r[0] < 0) type ^= 3, d[0] = -r[1], d[1] = -r[0]; // reverse the direction
+			else d[0] = r[0], d[1] = r[1];
 		} else type = x[0] / l[0] > x[1] / l[1]? LO_T_C1 : LO_T_C2;
 	} else type = LO_T_I; // internal local match; not a suffix-prefix match
-	d[0] = abs(r[0]); d[1] = abs(r[1]);
 	return type;
 }
 
@@ -189,7 +190,8 @@ static inline void lo_flip_edge(edgeinfo_t *e)
 	lo_swap(tmp, e->l[0], e->l[1]);
 	lo_swap(tmp, e->s[0], e->s[1]);
 	lo_swap(tmp, e->e[0], e->e[1]);
-	e->type = (e->type&1)<<1 | (e->type&2)>>1;
+	lo_swap(tmp, e->d[0], e->d[1]);
+	e->type = ((e->type&1)<<1 | (e->type&2)>>1) ^ 3;
 }
 
 void lo_rm_contained(ograph_t *g)
@@ -228,6 +230,10 @@ void lo_rm_contained(ograph_t *g)
 	kh_destroy(edge, tmp);
 }
 
+void lo_rm_conflict(ograph_t *g)
+{
+}
+
 void lo_populate_nei(ograph_t *g)
 {
 	int i;
@@ -243,14 +249,35 @@ void lo_populate_nei(ograph_t *g)
 		if (!kh_exist(g->e, k)) continue;
 		id[0] = kh_key(g->e, k)>>32;
 		id[1] = (uint32_t)kh_key(g->e, k);
+		if (id[0] > id[1]) continue;
 		e = &kh_val(g->e, k);
 		kv_push(uint64_t, *g->v.a[id[0]].nei[e->type>>1^1], (uint64_t)e->d[0]<<32 | id[1]<<1 | (e->type&1));
 		kv_push(uint64_t, *g->v.a[id[1]].nei[e->type&1],    (uint64_t)e->d[1]<<32 | id[0]<<1 | (e->type>>1^1));
 	}
 	for (i = 0; i < g->v.n; ++i) {
-		if (g->v.a[i].nei[0]) ks_introsort(uint64_t, g->v.a[i].nei[0]->n, g->v.a[i].nei[0]->a);
-		if (g->v.a[i].nei[1]) ks_introsort(uint64_t, g->v.a[i].nei[1]->n, g->v.a[i].nei[1]->a);
+		vertex_t *p = &g->v.a[i];
+		if (p->nei[0]) ks_introsort(uint64_t, p->nei[0]->n, p->nei[0]->a);
+		if (p->nei[1]) ks_introsort(uint64_t, p->nei[1]->n, p->nei[1]->a);
+		if (lo_verbose >= 4 && p->nei[0]) {
+			int j, k;
+			printf("%s\t%ld,%ld", p->name, p->nei[0]->n, p->nei[1]->n);
+			for (j = 0; j < 2; ++j) {
+				if (p->nei[j]->n) {
+					putchar('\t');
+					for (k = 0; k < p->nei[j]->n; ++k) {
+						uint64_t x = p->nei[j]->a[k];
+						if (k) putchar(',');
+						printf("%c%s:%d", "+-"[x&1], g->v.a[((uint32_t)x)>>1].name, (uint32_t)(x>>32));
+					}
+				} else printf("\t*");
+			}
+			putchar('\n');
+		}
 	}
+}
+
+void lo_trans_reduce(ograph_t *g)
+{
 }
 
 /*****************
@@ -277,7 +304,9 @@ int main_layout(int argc, char *argv[])
 	ks = ks_init(fp);
 	g = lo_graph_parse(&opt, ks);
 	lo_rm_contained(g);
+	lo_rm_conflict(g);
 	lo_populate_nei(g);
+	lo_trans_reduce(g);
 	lo_graph_destroy(g);
 	ks_destroy(ks);
 	gzclose(fp);
