@@ -147,7 +147,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
 		fprintf(stderr, "                     pacbio: -k17 -W40 -w200 -c1000 -r10 -A2 -B7 -O2 -E1 -L0\n");
-		fprintf(stderr, "                     pbread: -k13 -W30 -w100 -c1000 -r10 -A2 -B5 -O2 -E1 -N20 -FeaD.01\n");
+		fprintf(stderr, "                     pbread: -k13 -W30 -w100 -c1000 -r10 -A1 -B1 -O0 -E1 -N20 -FeaD.01\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -170,23 +170,29 @@ int main_mem(int argc, char *argv[])
 
 	if (mode) {
 		if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
-			if (!opt0.a) opt->a = 2, opt0.a = 1;
-			update_a(opt, &opt0);
-			if (!opt0.o_del) opt->o_del = 2;
-			if (!opt0.e_del) opt->e_del = 1;
-			if (!opt0.o_ins) opt->o_ins = 2;
-			if (!opt0.e_ins) opt->e_ins = 1;
 			if (!opt0.max_occ) opt->max_occ = 1000;
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
 			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
+				if (!opt0.a) opt->a = 1, opt0.a = 1;
+				update_a(opt, &opt0);
+				if (!opt0.o_del) opt->o_del = 0;
+				if (!opt0.e_del) opt->e_del = 1;
+				if (!opt0.o_ins) opt->o_ins = 0;
+				if (!opt0.e_ins) opt->e_ins = 1;
 				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
-				if (!opt0.b) opt->b = 5;
+				if (!opt0.b) opt->b = 1;
 				if (!opt0.w) opt->w = 100;
 				if (!opt0.min_seed_len) opt->min_seed_len = 13;
 				if (!opt0.min_chain_weight) opt->min_chain_weight = 30;
 				if (!opt0.max_chain_extend) opt->max_chain_extend = 20;
 				if (opt0.drop_ratio == 0.) opt->drop_ratio = .01;
 			} else {
+				if (!opt0.a) opt->a = 2, opt0.a = 1;
+				update_a(opt, &opt0);
+				if (!opt0.o_del) opt->o_del = 2;
+				if (!opt0.e_del) opt->e_del = 1;
+				if (!opt0.o_ins) opt->o_ins = 2;
+				if (!opt0.e_ins) opt->e_ins = 1;
 				if (!opt0.b) opt->b = 7;
 				if (!opt0.w) opt->w = 200;
 				if (!opt0.min_seed_len) opt->min_seed_len = 17;
