@@ -106,10 +106,11 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		}
 }
 
-int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
+int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
 	extern int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun);
-	int i, r, skip[4], n = 0;
+	int64_t l_pac = bns->l_pac;
+	int i, r, skip[4], n = 0, rid;
 	for (r = 0; r < 4; ++r)
 		skip[r] = pes[r].failed? 1 : 0;
 	for (i = 0; i < ma->n; ++i) { // check which orinentation has been found
@@ -122,7 +123,7 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 	for (r = 0; r < 4; ++r) {
 		int is_rev, is_larger;
 		uint8_t *seq, *rev = 0, *ref;
-		int64_t rb, re, len;
+		int64_t rb, re;
 		if (skip[r]) continue;
 		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
 		is_larger = !(r>>1); // whether the mate has larger coordinate
@@ -140,14 +141,15 @@ int mem_matesw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const me
 		}
 		if (rb < 0) rb = 0;
 		if (re > l_pac<<1) re = l_pac<<1;
-		ref = bns_get_seq(l_pac, pac, rb, re, &len);
-		if (len == re - rb) { // no funny things happening
+		ref = bns_fetch_seq(bns, pac, &rb, (rb+re)>>1, &re, &rid);
+		if (a->rid == rid) { // no funny things happening
 			kswr_t aln;
 			mem_alnreg_t b;
 			int tmp, xtra = KSW_XSUBO | KSW_XSTART | (l_ms * opt->a < 250? KSW_XBYTE : 0) | (opt->min_seed_len * opt->a);
-			aln = ksw_align2(l_ms, seq, len, ref, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, xtra, 0);
+			aln = ksw_align2(l_ms, seq, re - rb, ref, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, xtra, 0);
 			memset(&b, 0, sizeof(mem_alnreg_t));
 			if (aln.score >= opt->min_seed_len && aln.qb >= 0) { // something goes wrong if aln.qb < 0
+				b.rid = a->rid;
 				b.qb = is_rev? l_ms - (aln.qe + 1) : aln.qb;                                                                                                                                                                              
 				b.qe = is_rev? l_ms - aln.qb : aln.qe + 1; 
 				b.rb = is_rev? (l_pac<<1) - (rb + aln.te + 1) : rb + aln.tb;
@@ -258,7 +260,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 					kv_push(mem_alnreg_t, b[i], a[i].a[j]);
 		for (i = 0; i < 2; ++i)
 			for (j = 0; j < b[i].n && j < opt->max_matesw; ++j)
-				n += mem_matesw(opt, bns->l_pac, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
+				n += mem_matesw(opt, bns, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
 		free(b[0].a); free(b[1].a);
 	}
 	mem_mark_primary_se(opt, a[0].n, a[0].a, id<<1|0);
