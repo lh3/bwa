@@ -58,6 +58,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		if (r[0]->n == 0 || r[1]->n == 0) continue;
 		if (cal_sub(opt, r[0]) > MIN_RATIO * r[0]->a[0].score) continue;
 		if (cal_sub(opt, r[1]) > MIN_RATIO * r[1]->a[0].score) continue;
+		if (r[0]->a[0].rid != r[1]->a[0].rid) continue; // not on the same chr
 		dir = mem_infer_dir(l_pac, r[0]->a[0].rb, r[1]->a[0].rb, &is);
 		if (is && is <= opt->max_ins) kv_push(uint64_t, isize[dir], is);
 	}
@@ -176,16 +177,18 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	return n;
 }
 
-int mem_pair(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2])
+int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2])
 {
 	pair64_v v, u;
 	int r, i, k, y[4], ret; // y[] keeps the last hit
+	int64_t l_pac = bns->l_pac;
 	kv_init(v); kv_init(u);
 	for (r = 0; r < 2; ++r) { // loop through read number
 		for (i = 0; i < a[r].n; ++i) {
 			pair64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
 			key.x = e->rb < l_pac? e->rb : (l_pac<<1) - 1 - e->rb; // forward position
+			key.x = (uint64_t)e->rid<<32 | (key.x - bns->anns[e->rid].offset);
 			key.y = (uint64_t)e->score << 32 | i << 2 | (e->rb >= l_pac)<<1 | r;
 			kv_push(pair64_t, v, key);
 		}
@@ -267,7 +270,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
-	if (a[0].n && a[1].n && (o = mem_pair(opt, bns->l_pac, pac, pes, s, a, id, &subo, &n_sub, z)) > 0) {
+	if (a[0].n && a[1].n && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z)) > 0) {
 		int is_multi[2], q_pe, score_un, q_se[2];
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
