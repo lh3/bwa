@@ -6,13 +6,11 @@
 #include <string.h>
 #include <assert.h>
 
+#include "ksort.h"
 #include "kvec.h"
 #include "khash.h"
 #include "kseq.h"
 KSTREAM_INIT(gzFile, gzread, 0x10000)
-
-#include "ksort.h"
-KSORT_INIT_GENERIC(uint64_t)
 
 static int lo_verbose = 3;
 
@@ -29,13 +27,21 @@ typedef struct {
 	float min_aln_ratio;
 } lo_opt_t;
 
-typedef kvec_t(uint64_t) uint64_v;
+typedef struct {
+	uint32_t dist:31, reduced:1;
+	uint32_t id:31, ori:1;
+} lo_nei_t;
+
+typedef kvec_t(lo_nei_t) lo_nei_v;
+
+#define nei_lt(a, b) ((a).dist < (b).dist)
+KSORT_INIT(nei, lo_nei_t, nei_lt)
 
 typedef struct {
 	int id;
 	int contained:16, marked:16;
 	char *name;
-	uint64_v *nei[2];
+	lo_nei_v *nei[2];
 } vertex_t;
 
 typedef kvec_t(vertex_t) vertex_v;
@@ -242,24 +248,27 @@ void lo_populate_nei(ograph_t *g)
 	khint_t k;
 	for (i = 0; i < g->v.n; ++i) {
 		if (g->v.a[i].contained) continue;
-		g->v.a[i].nei[0] = calloc(1, sizeof(uint64_v));
-		g->v.a[i].nei[1] = calloc(1, sizeof(uint64_v));
+		g->v.a[i].nei[0] = calloc(1, sizeof(lo_nei_v));
+		g->v.a[i].nei[1] = calloc(1, sizeof(lo_nei_v));
 	}
 	for (k = 0; k != kh_end(g->e); ++k) {
 		int id[2];
 		edgeinfo_t *e;
+		lo_nei_t *p;
 		if (!kh_exist(g->e, k)) continue;
 		id[0] = kh_key(g->e, k)>>32;
 		id[1] = (uint32_t)kh_key(g->e, k);
 		if (id[0] > id[1]) continue;
 		e = &kh_val(g->e, k);
-		kv_push(uint64_t, *g->v.a[id[0]].nei[e->type>>1^1], (uint64_t)e->d[0]<<32 | id[1]<<1 | (e->type&1));
-		kv_push(uint64_t, *g->v.a[id[1]].nei[e->type&1],    (uint64_t)e->d[1]<<32 | id[0]<<1 | (e->type>>1^1));
+		p = kv_pushp(lo_nei_t, *g->v.a[id[0]].nei[e->type>>1^1]);
+		p->dist = e->d[0], p->id = id[1], p->ori = e->type&1, p->reduced = 0;
+		p = kv_pushp(lo_nei_t, *g->v.a[id[1]].nei[e->type&1]);
+		p->dist = e->d[1], p->id = id[0], p->ori = e->type>>1^1, p->reduced = 0;
 	}
 	for (i = 0; i < g->v.n; ++i) {
 		vertex_t *p = &g->v.a[i];
-		if (p->nei[0]) ks_introsort(uint64_t, p->nei[0]->n, p->nei[0]->a);
-		if (p->nei[1]) ks_introsort(uint64_t, p->nei[1]->n, p->nei[1]->a);
+		if (p->nei[0]) ks_introsort(nei, p->nei[0]->n, p->nei[0]->a);
+		if (p->nei[1]) ks_introsort(nei, p->nei[1]->n, p->nei[1]->a);
 		if (lo_verbose >= 4 && p->nei[0]) {
 			int j, k;
 			printf("%s\t%ld,%ld", p->name, p->nei[0]->n, p->nei[1]->n);
@@ -267,9 +276,9 @@ void lo_populate_nei(ograph_t *g)
 				if (p->nei[j]->n) {
 					putchar('\t');
 					for (k = 0; k < p->nei[j]->n; ++k) {
-						uint64_t x = p->nei[j]->a[k];
+						lo_nei_t *q = &p->nei[j]->a[k];
 						if (k) putchar(',');
-						printf("%c%s:%d", "+-"[x&1], g->v.a[((uint32_t)x)>>1].name, (uint32_t)(x>>32));
+						printf("%c%s:%d", "+-"[q->ori], g->v.a[q->id].name, q->dist);
 					}
 				} else printf("\t*");
 			}
