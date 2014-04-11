@@ -143,11 +143,11 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 typedef struct {
 	int64_t rbeg;
 	int32_t qbeg, len;
-} mem_seed_t;
+} mem_seed_t; // unaligned memory
 
 typedef struct {
-	int n, m, first;
-	uint32_t w:30, kept:2;
+	int n, m, first, rid;
+	int w, kept;
 	int64_t pos;
 	mem_seed_t *seeds;
 } mem_chain_t;
@@ -160,12 +160,13 @@ typedef struct { size_t n, m; mem_chain_t *a;  } mem_chain_v;
 KBTREE_INIT(chn, mem_chain_t, chain_cmp)
 
 // return 1 if the seed is merged into the chain
-static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, const mem_seed_t *p)
+static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, const mem_seed_t *p, int seed_rid)
 {
 	int64_t qend, rend, x, y;
 	const mem_seed_t *last = &c->seeds[c->n-1];
 	qend = last->qbeg + last->len;
 	rend = last->rbeg + last->len;
+	if (seed_rid != c->rid) return 0; // different chr; request a new chain
 	if (p->qbeg >= c->seeds[0].qbeg && p->qbeg + p->len <= qend && p->rbeg >= c->seeds[0].rbeg && p->rbeg + p->len <= rend)
 		return 1; // contained seed; do nothing
 	if ((last->rbeg < l_pac || c->seeds[0].rbeg < l_pac) && p->rbeg >= l_pac) return 0; // don't chain if on different strand
@@ -220,9 +221,10 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 	}
 }
 
-mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int len, const uint8_t *seq)
+mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, int len, const uint8_t *seq)
 {
 	int i;
+	int64_t l_pac = bns->l_pac;
 	mem_chain_v chain;
 	kbtree_t(chn) *tree;
 	smem_aux_t *aux;
@@ -241,19 +243,21 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, int64_t l_pac, int
 		for (k = 0; k < p->x[2]; ++k) {
 			mem_chain_t tmp, *lower, *upper;
 			mem_seed_t s;
-			int to_add = 0;
+			int rid, to_add = 0;
 			s.rbeg = tmp.pos = bwt_sa(bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 			s.qbeg = p->info>>32;
 			s.len  = slen;
-			if (s.rbeg < l_pac && l_pac < s.rbeg + s.len) continue; // bridging forward-reverse boundary; skip
+			rid = bns_intv2rid(bns, s.rbeg, s.rbeg + s.len);
+			if (rid < 0) continue; // bridging multiple reference sequences or the forward-reverse boundary
 			if (kb_size(tree)) {
 				kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
-				if (!lower || !test_and_merge(opt, l_pac, lower, &s)) to_add = 1;
+				if (!lower || !test_and_merge(opt, l_pac, lower, &s, rid)) to_add = 1;
 			} else to_add = 1;
 			if (to_add) { // add the seed as a new chain
 				tmp.n = 1; tmp.m = 4;
 				tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
 				tmp.seeds[0] = s;
+				tmp.rid = rid;
 				kb_putp(chn, tree, &tmp);
 			}
 		}
@@ -473,11 +477,11 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
  * low-divergence sequences, more testing is needed. For now, I only recommend
  * to use mem_test_chain_sw() for PacBio data. It is disabled by default.
  */
-int mem_test_chain_sw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c)
+int mem_test_chain_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c)
 {
-	int i, qb, qe;
+	int i, qb, qe, rid;
 	int min_HSP_score = (int)(opt->min_chain_weight * opt->a * MEM_HSP_COEF + .499);
-	int64_t rb, re, rlen;
+	int64_t rb, re, l_pac = bns->l_pac;
 	uint8_t *rseq = 0;
 	kswr_t x;
 
@@ -505,8 +509,8 @@ int mem_test_chain_sw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, i
 	if (qe - qb >= opt->w * 4 || re - rb >= opt->w * 4) return 1;
 	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return 1;
 
-	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
-	assert(rlen == re - rb);
+	rseq = bns_fetch_seq(bns, pac, &rb, c->seeds[0].rbeg, &re, &rid);
+	assert(c->rid == rid);
 	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0);
 	free(rseq);
 	if (x.score >= min_HSP_score) return 1;
@@ -514,10 +518,10 @@ int mem_test_chain_sw(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, i
 	return 0;
 }
 
-int mem_chain2aln_short(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
+int mem_chain2aln_short(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 {
-	int i, qb, qe, xtra;
-	int64_t rb, re, rlen;
+	int i, qb, qe, xtra, rid;
+	int64_t rb, re, l_pac = bns->l_pac;
 	uint8_t *rseq = 0;
 	mem_alnreg_t a;
 	kswr_t x;
@@ -547,8 +551,8 @@ int mem_chain2aln_short(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 	if (qe - qb >= opt->w * 4 || re - rb >= opt->w * 4) return 1;
 	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return 1;
 
-	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
-	assert(rlen == re - rb);
+	rseq = bns_fetch_seq(bns, pac, &rb, c->seeds[0].rbeg, &re, &rid);
+	assert(c->rid == rid);
 	xtra = KSW_XSUBO | KSW_XSTART | ((qe - qb) * opt->a < 250? KSW_XBYTE : 0) | (opt->min_seed_len * opt->a);
 	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, xtra, 0);
 	free(rseq);
@@ -556,6 +560,7 @@ int mem_chain2aln_short(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac,
 	a.qb = qb + x.qb; a.qe = qb + x.qe + 1;
 	a.score = x.score;
 	a.csub = x.score2;
+	a.rid = c->rid;
 	if (bwa_verbose >= 4) printf("** Attempted alignment via mem_chain2aln_short(): [%d,%d) <=> [%ld,%ld); score=%d; %d/%d\n", a.qb, a.qe, (long)a.rb, (long)a.re, x.score, a.qe-a.qb, qe-qb);
 	if (x.tb < MEM_SHORT_EXT>>1 || x.te > re - rb - (MEM_SHORT_EXT>>1)) return 1;
 	kv_push(mem_alnreg_t, *av, a);
@@ -571,10 +576,10 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 	return l < opt->w<<1? l : opt->w<<1;
 }
 
-void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
+void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 {
-	int i, k, max_off[2], aw[2]; // aw: actual bandwidth used in extension
-	int64_t rlen, rmax[2], tmp, max = 0;
+	int i, k, rid, max_off[2], aw[2]; // aw: actual bandwidth used in extension
+	int64_t l_pac = bns->l_pac, rmax[2], tmp, max = 0;
 	const mem_seed_t *s;
 	uint8_t *rseq = 0;
 	uint64_t *srt;
@@ -598,8 +603,8 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		else rmax[0] = l_pac;
 	}
 	// retrieve the reference sequence
-	rseq = bns_get_seq(l_pac, pac, rmax[0], rmax[1], &rlen);
-	assert(rlen == rmax[1] - rmax[0]);
+	rseq = bns_fetch_seq(bns, pac, &rmax[0], c->seeds[0].rbeg, &rmax[1], &rid);
+	assert(c->rid == rid);
 
 	srt = malloc(c->n * 8);
 	for (i = 0; i < c->n; ++i)
@@ -649,6 +654,7 @@ void mem_chain2aln(const mem_opt_t *opt, int64_t l_pac, const uint8_t *pac, int 
 		memset(a, 0, sizeof(mem_alnreg_t));
 		a->w = aw[0] = aw[1] = opt->w;
 		a->score = a->truesc = -1;
+		a->rid = c->rid;
 
 		if (bwa_verbose >= 4) err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg);
 		if (s->qbeg) { // left extension
@@ -939,7 +945,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	for (i = 0; i < l_seq; ++i) // convert to 2-bit encoding if we have not done so
 		seq[i] = seq[i] < 4? seq[i] : nst_nt4_table[(int)seq[i]];
 
-	chn = mem_chain(opt, bwt, bns->l_pac, l_seq, (uint8_t*)seq);
+	chn = mem_chain(opt, bwt, bns, l_seq, (uint8_t*)seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 
@@ -948,9 +954,9 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 		mem_chain_t *p = &chn.a[i];
 		int ret;
 		if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-		if (opt->min_chain_weight > 0) ret = mem_test_chain_sw(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p);
-		else ret = mem_chain2aln_short(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
-		if (ret > 0) mem_chain2aln(opt, bns->l_pac, pac, l_seq, (uint8_t*)seq, p, &regs);
+		if (opt->min_chain_weight > 0) ret = mem_test_chain_sw(opt, bns, pac, l_seq, (uint8_t*)seq, p);
+		else ret = mem_chain2aln_short(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
+		if (ret > 0) mem_chain2aln(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
@@ -986,11 +992,6 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
 	if (ar->secondary >= 0) a.flag |= 0x100; // secondary alignment
-	if (bwa_fix_xref2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, bns, pac, (uint8_t*)query, &qb, &qe, &rb, &re) < 0) {
-		if (bwa_verbose >= 2 && name)
-			fprintf(stderr, "[W::%s] A cross-chr hit of read '%s' has been dropped.\n", __func__, name);
-		goto err_reg2aln;
-	}
 	tmp = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_del, opt->e_del);
 	w2  = infer_bw(qe - qb, re - rb, ar->truesc, opt->a, opt->o_ins, opt->e_ins);
 	w2 = w2 > tmp? w2 : tmp;
@@ -1005,11 +1006,6 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 		last_sc = score;
 		w2 <<= 1;
 	} while (++i < 3 && score < ar->truesc - opt->a);
-	if (score < 0) {
-		if (bwa_verbose >= 2 && name)
-			fprintf(stderr, "[W::%s] A hit to read '%s' has been dropped.\n", __func__, name);
-		goto err_reg2aln;
-	}
 	l_MD = strlen((char*)(a.cigar + a.n_cigar)) + 1;
 	a.NM = NM;
 	pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
@@ -1040,15 +1036,9 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 		}
 	}
 	a.rid = bns_pos2rid(bns, pos);
+	assert(a.rid == ar->rid);
 	a.pos = pos - bns->anns[a.rid].offset;
 	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
-	free(query);
-	return a;
-
-err_reg2aln:
-	free(a.cigar);
-	memset(&a, 0, sizeof(mem_aln_t));
-	a.rid = -1; a.pos = -1; a.flag |= 0x4;
 	free(query);
 	return a;
 }
