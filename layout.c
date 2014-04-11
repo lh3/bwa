@@ -33,7 +33,7 @@ typedef kvec_t(uint64_t) uint64_v;
 
 typedef struct {
 	int id;
-	int contained;
+	int contained:16, marked:16;
 	char *name;
 	uint64_v *nei[2];
 } vertex_t;
@@ -41,7 +41,9 @@ typedef struct {
 typedef kvec_t(vertex_t) vertex_v;
 
 typedef struct {
-	int type, score, l[2], s[2], e[2], d[2]; // length, start and end
+	int type:16, reduced:16;
+	int l[2], s[2], e[2], d[2]; // length, start and end
+	float usc;
 } edgeinfo_t;
 
 KHASH_MAP_INIT_INT64(edge, edgeinfo_t)
@@ -92,12 +94,12 @@ int lo_infer_edge_type(const lo_opt_t *opt, int l[2], int s[2], int e[2], int d[
 	el += r[1] < 0? t[1][1] : t[1][0];
 	x[0] += el, x[1] += el;
 	d[0] = d[1] = -1;
-	if ((float)a[0] / x[0] >= opt->min_aln_ratio && (float)a[1] / x[1] >= opt->min_aln_ratio) {
+	if ((double)a[0] / x[0] >= opt->min_aln_ratio && (double)a[1] / x[1] >= opt->min_aln_ratio) {
 		if ((r[0] >= opt->min_ext && r[1] >= opt->min_ext) || (r[0] <= -opt->min_ext && r[1] <= -opt->min_ext)) { // suffix-prefix match
 			type = s[0] < e[0]? 0 : 2;
 			if (r[0] < 0) type ^= 3, d[0] = -r[1], d[1] = -r[0]; // reverse the direction
 			else d[0] = r[0], d[1] = r[1];
-		} else type = x[0] / l[0] > x[1] / l[1]? LO_T_C1 : LO_T_C2;
+		} else type = (double)x[0] / l[0] > (double)x[1] / l[1]? LO_T_C1 : LO_T_C2;
 	} else type = LO_T_I; // internal local match; not a suffix-prefix match
 	return type;
 }
@@ -139,7 +141,7 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 			else if (i == 5) e.l[1] = strtol(p, &p, 10);
 			else if (i == 6) e.s[1] = strtol(p, &p, 10);
 			else if (i == 7) e.e[1] = strtol(p, &p, 10);
-			else if (i == 8) e.score= strtol(p, &p, 10);
+			else if (i == 8) e.usc  = strtod(p, &p);
 			++i;
 			p = q + 1;
 			if (*q == 0) break;
@@ -153,7 +155,7 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 		} else if (e.type < 4) { // a suffix-prefix overlap
 			uint64_t x = (uint64_t)id[0]<<32 | id[1];
 			k = kh_put(edge, g->e, x, &absent);
-			if (absent || kh_val(g->e, k).score < e.score) 
+			if (absent || kh_val(g->e, k).usc < e.usc) // TODO: compare the total score, not unit score!
 				kh_val(g->e, k) = e;
 		}
 //		printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", id[0], e.l[0], e.s[0], e.e[0], id[1], e.l[1], e.s[1], e.e[1]);
@@ -278,6 +280,10 @@ void lo_populate_nei(ograph_t *g)
 
 void lo_trans_reduce(ograph_t *g)
 {
+	int i;
+	for (i = 0; i < g->v.n; ++i) {
+		vertex_t *p = &g->v.a[i];
+	}
 }
 
 /*****************
