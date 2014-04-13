@@ -39,7 +39,7 @@ KSORT_INIT(nei, lo_nei_t, nei_lt)
 
 typedef struct {
 	int id;
-	int contained:16, marked:16;
+	int contained:16, state:16;
 	char *name;
 	lo_nei_v *nei[2];
 } vertex_t;
@@ -70,6 +70,12 @@ void lo_opt_init(lo_opt_t *opt)
 	opt->min_aln_ratio = 0.9;
 }
 
+const char *lo_edge_label[] = {
+	">>", "><", "<>", "<<",
+	"??", "??", "??", "??",
+	"C1", "??", "??", "??",
+	"C2", "??", "??", "??", "IN" };
+
 /**********
  * Parser *
  **********/
@@ -81,6 +87,27 @@ ograph_t *lo_graph_init()
 	g->n = kh_init(name);
 	g->e = kh_init(edge);
 	return g;
+}
+
+void lo_print_edge(const ograph_t *g)
+{
+	khint_t k;
+	for (k = 0; k != kh_end(g->e); ++k) {
+		if (kh_exist(g->e, k) && !kh_val(g->e, k).reduced) {
+			int id[2];
+			edgeinfo_t *e = &kh_val(g->e, k);
+			id[0] = kh_key(g->e, k)>>32;
+			id[1] = (uint32_t)kh_key(g->e, k);
+			if (e->s[1] < e->e[1])
+				printf("%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%d\t%.3f\n", lo_edge_label[e->type],
+					   g->v.a[id[0]].name, e->l[0], e->s[0], e->e[0],
+					   g->v.a[id[1]].name, e->l[1], e->s[1], e->e[1], e->usc);
+			else
+				printf("%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%d\t%.3f\n", lo_edge_label[e->type],
+					   g->v.a[id[0]].name, e->l[0], e->e[0], e->s[0],
+					   g->v.a[id[1]].name, e->l[1], e->e[1], e->s[1], e->usc);
+		}
+	}
 }
 
 int lo_infer_edge_type(const lo_opt_t *opt, int l[2], int s[2], int e[2], int d[2])
@@ -132,7 +159,7 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 					z = kv_pushp(vertex_t, g->v);
 					z->id = kh_size(g->n);
 					z->name = strdup(p);
-					z->contained = 0;
+					z->contained = z->state = 0;
 					z->nei[0] = z->nei[1] = 0; // don't initialize the neighbor list right now
 					k = kh_put(name, g->n, z->name, &absent);
 					assert(absent);
@@ -160,8 +187,13 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 			g->v.a[id[1]].contained = 1;
 		} else if (e.type < 4) { // a suffix-prefix overlap
 			uint64_t x = (uint64_t)id[0]<<32 | id[1];
+			int sc_new, sc_old;
+			edgeinfo_t *f;
 			k = kh_put(edge, g->e, x, &absent);
-			if (absent || kh_val(g->e, k).usc < e.usc) // TODO: compare the total score, not unit score!
+			f = &kh_val(g->e, k);
+			sc_old = f->usc * (abs(f->s[0] - f->e[0]) > abs(f->s[1] - f->e[1])? abs(f->s[0] - f->e[0]) : abs(f->s[1] - f->e[1]));
+			sc_new = e.usc * (abs(e.s[0] - e.e[0]) > abs(e.s[1] - e.e[1])? abs(e.s[0] - e.e[0]) : abs(e.s[1] - e.e[1]));
+			if (absent || sc_old < sc_new) // TODO: compare the total score, not unit score!
 				kh_val(g->e, k) = e;
 		}
 //		printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", id[0], e.l[0], e.s[0], e.e[0], id[1], e.l[1], e.s[1], e.e[1]);
@@ -242,6 +274,31 @@ void lo_rm_conflict(ograph_t *g)
 {
 }
 
+void lo_print_nei(ograph_t *g)
+{
+	int i;
+	for (i = 0; i < g->v.n; ++i) {
+		vertex_t *p = &g->v.a[i];
+		if (p->nei[0]) ks_introsort(nei, p->nei[0]->n, p->nei[0]->a);
+		if (p->nei[1]) ks_introsort(nei, p->nei[1]->n, p->nei[1]->a);
+		if (p->nei[0]) {
+			int j, k;
+			printf("%s\t%ld,%ld", p->name, p->nei[0]->n, p->nei[1]->n);
+			for (j = 0; j < 2; ++j) {
+				if (p->nei[j]->n) {
+					putchar('\t');
+					for (k = 0; k < p->nei[j]->n; ++k) {
+						lo_nei_t *q = &p->nei[j]->a[k];
+						if (k) putchar(',');
+						printf("%s%c%d:%c", g->v.a[q->id].name, "<>"[q->ori], q->dist, "+-"[q->reduced]);
+					}
+				} else printf("\t*");
+			}
+			putchar('\n');
+		}
+	}
+}
+
 void lo_populate_nei(ograph_t *g)
 {
 	int i;
@@ -265,34 +322,64 @@ void lo_populate_nei(ograph_t *g)
 		p = kv_pushp(lo_nei_t, *g->v.a[id[1]].nei[e->type&1]);
 		p->dist = e->d[1], p->id = id[0], p->ori = e->type>>1^1, p->reduced = 0;
 	}
-	for (i = 0; i < g->v.n; ++i) {
-		vertex_t *p = &g->v.a[i];
-		if (p->nei[0]) ks_introsort(nei, p->nei[0]->n, p->nei[0]->a);
-		if (p->nei[1]) ks_introsort(nei, p->nei[1]->n, p->nei[1]->a);
-		if (lo_verbose >= 4 && p->nei[0]) {
-			int j, k;
-			printf("%s\t%ld,%ld", p->name, p->nei[0]->n, p->nei[1]->n);
-			for (j = 0; j < 2; ++j) {
-				if (p->nei[j]->n) {
-					putchar('\t');
-					for (k = 0; k < p->nei[j]->n; ++k) {
-						lo_nei_t *q = &p->nei[j]->a[k];
-						if (k) putchar(',');
-						printf("%c%s:%d", "+-"[q->ori], g->v.a[q->id].name, q->dist);
-					}
-				} else printf("\t*");
-			}
-			putchar('\n');
-		}
-	}
 }
 
-void lo_trans_reduce(ograph_t *g)
+static inline edgeinfo_t *lo_get_edge(ehash_t *e, int id0, int id1)
 {
-	int i;
+	khint_t k;
+	k = kh_get(edge, e, (uint64_t)id0<<32 | id1);
+	return k == kh_end(e)? 0 : &kh_val(e, k);
+}
+
+void lo_trans_reduce(ograph_t *g, int fd) // fd: fuzzy distance
+{
+	int i, j, k, l;
+	for (i = 0; i < g->v.n; ++i)
+		g->v.a[i].state = 0;
 	for (i = 0; i < g->v.n; ++i) {
-		vertex_t *p = &g->v.a[i];
+		vertex_t *pi = &g->v.a[i];
+		if (pi->nei[0] == 0) continue;
+		for (j = 0; j < 2; ++j) {
+			int max;
+			lo_nei_v *q = pi->nei[j];
+			if (q->n == 0) continue;
+			for (k = 0; k < q->n; ++k)
+				g->v.a[q->a[k].id].state = 1;
+			max = q->a[q->n - 1].dist + fd;
+			// loop between line 9--14
+			for (k = 0; k < q->n; ++k) {
+				vertex_t *pk = &g->v.a[q->a[k].id];
+				if (pk->state == 1) {
+					lo_nei_v *r = pk->nei[q->a[k].ori^1];
+					for (l = 0; l < r->n && r->a[l].dist + q->a[k].dist < max; ++l)
+						if (g->v.a[r->a[l].id].state == 1)
+							g->v.a[r->a[l].id].state = 2;
+				}
+			}
+			// loop between line 20--23
+			for (k = 0; k < q->n; ++k) {
+				if (g->v.a[q->a[k].id].state == 2) {
+					edgeinfo_t *e;
+					e = lo_get_edge(g->e, i, q->a[k].id);
+					e->reduced = 1;
+					e = lo_get_edge(g->e, q->a[k].id, i);
+					e->reduced = 1;
+				}
+				g->v.a[q->a[k].id].state = 0;
+			}
+		}
 	}
+	for (i = 0; i < g->v.n; ++i) {
+		vertex_t *pi = &g->v.a[i];
+		if (pi->nei[0] == 0) continue;
+		for (j = 0; j < 2; ++j) {
+			lo_nei_v *q = pi->nei[j];
+			for (k = 0; k < q->n; ++k)
+				q->a[k].reduced = lo_get_edge(g->e, i, q->a[k].id)->reduced;
+		}
+	}
+	if (lo_verbose == 4) lo_print_edge(g);
+	if (lo_verbose == 5) lo_print_nei(g);
 }
 
 /*****************
@@ -321,7 +408,8 @@ int main_layout(int argc, char *argv[])
 	lo_rm_contained(g);
 	lo_rm_conflict(g);
 	lo_populate_nei(g);
-	lo_trans_reduce(g);
+	if (lo_verbose == 6) lo_print_edge(g);
+	lo_trans_reduce(g, 10);
 	lo_graph_destroy(g);
 	ks_destroy(ks);
 	gzclose(fp);
