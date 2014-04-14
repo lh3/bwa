@@ -23,7 +23,7 @@ static int lo_verbose = 3;
 #define LO_T_I  16
 
 typedef struct {
-	int min_ext;
+	int min_ext, fuzzy_dist;
 	float min_aln_ratio;
 } lo_opt_t;
 
@@ -68,6 +68,7 @@ void lo_opt_init(lo_opt_t *opt)
 {
 	opt->min_ext = 50;
 	opt->min_aln_ratio = 0.9;
+	opt->fuzzy_dist = 500;
 }
 
 const char *lo_edge_label[] = {
@@ -279,8 +280,6 @@ void lo_print_nei(ograph_t *g)
 	int i;
 	for (i = 0; i < g->v.n; ++i) {
 		vertex_t *p = &g->v.a[i];
-		if (p->nei[0]) ks_introsort(nei, p->nei[0]->n, p->nei[0]->a);
-		if (p->nei[1]) ks_introsort(nei, p->nei[1]->n, p->nei[1]->a);
 		if (p->nei[0]) {
 			int j, k;
 			printf("%s\t%ld,%ld", p->name, p->nei[0]->n, p->nei[1]->n);
@@ -322,6 +321,11 @@ void lo_populate_nei(ograph_t *g)
 		p = kv_pushp(lo_nei_t, *g->v.a[id[1]].nei[e->type&1]);
 		p->dist = e->d[1], p->id = id[0], p->ori = e->type>>1^1, p->reduced = 0;
 	}
+	for (i = 0; i < g->v.n; ++i) {
+		vertex_t *p = &g->v.a[i];
+		if (p->nei[0]) ks_introsort(nei, p->nei[0]->n, p->nei[0]->a);
+		if (p->nei[1]) ks_introsort(nei, p->nei[1]->n, p->nei[1]->a);
+	}
 }
 
 static inline edgeinfo_t *lo_get_edge(ehash_t *e, int id0, int id1)
@@ -339,6 +343,7 @@ void lo_trans_reduce(ograph_t *g, int fd) // fd: fuzzy distance
 	for (i = 0; i < g->v.n; ++i) {
 		vertex_t *pi = &g->v.a[i];
 		if (pi->nei[0] == 0) continue;
+		//printf("===> vertex %s <===\n", pi->name);
 		for (j = 0; j < 2; ++j) {
 			int max;
 			lo_nei_v *q = pi->nei[j];
@@ -346,13 +351,20 @@ void lo_trans_reduce(ograph_t *g, int fd) // fd: fuzzy distance
 			for (k = 0; k < q->n; ++k)
 				g->v.a[q->a[k].id].state = 1;
 			max = q->a[q->n - 1].dist + fd;
+			//printf("* max[%c]=%d, %ld, %d\n", "<>"[j], max, q->n, q->a[q->n - 1].dist);
 			// loop between line 9--14
 			for (k = 0; k < q->n; ++k) {
 				vertex_t *pk = &g->v.a[q->a[k].id];
 				if (pk->state == 1) {
 					lo_nei_v *r = pk->nei[q->a[k].ori^1];
-					for (l = 0; l < r->n && r->a[l].dist + q->a[k].dist < max; ++l)
-						if (g->v.a[r->a[l].id].state == 1)
+					/*
+					printf("** %s: ", pk->name);
+					for (l = 0; l < r->n; ++l)
+						printf("%s,%d", g->v.a[r->a[k].id].name, r->a[l].dist + q->a[k].dist);
+					printf("\n");
+					*/
+					for (l = 0; l < r->n; ++l)
+						if (r->a[l].dist + q->a[k].dist < max && g->v.a[r->a[l].id].state == 1)
 							g->v.a[r->a[l].id].state = 2;
 				}
 			}
@@ -395,8 +407,9 @@ int main_layout(int argc, char *argv[])
 	int c;
 
 	lo_opt_init(&opt);
-	while ((c = getopt(argc, argv, "v:")) >= 0) {
+	while ((c = getopt(argc, argv, "v:d:")) >= 0) {
 		if (c == 'v') lo_verbose = atoi(optarg);
+		else if (c == 'd') opt.fuzzy_dist = atoi(optarg);
 	}
 	if (argc == optind && isatty(fileno(stdin))) {
 		fprintf(stderr, "Usage: bwa layout <in.ovlp>\n");
@@ -409,7 +422,7 @@ int main_layout(int argc, char *argv[])
 	lo_rm_conflict(g);
 	lo_populate_nei(g);
 	if (lo_verbose == 6) lo_print_edge(g);
-	lo_trans_reduce(g, 10);
+	lo_trans_reduce(g, opt.fuzzy_dist);
 	lo_graph_destroy(g);
 	ks_destroy(ks);
 	gzclose(fp);
