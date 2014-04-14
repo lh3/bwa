@@ -88,13 +88,9 @@ void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 		const mem_alnreg_t *p = &a->a[i];
 		int is_rev, rid, qb = p->qb, qe = p->qe;
 		int64_t pos, rb = p->rb, re = p->re;
-		if (bwa_fix_xref2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, opt->w, bns, pac, (uint8_t*)s->seq, &qb, &qe, &rb, &re) < 0) {
-			if (bwa_verbose >= 2)
-				fprintf(stderr, "[W::%s] A cross-chr hit of read '%s' has been dropped.\n", __func__, s->name);
-			continue;
-		}
 		pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
 		rid = bns_pos2rid(bns, pos);
+		assert(rid == p->rid);
 		pos -= bns->anns[rid].offset;
 		kputs(s->name, &str); kputc('\t', &str);
 		kputw(s->l_seq, &str); kputc('\t', &str);
@@ -103,7 +99,8 @@ void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 		kputs(bns->anns[rid].name, &str); kputc('\t', &str);
 		kputw(bns->anns[rid].len, &str); kputc('\t', &str);
 		kputw(pos, &str); kputc('\t', &str); kputw(pos + (re - rb), &str); kputc('\t', &str);
-		kputw(p->truesc, &str); kputc('\n', &str);
+		ksprintf(&str, "%.3f", (double)p->truesc / opt->a / (qe - qb > re - rb? qe - qb : re - rb));
+		kputc('\n', &str);
 	}
 	s->sam = str.s;
 }
