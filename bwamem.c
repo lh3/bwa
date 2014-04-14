@@ -358,7 +358,7 @@ KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 #define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
 
-int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
+int mem_sort_and_dedup2(int n, mem_alnreg_t *a, float mask_level_redun, int merge_bw)
 {
 	int m, i, j;
 	if (n <= 1) return n;
@@ -366,19 +366,39 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 	for (i = 1; i < n; ++i) {
 		mem_alnreg_t *p = &a[i];
 		if (p->rb >= a[i-1].re) continue;
-		for (j = i - 1; j >= 0 && p->rb < a[j].re; --j) {
+		for (j = i - 1; j >= 0 && p->rid == a[j].rid && p->rb < a[j].re; --j) {
 			mem_alnreg_t *q = &a[j];
 			int64_t or, oq, mr, mq;
+			int is_merged = 0;
 			if (q->qe == q->qb) continue; // a[j] has been excluded
-			or = q->re - p->rb; // overlap length on the reference
-			oq = q->qb < p->qb? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
-			mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
-			mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
-			if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
-				if (p->score < q->score) {
-					p->qe = p->qb;
-					break;
-				} else q->qe = q->qb;
+			if (merge_bw > 0 && q->qb < p->qb && q->qe < p->qe && q->re < p->re) {
+				int flag = 0;
+				int64_t l1, l2;
+				l1 = p->qb - q->qb, l2 = p->rb - q->rb;
+				if (l1 - l2 < merge_bw && l2 - l1 < merge_bw) ++flag;
+				l1 = p->qe - q->qe, l2 = p->re - q->re;
+				if (l1 - l2 < merge_bw && l2 - l1 < merge_bw) ++flag;
+				if (flag == 2) { // merge q into p
+					mem_alnreg_t t = *p;
+					*p = *q;
+					p->qe = t.qe, p->re = t.re;
+					p->score = p->score > t.score? p->score : t.score;
+					p->w = p->w > t.w? p->w : t.w;
+					q->qb = q->qe;
+					is_merged = 1;
+				}
+			}
+			if (is_merged == 0) {
+				or = q->re - p->rb; // overlap length on the reference
+				oq = q->qb < p->qb? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
+				mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
+				mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
+				if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
+					if (p->score < q->score) {
+						p->qe = p->qb;
+						break;
+					} else q->qe = q->qb;
+				}
 			}
 		}
 	}
@@ -399,6 +419,11 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
 			else ++m;
 		}
 	return m;
+}
+
+int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
+{
+	return mem_sort_and_dedup2(n, a, mask_level_redun, -1);
 }
 
 int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int qlen)
@@ -960,7 +985,8 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
-	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
+	if (opt->flag & MEM_F_MERGE_REG) regs.n = mem_sort_and_dedup2(regs.n, regs.a, opt->mask_level, opt->w);
+	else regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
 	if (opt->flag & MEM_F_SELF_OVLP)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
 	if (bwa_verbose >= 4) {
