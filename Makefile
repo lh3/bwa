@@ -1,6 +1,6 @@
 CC=			gcc
 #CC=			clang --analyze
-CFLAGS=		-g -Wall -O2 -Wno-unused-function
+CFLAGS=		-g -Wall -Wno-unused-function -O2
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)

@@ -24,6 +24,7 @@ static int lo_verbose = 3;
 
 typedef struct {
 	int min_ext, fuzzy_dist;
+	int min_n_ovlp;
 	float min_aln_ratio;
 } lo_opt_t;
 
@@ -37,14 +38,19 @@ typedef kvec_t(lo_nei_t) lo_nei_v;
 #define nei_lt(a, b) ((a).dist < (b).dist)
 KSORT_INIT(nei, lo_nei_t, nei_lt)
 
+#define LO_VF_CONTAINED 0x1
+#define LO_VF_LACK_OVLP 0x2
+
 typedef struct {
 	int id;
-	int contained:16, state:16;
+	int flag:16, state:16;
 	char *name;
 	lo_nei_v *nei[2];
 } vertex_t;
 
 typedef kvec_t(vertex_t) vertex_v;
+
+#define lo_skipped(v) ((v)->flag & (LO_VF_CONTAINED|LO_VF_LACK_OVLP))
 
 typedef struct {
 	int type:16, reduced:16;
@@ -68,7 +74,8 @@ void lo_opt_init(lo_opt_t *opt)
 {
 	opt->min_ext = 50;
 	opt->min_aln_ratio = 0.9;
-	opt->fuzzy_dist = 500;
+	opt->min_n_ovlp = 1;
+	opt->fuzzy_dist = 100;
 }
 
 const char *lo_edge_label[] = {
@@ -160,7 +167,7 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 					z = kv_pushp(vertex_t, g->v);
 					z->id = kh_size(g->n);
 					z->name = strdup(p);
-					z->contained = z->state = 0;
+					z->flag = z->state = 0;
 					z->nei[0] = z->nei[1] = 0; // don't initialize the neighbor list right now
 					k = kh_put(name, g->n, z->name, &absent);
 					assert(absent);
@@ -183,9 +190,9 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 		if (i < 9) continue; // not enough fields
 		e.type = lo_infer_edge_type(opt, e.l, e.s, e.e, e.d);
 		if (e.type == LO_T_C1) {
-			g->v.a[id[0]].contained = 1;
+			g->v.a[id[0]].flag |= LO_VF_CONTAINED;
 		} else if (e.type == LO_T_C2) {
-			g->v.a[id[1]].contained = 1;
+			g->v.a[id[1]].flag |= LO_VF_CONTAINED;
 		} else if (e.type < 4) { // a suffix-prefix overlap
 			uint64_t x = (uint64_t)id[0]<<32 | id[1];
 			int sc_new, sc_old;
@@ -197,7 +204,6 @@ ograph_t *lo_graph_parse(const lo_opt_t *opt, kstream_t *ks)
 			if (absent || sc_old < sc_new) // TODO: compare the total score, not unit score!
 				kh_val(g->e, k) = e;
 		}
-//		printf("%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", id[0], e.l[0], e.s[0], e.e[0], id[1], e.l[1], e.s[1], e.e[1]);
 	}
 	free(str.s);
 	if (lo_verbose >= 3)
@@ -235,44 +241,80 @@ static inline void lo_flip_edge(edgeinfo_t *e)
 	e->type = ((e->type&1)<<1 | (e->type&2)>>1) ^ 3;
 }
 
-void lo_rm_contained(ograph_t *g)
+void lo_add_missing(ograph_t *g)
 {
 	khint_t k, l;
-	int n_del = 0, n_add = 0, absent;
-	ehash_t *tmp;
-	tmp = kh_init(edge);
+	int absent;
+	ehash_t *added;
+	added = kh_init(edge);
 	for (k = 0; k != kh_end(g->e); ++k) {
 		int id[2];
 		if (!kh_exist(g->e, k)) continue;
 		id[0] = kh_key(g->e, k)>>32;
 		id[1] = (uint32_t)kh_key(g->e, k);
-		if (g->v.a[id[0]].contained || g->v.a[id[1]].contained) {
-			++n_del;
-			kh_del(edge, g->e, k); // kh_del() will not trigger rehash
-		} else {
+		if (!lo_skipped(&g->v.a[id[0]]) && !lo_skipped(&g->v.a[id[1]])) {
 			uint64_t key2 = (uint64_t)id[1]<<32|id[0];
 			l = kh_get(edge, g->e, key2);
 			if (l == kh_end(g->e)) {
-				l = kh_put(edge, tmp, key2, &absent);
-				kh_val(tmp, l) = kh_val(g->e, k);
-				lo_flip_edge(&kh_val(tmp, l));
-				++n_add;
+				l = kh_put(edge, added, key2, &absent);
+				kh_val(added, l) = kh_val(g->e, k);
+				lo_flip_edge(&kh_val(added, l));
 			}
 		}
 	}
-	for (k = 0; k != kh_end(tmp); ++k) {
-		if (!kh_exist(tmp, k)) continue;
-		l = kh_put(edge, g->e, kh_key(tmp, k), &absent);
+	for (k = 0; k != kh_end(added); ++k) {
+		if (!kh_exist(added, k)) continue;
+		l = kh_put(edge, g->e, kh_key(added, k), &absent);
 		assert(absent);
-		kh_val(g->e, l) = kh_val(tmp, k);
+		kh_val(g->e, l) = kh_val(added, k);
 	}
 	if (lo_verbose >= 3)
-		fprintf(stderr, "[M::%s] removed %d and added %d; %d edges remain\n", __func__, n_del, kh_size(tmp), kh_size(g->e));
-	kh_destroy(edge, tmp);
+		fprintf(stderr, "[M::%s] added %d missing edges. %d edges remain in total.\n", __func__, kh_size(added), kh_size(g->e));
+	kh_destroy(edge, added);
+}
+
+void lo_rm_skipped(ograph_t *g)
+{
+	khint_t k;
+	int n_del = 0;
+	for (k = 0; k != kh_end(g->e); ++k) {
+		int id[2];
+		if (!kh_exist(g->e, k)) continue;
+		id[0] = kh_key(g->e, k)>>32;
+		id[1] = (uint32_t)kh_key(g->e, k);
+		if (lo_skipped(&g->v.a[id[0]]) || lo_skipped(&g->v.a[id[1]])) {
+			++n_del;
+			kh_del(edge, g->e, k); // kh_del() will not trigger rehash
+		}
+	}
+	if (lo_verbose >= 3)
+		fprintf(stderr, "[M::%s] removed %d edges; %d remain\n", __func__, n_del, kh_size(g->e));
 }
 
 void lo_rm_conflict(ograph_t *g)
 {
+}
+
+void lo_mark_lack_ovlp(ograph_t *g, int min_n_ovlp) // can only be called before lo_populate_nei()
+{
+	int *count, i, n_marked = 0;
+	khint_t k;
+	count = calloc(g->v.n<<1, sizeof(int));
+	for (k = 0; k != kh_end(g->e); ++k) {
+		int id[2];
+		edgeinfo_t *e;
+		if (!kh_exist(g->e, k) || kh_val(g->e, k).type >= 4) continue;
+		e = &kh_val(g->e, k);
+		id[0] = kh_key(g->e, k)>>32;
+		id[1] = (uint32_t)kh_key(g->e, k);
+		++count[id[0]<<1|(e->type>>1^1)];
+		++count[id[1]|(e->type&1)];
+	}
+	for (i = 0; i < g->v.n; ++i)
+		if (!lo_skipped(&g->v.a[i]) && (count[i<<1|0] < min_n_ovlp || count[i<<1|1] < min_n_ovlp))
+			g->v.a[i].flag |= LO_VF_LACK_OVLP, ++n_marked;
+	free(count);
+	if (lo_verbose >= 3) fprintf(stderr, "[M::%s] %d vertices to be dropped due to lack of overlaps\n", __func__, n_marked);
 }
 
 void lo_print_nei(ograph_t *g)
@@ -280,7 +322,7 @@ void lo_print_nei(ograph_t *g)
 	int i;
 	for (i = 0; i < g->v.n; ++i) {
 		vertex_t *p = &g->v.a[i];
-		if (p->nei[0]) {
+		if (!lo_skipped(p) && p->nei[0]) {
 			int j, k;
 			printf("%s\t%ld,%ld", p->name, p->nei[0]->n, p->nei[1]->n);
 			for (j = 0; j < 2; ++j) {
@@ -303,7 +345,7 @@ void lo_populate_nei(ograph_t *g)
 	int i;
 	khint_t k;
 	for (i = 0; i < g->v.n; ++i) {
-		if (g->v.a[i].contained) continue;
+		if (lo_skipped(&g->v.a[i])) continue;
 		g->v.a[i].nei[0] = calloc(1, sizeof(lo_nei_v));
 		g->v.a[i].nei[1] = calloc(1, sizeof(lo_nei_v));
 	}
@@ -343,7 +385,6 @@ void lo_trans_reduce(ograph_t *g, int fd) // fd: fuzzy distance
 	for (i = 0; i < g->v.n; ++i) {
 		vertex_t *pi = &g->v.a[i];
 		if (pi->nei[0] == 0) continue;
-		//printf("===> vertex %s <===\n", pi->name);
 		for (j = 0; j < 2; ++j) {
 			int max;
 			lo_nei_v *q = pi->nei[j];
@@ -351,18 +392,11 @@ void lo_trans_reduce(ograph_t *g, int fd) // fd: fuzzy distance
 			for (k = 0; k < q->n; ++k)
 				g->v.a[q->a[k].id].state = 1;
 			max = q->a[q->n - 1].dist + fd;
-			//printf("* max[%c]=%d, %ld, %d\n", "<>"[j], max, q->n, q->a[q->n - 1].dist);
 			// loop between line 9--14
 			for (k = 0; k < q->n; ++k) {
 				vertex_t *pk = &g->v.a[q->a[k].id];
 				if (pk->state == 1) {
 					lo_nei_v *r = pk->nei[q->a[k].ori^1];
-					/*
-					printf("** %s: ", pk->name);
-					for (l = 0; l < r->n; ++l)
-						printf("%s,%d", g->v.a[r->a[k].id].name, r->a[l].dist + q->a[k].dist);
-					printf("\n");
-					*/
 					for (l = 0; l < r->n; ++l)
 						if (r->a[l].dist + q->a[k].dist < max && g->v.a[r->a[l].id].state == 1)
 							g->v.a[r->a[l].id].state = 2;
@@ -407,9 +441,10 @@ int main_layout(int argc, char *argv[])
 	int c;
 
 	lo_opt_init(&opt);
-	while ((c = getopt(argc, argv, "v:d:")) >= 0) {
+	while ((c = getopt(argc, argv, "v:d:o:")) >= 0) {
 		if (c == 'v') lo_verbose = atoi(optarg);
 		else if (c == 'd') opt.fuzzy_dist = atoi(optarg);
+		else if (c == 'o') opt.min_n_ovlp = atoi(optarg);
 	}
 	if (argc == optind && isatty(fileno(stdin))) {
 		fprintf(stderr, "Usage: bwa layout <in.ovlp>\n");
@@ -418,8 +453,11 @@ int main_layout(int argc, char *argv[])
 	fp = (optind == argc && !isatty(fileno(stdin))) || strcmp(argv[optind], "-") == 0? gzdopen(fileno(stdin), "r") : gzopen(argv[optind], "r");
 	ks = ks_init(fp);
 	g = lo_graph_parse(&opt, ks);
-	lo_rm_contained(g);
+	lo_rm_skipped(g);
+	lo_add_missing(g);
 	lo_rm_conflict(g);
+	lo_mark_lack_ovlp(g, opt.min_n_ovlp);
+	lo_rm_skipped(g);
 	lo_populate_nei(g);
 	if (lo_verbose == 6) lo_print_edge(g);
 	lo_trans_reduce(g, opt.fuzzy_dist);
