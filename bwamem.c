@@ -358,7 +358,7 @@ KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 #define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
 
-int mem_sort_and_dedup2(int n, mem_alnreg_t *a, float mask_level_redun, int merge_bw)
+int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun, int merge_bw)
 {
 	int m, i, j;
 	if (n <= 1) return n;
@@ -418,11 +418,6 @@ int mem_sort_and_dedup2(int n, mem_alnreg_t *a, float mask_level_redun, int merg
 			else ++m;
 		}
 	return m;
-}
-
-int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
-{
-	return mem_sort_and_dedup2(n, a, mask_level_redun, -1);
 }
 
 int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int qlen)
@@ -984,8 +979,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
-	if (opt->flag & MEM_F_MERGE_REG) regs.n = mem_sort_and_dedup2(regs.n, regs.a, opt->mask_level_redun, opt->w);
-	else regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
+	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun, opt->w);
 	if (opt->flag & MEM_F_SELF_OVLP)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
 	if (bwa_verbose >= 4) {

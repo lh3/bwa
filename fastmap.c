@@ -53,7 +53,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -69,7 +69,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
 		else if (c == 'e') opt->flag |= MEM_F_SELF_OVLP;
 		else if (c == 'F') opt->flag |= MEM_F_ALN_REG;
-		else if (c == 'V') opt->flag |= MEM_F_MERGE_REG;
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -148,7 +147,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
 		fprintf(stderr, "                     pacbio: -k17 -W40 -w200 -c1000 -r10 -A2 -B5 -O2 -E1 -L0\n");
-		fprintf(stderr, "                     pbread: -k13 -W40 -w200 -c1000 -r10 -A2 -B5 -O2 -E1 -N25 -FVeaD.001\n");
+		fprintf(stderr, "                     pbread: -k13 -W40 -w200 -c1000 -r10 -A2 -B5 -O2 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -183,12 +182,11 @@ int main_mem(int argc, char *argv[])
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
 			if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
 			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
-				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG | MEM_F_MERGE_REG;
+				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
 				if (!opt0.min_seed_len) opt->min_seed_len = 13;
 				if (!opt0.max_chain_extend) opt->max_chain_extend = 25;
 				if (opt0.drop_ratio == 0.) opt->drop_ratio = .001;
 			} else {
-				opt->flag |= MEM_F_MERGE_REG;
 				if (!opt0.min_seed_len) opt->min_seed_len = 17;
 				if (!opt0.pen_clip5) opt->pen_clip5 = 0;
 				if (!opt0.pen_clip3) opt->pen_clip3 = 0;
