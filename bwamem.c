@@ -369,13 +369,17 @@ int mem_sort_and_dedup2(int n, mem_alnreg_t *a, float mask_level_redun, int merg
 		for (j = i - 1; j >= 0 && p->rid == a[j].rid && p->rb < a[j].re; --j) {
 			mem_alnreg_t *q = &a[j];
 			int64_t or, oq, mr, mq;
-			int is_merged = 0;
 			if (q->qe == q->qb) continue; // a[j] has been excluded
 			or = q->re - p->rb; // overlap length on the reference
 			oq = q->qb < p->qb? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
 			mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
 			mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
-			if (merge_bw > 0 && q->qb < p->qb && q->qe < p->qe && q->re < p->re && fabs((float)oq / (p->qe - q->qb) - (float)or / (p->re - q->rb)) < .05) {
+			if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
+				if (p->score < q->score) {
+					p->qe = p->qb;
+					break;
+				} else q->qe = q->qb;
+			} else if (merge_bw > 0 && q->qb < p->qb && q->qe < p->qe && q->re < p->re && fabs((float)oq / (p->qe - q->qb) - (float)or / (p->re - q->rb)) < .05) {
 				int flag = 0, q_s, r_s;
 				int64_t l1, l2;
 				l1 = p->qb - q->qb, l2 = p->rb - q->rb;
@@ -393,15 +397,6 @@ int mem_sort_and_dedup2(int n, mem_alnreg_t *a, float mask_level_redun, int merg
 					p->w = p->w > t.w? p->w : t.w;
 					p->w = p->w > abs(l1 - l2) + 50? p->w : abs(l1 - l2) + 50;
 					q->qb = q->qe;
-					is_merged = 1;
-				}
-			}
-			if (is_merged == 0) {
-				if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
-					if (p->score < q->score) {
-						p->qe = p->qb;
-						break;
-					} else q->qe = q->qb;
 				}
 			}
 		}
@@ -989,7 +984,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
-	if (opt->flag & MEM_F_MERGE_REG) regs.n = mem_sort_and_dedup2(regs.n, regs.a, opt->mask_level, opt->w);
+	if (opt->flag & MEM_F_MERGE_REG) regs.n = mem_sort_and_dedup2(regs.n, regs.a, opt->mask_level_redun, opt->w);
 	else regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
 	if (opt->flag & MEM_F_SELF_OVLP)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
