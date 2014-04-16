@@ -95,7 +95,8 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 	kstring_t str;
 	const char *int2base;
 
-	*n_cigar = 0; *NM = -1;
+	if (n_cigar) *n_cigar = 0;
+	if (NM) *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
 	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
 	if (re - rb != rlen) goto ret_gen_cigar; // possible if out of range
@@ -131,7 +132,7 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 		}
 		*score = ksw_global2(l_query, query, rlen, rseq, 5, mat, o_del, e_del, o_ins, e_ins, w, n_cigar, &cigar);
 	}
-	{// compute NM and MD
+	if (NM && n_cigar) {// compute NM and MD
 		int k, x, y, u, n_mm = 0, n_gap = 0;
 		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
 		int2base = rb < l_pac? "ACGTN" : "TGCAN";

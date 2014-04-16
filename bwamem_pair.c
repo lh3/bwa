@@ -109,7 +109,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 
 int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
 {
-	extern int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun, int merge_bw);
+	extern int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int n, mem_alnreg_t *a);
 	int64_t l_pac = bns->l_pac;
 	int i, r, skip[4], n = 0, rid;
 	for (r = 0; r < 4; ++r)
@@ -170,7 +170,7 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			}
 			++n;
 		}
-		if (n) ma->n = mem_sort_and_dedup(ma->n, ma->a, opt->mask_level_redun, -1);
+		if (n) ma->n = mem_sort_dedup_patch(opt, 0, 0, 0, ma->n, ma->a);
 		if (rev) free(rev);
 		free(ref);
 	}

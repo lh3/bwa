@@ -61,6 +61,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
+	int n_comp;     // number of sub-alignments chained together
 	uint64_t hash;
 } mem_alnreg_t;
 
