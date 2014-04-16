@@ -358,6 +358,11 @@ KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 #define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
 
+int mem_chain_reg(const bntseq_t *bns, const uint8_t *pac, mem_alnreg_t *a, mem_alnreg_t *b, int merge_bw, int max_gap)
+{
+	return 0;
+}
+
 int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun, int merge_bw)
 {
 	int m, i, j;
@@ -389,14 +394,15 @@ int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun, int merge
 				l1 = p->qe - q->qb, l2 = p->re - q->rb;
 				q_s = (int)((double)(p->qe - q->qb) / ((p->qe - p->qb) + (q->qe - q->qb)) * (p->score + q->score) + .499);
 				r_s = (int)((double)(p->re - q->rb) / ((p->re - p->rb) + (q->re - q->rb)) * (p->score + q->score) + .499);
-				if (flag == 2) { // merge q into p
-					mem_alnreg_t t = *p;
-					*p = *q;
-					p->qe = t.qe, p->re = t.re;
-					p->truesc = p->score = (q_s + r_s) >> 1;
-					p->w = p->w > t.w? p->w : t.w;
-					p->w = p->w > abs(l1 - l2) + 50? p->w : abs(l1 - l2) + 50;
-					q->qb = q->qe;
+				if (flag == 2) { // merge p into q; don't merge q into p as this breaks sorting
+					mem_alnreg_t t = *q;
+					*q = *p;
+					q->qe = t.qe, q->re = t.re;
+					q->truesc = q->score = (q_s + r_s) >> 1;
+					q->w = q->w > t.w? q->w : t.w;
+					q->w = q->w > abs(l1 - l2) + 50? q->w : abs(l1 - l2) + 50;
+					p->qb = p->qe;
+					break;
 				}
 			}
 		}
