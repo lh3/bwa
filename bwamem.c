@@ -350,7 +350,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a)
  * De-overlap single-end hits *
  ******************************/
 
-#define alnreg_slt2(a, b) ((a).rb < (b).rb)
+#define alnreg_slt2(a, b) ((a).re < (b).re)
 KSORT_INIT(mem_ars2, mem_alnreg_t, alnreg_slt2)
 
 #define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
@@ -368,9 +368,6 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	double r;
 	if (bns == 0 || pac == 0 || query == 0) return 0;
 	assert(a->rid == b->rid && a->rb <= b->rb);
-	if (bwa_verbose >= 5)
-		printf("* test hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s\n",
-			   a->qb, a->qe, (long)a->rb, (long)a->re, b->qb, b->qe, (long)b->rb, (long)b->re, bns->anns[a->rid].name);
 	if (a->qb >= b->qb || a->qe >= b->qe || a->re >= b->re) return 0; // not colinear
 	w = (a->re - b->rb) - (a->qe - b->qb); // required bandwidth
 	w = w > 0? w : -w; // l = abs(l)
@@ -379,7 +376,7 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	if (bwa_verbose >= 4)
 		printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n",
 			   a->qb, a->qe, (long)a->rb, (long)a->re, b->qb, b->qe, (long)b->rb, (long)b->re, bns->anns[a->rid].name, w, r);
-	if (w > opt->w<<1) return 0; // the bandwidth is too large
+	if (w > opt->w) return 0; // the bandwidth is too large
 	if (r >= PATCH_MAX_R_BW) return 0; // relative bandwidth is too large
 	// global alignment
 	w += a->w + b->w;
@@ -397,12 +394,12 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 {
 	int m, i, j;
 	if (n <= 1) return n;
-	ks_introsort(mem_ars2, n, a);
+	ks_introsort(mem_ars2, n, a); // sort by the END position, not START!
 	for (i = 0; i < n; ++i) a[i].n_comp = 1;
 	for (i = 1; i < n; ++i) {
 		mem_alnreg_t *p = &a[i];
-		if (p->rb >= a[i-1].re) continue;
-		for (j = i - 1; j >= 0 && p->rid == a[j].rid && p->rb < a[j].re; --j) {
+		if (p->rid != a[i-1].rid || p->rb >= a[i-1].re + opt->max_chain_gap) continue; // then no need to go into the loop below
+		for (j = i - 1; j >= 0 && p->rid == a[j].rid && p->rb < a[j].re + opt->max_chain_gap; --j) {
 			mem_alnreg_t *q = &a[j];
 			int64_t or, oq, mr, mq;
 			int score, w;
@@ -416,15 +413,13 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 					p->qe = p->qb;
 					break;
 				} else q->qe = q->qb;
-			} else if ((score = mem_patch_reg(opt, bns, pac, query, q, p, &w)) > 0) {
-				mem_alnreg_t t = *q;
-				*q = *p;
-				q->n_comp = t.n_comp + 1;
-				q->qb = t.qb, q->rb = t.rb;
-				q->truesc = q->score = score;
-				q->w = w;
-				p->qb = p->qe;
-				break;
+			} else if (q->rb < p->rb && (score = mem_patch_reg(opt, bns, pac, query, q, p, &w)) > 0) { // then merge q into p
+				p->n_comp += q->n_comp + 1;
+				p->seedcov = p->seedcov > q->seedcov? p->seedcov : q->seedcov;
+				p->qb = q->qb, p->rb = q->rb;
+				p->truesc = p->score = score;
+				p->w = w;
+				q->qb = q->qe;
 			}
 		}
 	}
