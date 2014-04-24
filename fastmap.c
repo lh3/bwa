@@ -30,7 +30,7 @@ int main_mem(int argc, char *argv[])
 	int64_t n_processed = 0;
 
 	opt = mem_opt_init();
-	while ((c = getopt(argc, argv, "paMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:")) >= 0) {
+	while ((c = getopt(argc, argv, "paMCSPHIk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg);
 		else if (c == 'w') opt->w = atoi(optarg);
 		else if (c == 'A') opt->a = atoi(optarg);
@@ -45,6 +45,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'p') opt->flag |= MEM_F_PE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
+		else if (c == 'I') opt->flag |= MEM_F_SOFTCLIP;
 		else if (c == 'c') opt->max_occ = atoi(optarg);
 		else if (c == 'd') opt->zdrop = atoi(optarg);
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -93,6 +94,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT     verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
 		fprintf(stderr, "       -T INT     minimum score to output [%d]\n", opt->T);
+		fprintf(stderr, "       -I         use soft clipping for supplementary alignments\n");
 		fprintf(stderr, "       -a         output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C         append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -M         mark shorter split hits as secondary (for Picard/GATK compatibility)\n");
