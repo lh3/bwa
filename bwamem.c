@@ -376,7 +376,7 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	if (bwa_verbose >= 4)
 		printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n",
 			   a->qb, a->qe, (long)a->rb, (long)a->re, b->qb, b->qe, (long)b->rb, (long)b->re, bns->anns[a->rid].name, w, r);
-	if (w > opt->w) return 0; // the bandwidth is too large
+	if (w > opt->w<<1) return 0; // the bandwidth is too large
 	if (r >= PATCH_MAX_R_BW) return 0; // relative bandwidth is too large
 	// global alignment
 	w += a->w + b->w;
