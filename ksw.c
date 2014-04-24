@@ -510,7 +510,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
-	z = malloc(n_col * tlen);
+	z = n_cigar_ && cigar_? malloc(n_col * tlen) : 0;
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
 	// generate the query profile
@@ -527,41 +527,60 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
 		int32_t f = MINUS_INF, h1, beg, end, t;
 		int8_t *q = &qp[target[i] * qlen];
-		uint8_t *zi = &z[i * n_col];
 		beg = i > w? i - w : 0;
 		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
 		h1 = beg == 0? -(o_del + e_del * (i + 1)) : MINUS_INF;
-		for (j = beg; LIKELY(j < end); ++j) {
-			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
-			// Cells are computed in the following order:
-			//   M(i,j)   = H(i-1,j-1) + S(i,j)
-			//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
-			//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
-			//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
-			// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
-			// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
-			// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
-			// In practice, this should happen very rarely given a reasonable scoring system.
-			eh_t *p = &eh[j];
-			int32_t h, m = p->h, e = p->e;
-			uint8_t d; // direction
-			p->h = h1;
-			m += q[j];
-			d = m >= e? 0 : 1;
-			h = m >= e? m : e;
-			d = h >= f? d : 2;
-			h = h >= f? h : f;
-			h1 = h;
-			t = m - oe_del;
-			e -= e_del;
-			d |= e > t? 1<<2 : 0;
-			e  = e > t? e    : t;
-			p->e = e;
-			t = m - oe_ins;
-			f -= e_ins;
-			d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
-			f  = f > t? f    : t;
-			zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+		if (n_cigar_ && cigar_) {
+			uint8_t *zi = &z[i * n_col];
+			for (j = beg; LIKELY(j < end); ++j) {
+				// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
+				// Cells are computed in the following order:
+				//   M(i,j)   = H(i-1,j-1) + S(i,j)
+				//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
+				//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
+				//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
+				// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
+				// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
+				// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
+				// In practice, this should happen very rarely given a reasonable scoring system.
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				uint8_t d; // direction
+				p->h = h1;
+				m += q[j];
+				d = m >= e? 0 : 1;
+				h = m >= e? m : e;
+				d = h >= f? d : 2;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				d |= e > t? 1<<2 : 0;
+				e  = e > t? e    : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
+				f  = f > t? f    : t;
+				zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+			}
+		} else {
+			for (j = beg; LIKELY(j < end); ++j) {
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				p->h = h1;
+				m += q[j];
+				h = m >= e? m : e;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				e  = e > t? e : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				f  = f > t? f : t;
+			}
 		}
 		eh[end].h = h1; eh[end].e = MINUS_INF;
 	}
