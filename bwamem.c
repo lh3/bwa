@@ -376,16 +376,18 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	if (bwa_verbose >= 4)
 		printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n",
 			   a->qb, a->qe, (long)a->rb, (long)a->re, b->qb, b->qe, (long)b->rb, (long)b->re, bns->anns[a->rid].name, w, r);
-	if (w > opt->w<<1) return 0; // the bandwidth is too large
-	if (r >= PATCH_MAX_R_BW) return 0; // relative bandwidth is too large
+	if (a->re < b->rb || a->qe < b->qb) { // no overlap on query or on ref
+		if (w > opt->w<<1) return 0; // the bandwidth is too large
+		if (r >= PATCH_MAX_R_BW) return 0; // relative bandwidth is too large
+	}
 	// global alignment
 	w += a->w + b->w;
 	if (bwa_verbose >= 4) printf("* test potential hit merge with global alignment; w=%d\n", w);
 	bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w, bns->l_pac, pac, b->qe - a->qb, query + a->qb, a->rb, b->re, &score, 0, 0);
 	q_s = (int)((double)(b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score) + .499); // predicted score from query
 	r_s = (int)((double)(b->re - a->rb) / ((b->re - b->rb) + (a->re - a->rb)) * (b->score + a->score) + .499); // predicted score from ref
-	if (2. * score / (q_s + r_s) < PATCH_MIN_SC_RATIO) return 0;
 	if (bwa_verbose >= 4) printf("* score=%d;(%d,%d)\n", score, q_s, r_s);
+	if ((double)score / (q_s > r_s? q_s : r_s) < PATCH_MIN_SC_RATIO) return 0;
 	*_w = w;
 	return score;
 }
