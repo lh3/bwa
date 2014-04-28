@@ -100,6 +100,7 @@ void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 		kputw(bns->anns[rid].len, &str); kputc('\t', &str);
 		kputw(pos, &str); kputc('\t', &str); kputw(pos + (re - rb), &str); kputc('\t', &str);
 		ksprintf(&str, "%.3f", (double)p->truesc / opt->a / (qe - qb > re - rb? qe - qb : re - rb));
+		kputc('\t', &str); kputw(p->n_comp, &str);
 		kputc('\n', &str);
 	}
 	s->sam = str.s;

@@ -143,6 +143,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 typedef struct {
 	int64_t rbeg;
 	int32_t qbeg, len;
+	int score;
 } mem_seed_t; // unaligned memory
 
 typedef struct {
@@ -211,11 +212,10 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 		err_printf("* Found CHAIN(%d): n=%d; weight=%d", i, p->n, mem_chain_weight(p));
 		for (j = 0; j < p->n; ++j) {
 			bwtint_t pos;
-			int is_rev, ref_id;
+			int is_rev;
 			pos = bns_depos(bns, p->seeds[j].rbeg, &is_rev);
 			if (is_rev) pos -= p->seeds[j].len - 1;
-			bns_cnt_ambi(bns, pos, p->seeds[j].len, &ref_id);
-			err_printf("\t%d;%d,%ld(%s:%c%ld)", p->seeds[j].len, p->seeds[j].qbeg, (long)p->seeds[j].rbeg, bns->anns[ref_id].name, "+-"[is_rev], (long)(pos - bns->anns[ref_id].offset) + 1);
+			err_printf("\t%d;%d;%d,%ld(%s:%c%ld)", p->seeds[j].score, p->seeds[j].len, p->seeds[j].qbeg, (long)p->seeds[j].rbeg, bns->anns[p->rid].name, "+-"[is_rev], (long)(pos - bns->anns[p->rid].offset) + 1);
 		}
 		err_putchar('\n');
 	}
@@ -247,6 +247,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 			s.rbeg = tmp.pos = bwt_sa(bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 			s.qbeg = p->info>>32;
 			s.len  = slen;
+			s.score = 0;
 			rid = bns_intv2rid(bns, s.rbeg, s.rbeg + s.len);
 			if (rid < 0) continue; // bridging multiple reference sequences or the forward-reverse boundary
 			if (kb_size(tree)) {
@@ -358,27 +359,69 @@ KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 #define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
 
-int mem_sort_and_dedup(int n, mem_alnreg_t *a, float mask_level_redun)
+#define PATCH_MAX_R_BW 0.05f
+#define PATCH_MIN_SC_RATIO 0.90f
+
+int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, const mem_alnreg_t *a, const mem_alnreg_t *b, int *_w)
+{
+	int w, score, q_s, r_s;
+	double r;
+	if (bns == 0 || pac == 0 || query == 0) return 0;
+	assert(a->rid == b->rid && a->rb <= b->rb);
+	if (a->qb >= b->qb || a->qe >= b->qe || a->re >= b->re) return 0; // not colinear
+	w = (a->re - b->rb) - (a->qe - b->qb); // required bandwidth
+	w = w > 0? w : -w; // l = abs(l)
+	r = (double)(a->re - b->rb) / (b->re - a->rb) - (double)(a->qe - b->qb) / (b->qe - a->qb); // relative bandwidth
+	r = r > 0.? r : -r; // r = fabs(r)
+	if (bwa_verbose >= 4)
+		printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n",
+			   a->qb, a->qe, (long)a->rb, (long)a->re, b->qb, b->qe, (long)b->rb, (long)b->re, bns->anns[a->rid].name, w, r);
+	if (a->re < b->rb || a->qe < b->qb) { // no overlap on query or on ref
+		if (w > opt->w<<1) return 0; // the bandwidth is too large
+		if (r >= PATCH_MAX_R_BW) return 0; // relative bandwidth is too large
+	}
+	// global alignment
+	w += a->w + b->w;
+	if (bwa_verbose >= 4) printf("* test potential hit merge with global alignment; w=%d\n", w);
+	bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w, bns->l_pac, pac, b->qe - a->qb, query + a->qb, a->rb, b->re, &score, 0, 0);
+	q_s = (int)((double)(b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score) + .499); // predicted score from query
+	r_s = (int)((double)(b->re - a->rb) / ((b->re - b->rb) + (a->re - a->rb)) * (b->score + a->score) + .499); // predicted score from ref
+	if (bwa_verbose >= 4) printf("* score=%d;(%d,%d)\n", score, q_s, r_s);
+	if ((double)score / (q_s > r_s? q_s : r_s) < PATCH_MIN_SC_RATIO) return 0;
+	*_w = w;
+	return score;
+}
+
+int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int n, mem_alnreg_t *a)
 {
 	int m, i, j;
 	if (n <= 1) return n;
-	ks_introsort(mem_ars2, n, a);
+	ks_introsort(mem_ars2, n, a); // sort by the END position, not START!
+	for (i = 0; i < n; ++i) a[i].n_comp = 1;
 	for (i = 1; i < n; ++i) {
 		mem_alnreg_t *p = &a[i];
-		if (p->rb >= a[i-1].re) continue;
-		for (j = i - 1; j >= 0 && p->rb < a[j].re; --j) {
+		if (p->rid != a[i-1].rid || p->rb >= a[i-1].re + opt->max_chain_gap) continue; // then no need to go into the loop below
+		for (j = i - 1; j >= 0 && p->rid == a[j].rid && p->rb < a[j].re + opt->max_chain_gap; --j) {
 			mem_alnreg_t *q = &a[j];
 			int64_t or, oq, mr, mq;
+			int score, w;
 			if (q->qe == q->qb) continue; // a[j] has been excluded
 			or = q->re - p->rb; // overlap length on the reference
 			oq = q->qb < p->qb? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
 			mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
 			mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment
-			if (or > mask_level_redun * mr && oq > mask_level_redun * mq) { // one of the hits is redundant
+			if (or > opt->mask_level_redun * mr && oq > opt->mask_level_redun * mq) { // one of the hits is redundant
 				if (p->score < q->score) {
 					p->qe = p->qb;
 					break;
 				} else q->qe = q->qb;
+			} else if (q->rb < p->rb && (score = mem_patch_reg(opt, bns, pac, query, q, p, &w)) > 0) { // then merge q into p
+				p->n_comp += q->n_comp + 1;
+				p->seedcov = p->seedcov > q->seedcov? p->seedcov : q->seedcov;
+				p->qb = q->qb, p->rb = q->rb;
+				p->truesc = p->score = score;
+				p->w = w;
+				q->qb = q->qe;
 			}
 		}
 	}
@@ -408,7 +451,7 @@ int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int 
 	return n - 1;
 }
 
-void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id) // IMPORTANT: must run mem_sort_and_dedup() before calling this function
+void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id)
 { // similar to the loop in mem_chain_flt()
 	int i, k, tmp;
 	kvec_t(int) z;
@@ -440,6 +483,56 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
 	free(z.a);
 }
 
+/*********************************
+ * Test if a seed is good enough *
+ *********************************/
+
+#define MEM_SHORT_EXT 50
+#define MEM_SHORT_LEN 200
+
+#define MEM_HSP_COEF 1.1
+
+int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_seed_t *s)
+{
+	int qb, qe, rid;
+	int64_t rb, re, mid, l_pac = bns->l_pac;
+	uint8_t *rseq = 0;
+	kswr_t x;
+
+	qb = s->qbeg, qe = s->qbeg + s->len;
+	rb = s->rbeg, re = s->rbeg + s->len;
+	mid = (rb + re) >> 1;
+	qb -= MEM_SHORT_EXT; qb = qb > 0? qb : 0;
+	qe += MEM_SHORT_EXT; qe = qe < l_query? qe : l_query;
+	rb -= MEM_SHORT_EXT; rb = rb > 0? rb : 0;
+	re += MEM_SHORT_EXT; re = re < l_pac<<1? re : l_pac<<1;
+	if (rb < l_pac && l_pac < re) {
+		if (mid < l_pac) re = l_pac;
+		else rb = l_pac;
+	}
+	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return -1;
+
+	rseq = bns_fetch_seq(bns, pac, &rb, mid, &re, &rid);
+	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0);
+	free(rseq);
+	return x.score;
+}
+
+void mem_flt_chained_seeds(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, int n_chn, mem_chain_t *a)
+{
+	int i, j, k, min_HSP_score = (int)(opt->min_chain_weight * opt->a * MEM_HSP_COEF + .499);
+	for (i = 0; i < n_chn; ++i) {
+		mem_chain_t *c = &a[i];
+		for (j = k = 0; j < c->n; ++j) {
+			mem_seed_t *s = &c->seeds[j];
+			s->score = mem_seed_sw(opt, bns, pac, l_query, query, s);
+			if (s->score < 0 || s->score >= min_HSP_score)
+				c->seeds[k++] = *s;
+		}
+		c->n = k;
+	}
+}
+
 /****************************************
  * Construct the alignment from a chain *
  ****************************************/
@@ -453,70 +546,6 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
  * query. In this case, mem_chain2aln() will be called again.
  * mem_chain2aln_short() is almost never used for short-read alignment.
  */
-
-#define MEM_SHORT_EXT 50
-#define MEM_SHORT_LEN 200
-
-#define MEM_HSP_COEF 1.5
-
-#define MAX_BAND_TRY  2
-
-/* mem_test_chain_sw() uses SSE2-SW to align a short chain with 50bp added to
- * each end of the chain. If the SW score is below min_HSP_score, it will
- * return 0, informing the caller to discard the chain. This heuristic is
- * somewhat similar to BLAST which drops a seed hit if ungapped extension is
- * below a certain score (true for old BLAST; don't know how BLAST+ works).
- *
- * For PacBio data, we need to set high matching score and low gap penalties;
- * otherwise we are likely to get fragmented alignments. However, with such
- * settings, we can often extend most random seed hits to the end. These
- * extensions are wasteful and time consuming. By testing the chain with SW,
- * we can discard bad chains before performing the expensive extension.
- *
- * Although probably it is not a bad idea to use this function for
- * low-divergence sequences, more testing is needed. For now, I only recommend
- * to use mem_test_chain_sw() for PacBio data. It is disabled by default.
- */
-int mem_test_chain_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c)
-{
-	int i, qb, qe, rid;
-	int min_HSP_score = (int)(opt->min_chain_weight * opt->a * MEM_HSP_COEF + .499);
-	int64_t rb, re, l_pac = bns->l_pac;
-	uint8_t *rseq = 0;
-	kswr_t x;
-
-	if (c->n == 0) return -1;
-	qb = l_query;  qe = 0;
-	rb = l_pac<<1; re = 0;
-	for (i = 0; i < c->n; ++i) {
-		const mem_seed_t *s = &c->seeds[i];
-		qb = qb < s->qbeg? qb : s->qbeg;
-		qe = qe > s->qbeg + s->len? qe : s->qbeg + s->len;
-		rb = rb < s->rbeg? rb : s->rbeg;
-		re = re > s->rbeg + s->len? re : s->rbeg + s->len;
-	}
-	qb -= MEM_SHORT_EXT; qe += MEM_SHORT_EXT;
-	qb = qb > 0? qb : 0;
-	qe = qe < l_query? qe : l_query;
-	rb -= MEM_SHORT_EXT; re += MEM_SHORT_EXT;
-	rb = rb > 0? rb : 0;
-	re = re < l_pac<<1? re : l_pac<<1;
-	if (rb < l_pac && l_pac < re) {
-		if (c->seeds[0].rbeg < l_pac) re = l_pac;
-		else rb = l_pac;
-	}
-	if ((re - rb) - (qe - qb) > MEM_SHORT_EXT || (qe - qb) - (re - rb) > MEM_SHORT_EXT) return 1;
-	if (qe - qb >= opt->w * 4 || re - rb >= opt->w * 4) return 1;
-	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return 1;
-
-	rseq = bns_fetch_seq(bns, pac, &rb, c->seeds[0].rbeg, &re, &rid);
-	assert(c->rid == rid);
-	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0);
-	free(rseq);
-	if (x.score >= min_HSP_score) return 1;
-	if (bwa_verbose >= 4) printf("** give up the chain due to small HSP score %d.\n", x.score);
-	return 0;
-}
 
 int mem_chain2aln_short(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 {
@@ -576,6 +605,8 @@ static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 	return l < opt->w<<1? l : opt->w<<1;
 }
 
+#define MAX_BAND_TRY  2
+
 void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
 {
 	int i, k, rid, max_off[2], aw[2]; // aw: actual bandwidth used in extension
@@ -608,7 +639,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 
 	srt = malloc(c->n * 8);
 	for (i = 0; i < c->n; ++i)
-		srt[i] = (uint64_t)c->seeds[i].len<<32 | i;
+		srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
 	ks_introsort_64(c->n, srt);
 
 	for (k = c->n - 1; k >= 0; --k) {
@@ -656,7 +687,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		a->score = a->truesc = -1;
 		a->rid = c->rid;
 
-		if (bwa_verbose >= 4) err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg);
+		if (bwa_verbose >= 4) err_printf("** ---> Extending from seed(%d) [%ld;%ld,%ld] @ %s <---\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg, bns->anns[c->rid].name);
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
 			int qle, tle, gtle, gscore;
@@ -751,7 +782,7 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 	return l;
 }
 
-void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
+void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_, int softclip_all)
 {
 	int i;
 	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
@@ -778,7 +809,8 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
 				int c = p->cigar[i]&0xf;
-				if (c == 3 || c == 4) c = which? 4 : 3; // use hard clipping for supplementary alignments
+				if (!softclip_all && (c == 3 || c == 4))
+					c = which? 4 : 3; // use hard clipping for supplementary alignments
 				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
 			}
 		} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
@@ -805,9 +837,9 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		kputsn("*\t*", 3, str);
 	} else if (!p->is_rev) { // the forward strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar) {
-			if (which && ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3)) qb += p->cigar[0]>>4;
-			if (which && ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3)) qe -= p->cigar[p->n_cigar-1]>>4;
+		if (p->n_cigar && which && !softclip_all) { // have cigar && not the primary alignment && not softclip all
+			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qb += p->cigar[0]>>4;
+			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qe -= p->cigar[p->n_cigar-1]>>4;
 		}
 		ks_resize(str, str->l + (qe - qb) + 1);
 		for (i = qb; i < qe; ++i) str->s[str->l++] = "ACGTN"[(int)s->seq[i]];
@@ -819,9 +851,9 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		} else kputc('*', str);
 	} else { // the reverse strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar) {
-			if (which && ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3)) qe -= p->cigar[0]>>4;
-			if (which && ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3)) qb += p->cigar[p->n_cigar-1]>>4;
+		if (p->n_cigar && which && !softclip_all) {
+			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qe -= p->cigar[0]>>4;
+			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qb += p->cigar[p->n_cigar-1]>>4;
 		}
 		ks_resize(str, str->l + (qe - qb) + 1);
 		for (i = qe-1; i >= qb; --i) str->s[str->l++] = "TGCAN"[(int)s->seq[i]];
@@ -926,10 +958,10 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		mem_aln_t t;
 		t = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, 0);
 		t.flag |= extra_flag;
-		mem_aln2sam(bns, &str, s, 1, &t, 0, m);
+		mem_aln2sam(bns, &str, s, 1, &t, 0, m, opt->flag&MEM_F_SOFTCLIP);
 	} else {
 		for (k = 0; k < aa.n; ++k)
-			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m);
+			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m, opt->flag&MEM_F_SOFTCLIP);
 		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
 		free(aa.a);
 	}
@@ -947,20 +979,21 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 
 	chn = mem_chain(opt, bwt, bns, l_seq, (uint8_t*)seq);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
+	if (opt->min_chain_weight > 0) mem_flt_chained_seeds(opt, bns, pac, l_seq, (uint8_t*)seq, chn.n, chn.a);
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 
 	kv_init(regs);
 	for (i = 0; i < chn.n; ++i) {
 		mem_chain_t *p = &chn.a[i];
-		int ret;
+		int ret = 1;
 		if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-		if (opt->min_chain_weight > 0) ret = mem_test_chain_sw(opt, bns, pac, l_seq, (uint8_t*)seq, p);
-		else ret = mem_chain2aln_short(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
+		if (opt->min_chain_weight == 0)
+			ret = mem_chain2aln_short(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
 		if (ret > 0) mem_chain2aln(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
-	regs.n = mem_sort_and_dedup(regs.n, regs.a, opt->mask_level_redun);
+	regs.n = mem_sort_dedup_patch(opt, bns, pac, (uint8_t*)seq, regs.n, regs.a);
 	if (opt->flag & MEM_F_SELF_OVLP)
 		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
 	if (bwa_verbose >= 4) {

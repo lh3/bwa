@@ -18,6 +18,7 @@ typedef struct __smem_i smem_i;
 #define MEM_F_NO_RESCUE 0x20
 #define MEM_F_SELF_OVLP 0x40
 #define MEM_F_ALN_REG   0x80
+#define MEM_F_SOFTCLIP  0x200
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
@@ -61,6 +62,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
+	int n_comp;     // number of sub-alignments chained together
 	uint64_t hash;
 } mem_alnreg_t;
 

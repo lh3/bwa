@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <stdint.h>
+#include <assert.h>
 #include <emmintrin.h>
 #include "ksw.h"
 
@@ -381,7 +382,7 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	eh_t *eh; // score array
 	int8_t *qp; // query profile
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
-	if (h0 < 0) h0 = 0;
+	assert(h0 > 0);
 	// allocate memory
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
@@ -411,13 +412,15 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	for (i = 0; LIKELY(i < tlen); ++i) {
 		int t, f = 0, h1, m = 0, mj = -1;
 		int8_t *q = &qp[target[i] * qlen];
-		// compute the first column
-		h1 = h0 - (o_del + e_del * (i + 1));
-		if (h1 < 0) h1 = 0;
 		// apply the band and the constraint (if provided)
 		if (beg < i - w) beg = i - w;
 		if (end > i + w + 1) end = i + w + 1;
 		if (end > qlen) end = qlen;
+		// compute the first column
+		if (beg == 0) {
+			h1 = h0 - (o_del + e_del * (i + 1));
+			if (h1 < 0) h1 = 0;
+		} else h1 = 0;
 		for (j = beg; LIKELY(j < end); ++j) {
 			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 			// Similar to SSE2-SW, cells are computed in the following order:
@@ -427,8 +430,8 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			eh_t *p = &eh[j];
 			int h, M = p->h, e = p->e; // get H(i-1,j-1) and E(i-1,j)
 			p->h = h1;          // set H(i,j-1) for the next row
-			M += q[j];          // separating H and M to disallow a cigar like "100M3I3D20M"
-			h = M > e? M : e;
+			M = M? M + q[j] : 0;// separating H and M to disallow a cigar like "100M3I3D20M"
+			h = M > e? M : e;   // e and f are guaranteed to be non-negative, so h>=0 even if M<0
 			h = h > f? h : f;
 			h1 = h;             // save H(i,j) to h1 for the next column
 			mj = m > h? mj : j; // record the position where max score is achieved
@@ -460,10 +463,10 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			}
 		}
 		// update beg and end for the next round
-		for (j = mj; j >= beg && eh[j].h; --j);
-		beg = j + 1;
-		for (j = mj + 2; j <= end && eh[j].h; ++j);
-		end = j;
+		for (j = beg; LIKELY(j < end) && eh[j].h == 0 && eh[j].e == 0; ++j);
+		beg = j;
+		for (j = end; LIKELY(j >= beg) && eh[j].h == 0 && eh[j].e == 0; --j);
+		end = j + 2 < qlen? j + 2 : qlen;
 		//beg = 0; end = qlen; // uncomment this line for debugging
 	}
 	free(eh); free(qp);
@@ -507,7 +510,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
-	z = malloc(n_col * tlen);
+	z = n_cigar_ && cigar_? malloc(n_col * tlen) : 0;
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
 	// generate the query profile
@@ -524,41 +527,60 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	for (i = 0; LIKELY(i < tlen); ++i) { // target sequence is in the outer loop
 		int32_t f = MINUS_INF, h1, beg, end, t;
 		int8_t *q = &qp[target[i] * qlen];
-		uint8_t *zi = &z[i * n_col];
 		beg = i > w? i - w : 0;
 		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
 		h1 = beg == 0? -(o_del + e_del * (i + 1)) : MINUS_INF;
-		for (j = beg; LIKELY(j < end); ++j) {
-			// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
-			// Cells are computed in the following order:
-			//   M(i,j)   = H(i-1,j-1) + S(i,j)
-			//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
-			//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
-			//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
-			// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
-			// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
-			// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
-			// In practice, this should happen very rarely given a reasonable scoring system.
-			eh_t *p = &eh[j];
-			int32_t h, m = p->h, e = p->e;
-			uint8_t d; // direction
-			p->h = h1;
-			m += q[j];
-			d = m >= e? 0 : 1;
-			h = m >= e? m : e;
-			d = h >= f? d : 2;
-			h = h >= f? h : f;
-			h1 = h;
-			t = m - oe_del;
-			e -= e_del;
-			d |= e > t? 1<<2 : 0;
-			e  = e > t? e    : t;
-			p->e = e;
-			t = m - oe_ins;
-			f -= e_ins;
-			d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
-			f  = f > t? f    : t;
-			zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+		if (n_cigar_ && cigar_) {
+			uint8_t *zi = &z[i * n_col];
+			for (j = beg; LIKELY(j < end); ++j) {
+				// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
+				// Cells are computed in the following order:
+				//   M(i,j)   = H(i-1,j-1) + S(i,j)
+				//   H(i,j)   = max{M(i,j), E(i,j), F(i,j)}
+				//   E(i+1,j) = max{M(i,j)-gapo, E(i,j)} - gape
+				//   F(i,j+1) = max{M(i,j)-gapo, F(i,j)} - gape
+				// We have to separate M(i,j); otherwise the direction may not be recorded correctly.
+				// However, a CIGAR like "10M3I3D10M" allowed by local() is disallowed by global().
+				// Such a CIGAR may occur, in theory, if mismatch_penalty > 2*gap_ext_penalty + 2*gap_open_penalty/k.
+				// In practice, this should happen very rarely given a reasonable scoring system.
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				uint8_t d; // direction
+				p->h = h1;
+				m += q[j];
+				d = m >= e? 0 : 1;
+				h = m >= e? m : e;
+				d = h >= f? d : 2;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				d |= e > t? 1<<2 : 0;
+				e  = e > t? e    : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				d |= f > t? 2<<4 : 0; // if we want to halve the memory, use one bit only, instead of two
+				f  = f > t? f    : t;
+				zi[j - beg] = d; // z[i,j] keeps h for the current cell and e/f for the next cell
+			}
+		} else {
+			for (j = beg; LIKELY(j < end); ++j) {
+				eh_t *p = &eh[j];
+				int32_t h, m = p->h, e = p->e;
+				p->h = h1;
+				m += q[j];
+				h = m >= e? m : e;
+				h = h >= f? h : f;
+				h1 = h;
+				t = m - oe_del;
+				e -= e_del;
+				e  = e > t? e : t;
+				p->e = e;
+				t = m - oe_ins;
+				f -= e_ins;
+				f  = f > t? f : t;
+			}
 		}
 		eh[end].h = h1; eh[end].e = MINUS_INF;
 	}
