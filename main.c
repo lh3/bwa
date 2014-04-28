@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.8-r730-dirty"
+#define PACKAGE_VERSION "0.7.8-r731-dirty"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -24,8 +24,6 @@ int main_fastmap(int argc, char *argv[]);
 int main_mem(int argc, char *argv[]);
 
 int main_pemerge(int argc, char *argv[]);
-
-int main_layout(int argc, char *argv[]);
 	
 char *bwa_pg;
 
@@ -84,7 +82,6 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "fastmap") == 0) ret = main_fastmap(argc-1, argv+1);
 	else if (strcmp(argv[1], "mem") == 0) ret = main_mem(argc-1, argv+1);
 	else if (strcmp(argv[1], "pemerge") == 0) ret = main_pemerge(argc-1, argv+1);
-	else if (strcmp(argv[1], "layout") == 0) ret = main_layout(argc-1, argv+1);
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;
