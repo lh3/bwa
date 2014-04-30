@@ -67,6 +67,7 @@ mem_opt_t *mem_opt_init()
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
+	o->max_hits = 10;
 	o->max_matesw = 100;
 	o->mask_level_redun = 0.95;
 	o->min_chain_weight = 0;
@@ -898,6 +899,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 			}
 		}
 	}
+	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
 	kputc('\n', str);
 }
@@ -934,10 +936,14 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 // TODO (future plan): group hits into a uint64_t[] array. This will be cleaner and more flexible
 void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
 {
+	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, mem_alnreg_v *a, int l_query, const char *query);
 	kstring_t str;
 	kvec_t(mem_aln_t) aa;
 	int k;
+	char **XA = 0;
 
+	if (!(opt->flag & MEM_F_ALL))
+		XA = mem_gen_alt(opt, bns, pac, a, s->l_seq, s->seq);
 	kv_init(aa);
 	str.l = str.m = 0; str.s = 0;
 	for (k = 0; k < a->n; ++k) {
@@ -948,10 +954,8 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln2(opt, bns, pac, s->l_seq, s->seq, p, s->name);
-		if (q->rid < 0) {
-			--aa.n;
-			continue;
-		}
+		assert(q->rid >= 0); // this should not happen with the new code
+		q->XA = XA? XA[k] : 0;
 		q->flag |= extra_flag; // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (k && p->secondary < 0) // if supplementary
@@ -966,10 +970,14 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 	} else {
 		for (k = 0; k < aa.n; ++k)
 			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m, opt->flag&MEM_F_SOFTCLIP);
-		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
+		for (k = 0; k < aa.n; ++k) {
+			free(aa.a[k].cigar);
+			free(aa.a[k].XA);
+		}
 		free(aa.a);
 	}
 	s->sam = str.s;
+	if (XA) free(XA);
 }
 
 mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)

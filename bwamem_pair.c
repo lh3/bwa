@@ -313,7 +313,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		mem_aln2sam(bns, &str, &s[0], 1, &h[0], 0, &h[1], opt->flag&MEM_F_SOFTCLIP); s[0].sam = strdup(str.s); str.l = 0;
 		mem_aln2sam(bns, &str, &s[1], 1, &h[1], 0, &h[0], opt->flag&MEM_F_SOFTCLIP); s[1].sam = str.s;
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
-		free(h[0].cigar); free(h[1].cigar);
+		free(h[0].cigar); free(h[0].XA);
+		free(h[1].cigar); free(h[1].XA);
 	} else goto no_pairing;
 	return n;
 
