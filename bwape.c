@@ -297,6 +297,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 				p[j]->seQ = p[j]->mapQ = bwa_approx_mapQ(p[j], max_diff);
 				p[j]->pos = bwa_sa2pos(bns, bwt, p[j]->sa, p[j]->len + p[j]->ref_shift, &strand);
 				p[j]->strand = strand;
+				if (p[j]->pos == (bwtint_t)-1) p[j]->type = BWA_TYPE_NO_MATCH;
 			}
 		}
 	}
