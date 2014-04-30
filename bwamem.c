@@ -246,8 +246,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 			int rid, to_add = 0;
 			s.rbeg = tmp.pos = bwt_sa(bwt, p->x[0] + k); // this is the base coordinate in the forward-reverse reference
 			s.qbeg = p->info>>32;
-			s.len  = slen;
-			s.score = 0;
+			s.score= s.len = slen;
 			rid = bns_intv2rid(bns, s.rbeg, s.rbeg + s.len);
 			if (rid < 0) continue; // bridging multiple reference sequences or the forward-reverse boundary
 			if (kb_size(tree)) {
