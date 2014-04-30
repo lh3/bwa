@@ -417,6 +417,8 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 			} else if (q->rb < p->rb && (score = mem_patch_reg(opt, bns, pac, query, q, p, &w)) > 0) { // then merge q into p
 				p->n_comp += q->n_comp + 1;
 				p->seedcov = p->seedcov > q->seedcov? p->seedcov : q->seedcov;
+				p->sub = p->sub > q->sub? p->sub : q->sub;
+				p->csub = p->csub > q->csub? p->csub : q->csub;
 				p->qb = q->qb, p->rb = q->rb;
 				p->truesc = p->score = score;
 				p->w = w;
@@ -650,6 +652,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			int64_t rd;
 			int qd, w, max_gap;
 			if (s->rbeg < p->rb || s->rbeg + s->len > p->re || s->qbeg < p->qb || s->qbeg + s->len > p->qe) continue; // not fully contained
+			if (s->len - p->seedlen0 > .1 * l_query) continue; // this seed may give a better alignment
 			// qd: distance ahead of the seed on query; rd: on reference
 			qd = s->qbeg - p->qb; rd = s->rbeg - p->rb;
 			max_gap = cal_max_gap(opt, qd < rd? qd : rd); // the maximal gap allowed in regions ahead of the seed
@@ -663,7 +666,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		}
 		if (i < av->n) { // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
 			if (bwa_verbose >= 4)
-				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment. Confirming whether extension is needed...\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg);
+				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n",
+					   k, (long)s->len, (long)s->qbeg, (long)s->rbeg, av->a[i].qb, av->a[i].qe, (long)av->a[i].rb, (long)av->a[i].re);
 			for (i = k + 1; i < c->n; ++i) { // check overlapping seeds in the same chain
 				const mem_seed_t *t;
 				if (srt[i] == 0) continue;
@@ -753,6 +757,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				a->seedcov += t->len; // this is not very accurate, but for approx. mapQ, this is good enough
 		}
 		a->w = aw[0] > aw[1]? aw[0] : aw[1];
+		a->seedlen0 = s->len;
 	}
 	free(srt); free(rseq);
 }
