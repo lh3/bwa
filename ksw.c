@@ -510,7 +510,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
-	z = n_cigar_ && cigar_? malloc(n_col * tlen) : 0;
+	z = n_cigar_ && cigar_? malloc((long)n_col * tlen) : 0;
 	qp = malloc(qlen * m);
 	eh = calloc(qlen + 1, 8);
 	// generate the query profile
