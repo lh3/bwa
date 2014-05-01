@@ -531,7 +531,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 		end = i + w + 1 < qlen? i + w + 1 : qlen; // only loop through [beg,end) of the query sequence
 		h1 = beg == 0? -(o_del + e_del * (i + 1)) : MINUS_INF;
 		if (n_cigar_ && cigar_) {
-			uint8_t *zi = &z[i * n_col];
+			uint8_t *zi = &z[(long)i * n_col];
 			for (j = beg; LIKELY(j < end); ++j) {
 				// At the beginning of the loop: eh[j] = { H(i-1,j-1), E(i,j) }, f = F(i,j) and h1 = H(i,j-1)
 				// Cells are computed in the following order:
@@ -590,7 +590,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 		uint32_t *cigar = 0, tmp;
 		i = tlen - 1; k = (i + w + 1 < qlen? i + w + 1 : qlen) - 1; // (i,k) points to the last cell
 		while (i >= 0 && k >= 0) {
-			which = z[i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
+			which = z[(long)i * n_col + (k - (i > w? i - w : 0))] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
 			else                 cigar = push_cigar(&n_cigar, &m_cigar, cigar, 1, 1), --k;
