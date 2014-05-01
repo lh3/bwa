@@ -107,10 +107,12 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
 	}
 	if (l_query == re - rb && w_ == 0) { // no gap; no need to do DP
-		// FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
-		cigar = malloc(4);
-		cigar[0] = l_query<<4 | 0;
-		*n_cigar = 1;
+		// UPDATE: we come to this block now... FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
+		if (n_cigar) {
+			cigar = malloc(4);
+			cigar[0] = l_query<<4 | 0;
+			*n_cigar = 1;
+		}
 		for (i = 0, *score = 0; i < l_query; ++i)
 			*score += mat[rseq[i]*5 + query[i]];
 	} else {

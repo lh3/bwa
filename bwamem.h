@@ -47,6 +47,7 @@ typedef struct {
 	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
+	int max_hits;           // if there are max_hits or fewer, output them all
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;
 
@@ -62,6 +63,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
+	int seedlen0;   // length of the starting seed
 	int n_comp;     // number of sub-alignments chained together
 	uint64_t hash;
 } mem_alnreg_t;
@@ -81,6 +83,7 @@ typedef struct { // This struct is only used for the convenience of API.
 	uint32_t is_rev:1, mapq:8, NM:23; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
 	int n_cigar;     // number of CIGAR operations
 	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
+	char *XA;        // alternative mappings
 
 	int score, sub;
 } mem_aln_t;

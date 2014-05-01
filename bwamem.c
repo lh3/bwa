@@ -67,6 +67,7 @@ mem_opt_t *mem_opt_init()
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
+	o->max_hits = 10;
 	o->max_matesw = 100;
 	o->mask_level_redun = 0.95;
 	o->min_chain_weight = 0;
@@ -376,11 +377,11 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 		printf("* potential hit merge between [%d,%d)<=>[%ld,%ld) and [%d,%d)<=>[%ld,%ld), @ %s; w=%d, r=%.4g\n",
 			   a->qb, a->qe, (long)a->rb, (long)a->re, b->qb, b->qe, (long)b->rb, (long)b->re, bns->anns[a->rid].name, w, r);
 	if (a->re < b->rb || a->qe < b->qb) { // no overlap on query or on ref
-		if (w > opt->w<<1) return 0; // the bandwidth is too large
-		if (r >= PATCH_MAX_R_BW) return 0; // relative bandwidth is too large
-	}
+		if (w > opt->w<<1 || r >= PATCH_MAX_R_BW) return 0; // the bandwidth or the relative bandwidth is too large
+	} else if (w > opt->w<<2 || r >= PATCH_MAX_R_BW*2) return 0; // more permissive if overlapping on both ref and query
 	// global alignment
 	w += a->w + b->w;
+	w = w < opt->w<<2? w : opt->w<<2;
 	if (bwa_verbose >= 4) printf("* test potential hit merge with global alignment; w=%d\n", w);
 	bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w, bns->l_pac, pac, b->qe - a->qb, query + a->qb, a->rb, b->re, &score, 0, 0);
 	q_s = (int)((double)(b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score) + .499); // predicted score from query
@@ -417,6 +418,8 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 			} else if (q->rb < p->rb && (score = mem_patch_reg(opt, bns, pac, query, q, p, &w)) > 0) { // then merge q into p
 				p->n_comp += q->n_comp + 1;
 				p->seedcov = p->seedcov > q->seedcov? p->seedcov : q->seedcov;
+				p->sub = p->sub > q->sub? p->sub : q->sub;
+				p->csub = p->csub > q->csub? p->csub : q->csub;
 				p->qb = q->qb, p->rb = q->rb;
 				p->truesc = p->score = score;
 				p->w = w;
@@ -650,6 +653,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			int64_t rd;
 			int qd, w, max_gap;
 			if (s->rbeg < p->rb || s->rbeg + s->len > p->re || s->qbeg < p->qb || s->qbeg + s->len > p->qe) continue; // not fully contained
+			if (s->len - p->seedlen0 > .1 * l_query) continue; // this seed may give a better alignment
 			// qd: distance ahead of the seed on query; rd: on reference
 			qd = s->qbeg - p->qb; rd = s->rbeg - p->rb;
 			max_gap = cal_max_gap(opt, qd < rd? qd : rd); // the maximal gap allowed in regions ahead of the seed
@@ -663,7 +667,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		}
 		if (i < av->n) { // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
 			if (bwa_verbose >= 4)
-				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment. Confirming whether extension is needed...\n", k, (long)s->len, (long)s->qbeg, (long)s->rbeg);
+				printf("** Seed(%d) [%ld;%ld,%ld] is almost contained in an existing alignment [%d,%d) <=> [%ld,%ld)\n",
+					   k, (long)s->len, (long)s->qbeg, (long)s->rbeg, av->a[i].qb, av->a[i].qe, (long)av->a[i].rb, (long)av->a[i].re);
 			for (i = k + 1; i < c->n; ++i) { // check overlapping seeds in the same chain
 				const mem_seed_t *t;
 				if (srt[i] == 0) continue;
@@ -753,6 +758,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				a->seedcov += t->len; // this is not very accurate, but for approx. mapQ, this is good enough
 		}
 		a->w = aw[0] > aw[1]? aw[0] : aw[1];
+		a->seedlen0 = s->len;
 	}
 	free(srt); free(rseq);
 }
@@ -893,6 +899,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 			}
 		}
 	}
+	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
 	kputc('\n', str);
 }
@@ -929,10 +936,14 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 // TODO (future plan): group hits into a uint64_t[] array. This will be cleaner and more flexible
 void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
 {
+	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, mem_alnreg_v *a, int l_query, const char *query);
 	kstring_t str;
 	kvec_t(mem_aln_t) aa;
 	int k;
+	char **XA = 0;
 
+	if (!(opt->flag & MEM_F_ALL))
+		XA = mem_gen_alt(opt, bns, pac, a, s->l_seq, s->seq);
 	kv_init(aa);
 	str.l = str.m = 0; str.s = 0;
 	for (k = 0; k < a->n; ++k) {
@@ -943,10 +954,8 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln2(opt, bns, pac, s->l_seq, s->seq, p, s->name);
-		if (q->rid < 0) {
-			--aa.n;
-			continue;
-		}
+		assert(q->rid >= 0); // this should not happen with the new code
+		q->XA = XA? XA[k] : 0;
 		q->flag |= extra_flag; // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (k && p->secondary < 0) // if supplementary
@@ -961,10 +970,14 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 	} else {
 		for (k = 0; k < aa.n; ++k)
 			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m, opt->flag&MEM_F_SOFTCLIP);
-		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
+		for (k = 0; k < aa.n; ++k) {
+			free(aa.a[k].cigar);
+			free(aa.a[k].XA);
+		}
 		free(aa.a);
 	}
 	s->sam = str.s;
+	if (XA) free(XA);
 }
 
 mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq)
@@ -1032,9 +1045,10 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 	i = 0; a.cigar = 0;
 	do {
 		free(a.cigar);
+		w2 = w2 < opt->w<<2? w2 : opt->w<<2;
 		a.cigar = bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w2, bns->l_pac, pac, qe - qb, (uint8_t*)&query[qb], rb, re, &score, &a.n_cigar, &NM);
 		if (bwa_verbose >= 4) printf("* Final alignment: w2=%d, global_sc=%d, local_sc=%d\n", w2, score, ar->truesc);
-		if (score == last_sc) break; // it is possible that global alignment and local alignment give different scores
+		if (score == last_sc || w2 == opt->w<<2) break; // it is possible that global alignment and local alignment give different scores
 		last_sc = score;
 		w2 <<= 1;
 	} while (++i < 3 && score < ar->truesc - opt->a);

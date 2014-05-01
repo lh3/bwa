@@ -100,9 +100,48 @@ void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 		kputw(bns->anns[rid].len, &str); kputc('\t', &str);
 		kputw(pos, &str); kputc('\t', &str); kputw(pos + (re - rb), &str); kputc('\t', &str);
 		ksprintf(&str, "%.3f", (double)p->truesc / opt->a / (qe - qb > re - rb? qe - qb : re - rb));
-		kputc('\t', &str); kputw(p->n_comp, &str);
 		kputc('\n', &str);
 	}
 	s->sam = str.s;
 }
 
+// Okay, returning strings is bad, but this has happened a lot elsewhere. If I have time, I need serious code cleanup.
+char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query) // ONLY work after mem_mark_primary_se()
+{
+	int i, k, *cnt, tot;
+	kstring_t *aln = 0;
+	char **XA = 0;
+
+	cnt = calloc(a->n, sizeof(int));
+	for (i = 0, tot = 0; i < a->n; ++i) {
+		int j = a->a[i].secondary;
+		if (j >= 0 && a->a[i].score >= a->a[j].score * opt->drop_ratio)
+			++cnt[j], ++tot;
+	}
+	if (tot == 0) goto end_gen_alt;
+	aln = calloc(a->n, sizeof(kstring_t));
+	for (i = 0; i < a->n; ++i) {
+		mem_aln_t t;
+		int j = a->a[i].secondary;
+		if (j < 0 || a->a[i].score < a->a[j].score * opt->drop_ratio) continue; // we don't process the primary alignments as they will be converted to SAM later
+		if (cnt[j] > opt->max_hits) continue;
+		t = mem_reg2aln(opt, bns, pac, l_query, query, &a->a[i]);
+		kputs(bns->anns[t.rid].name, &aln[j]);
+		kputc(',', &aln[j]); kputc("+-"[t.is_rev], &aln[j]); kputl(t.pos + 1, &aln[j]);
+		kputc(',', &aln[j]);
+		for (k = 0; k < t.n_cigar; ++k) {
+			kputw(t.cigar[k]>>4, &aln[j]);
+			kputc("MIDSHN"[t.cigar[k]&0xf], &aln[j]);
+		}
+		kputc(',', &aln[j]); kputw(t.NM, &aln[j]);
+		kputc(';', &aln[j]);
+		free(t.cigar);
+	}
+	XA = calloc(a->n, sizeof(char*));
+	for (k = 0; k < a->n; ++k)
+		XA[k] = aln[k].s;
+
+end_gen_alt:
+	free(cnt); free(aln);
+	return XA;
+}
