@@ -59,7 +59,7 @@ mem_opt_t *mem_opt_init()
 	o->pen_clip5 = o->pen_clip3 = 5;
 	o->min_seed_len = 19;
 	o->split_width = 10;
-	o->max_occ = 10000;
+	o->max_occ = 500;
 	o->max_chain_gap = 10000;
 	o->max_ins = 10000;
 	o->mask_level = 0.50;
@@ -118,7 +118,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 			for (i = 0; i < a->mem1.n; ++i) {
 				bwtintv_t *p = &a->mem1.a[i];
 				int slen = (uint32_t)p->info - (p->info>>32); // seed length
-				if (slen >= opt->min_seed_len && p->x[2] <= opt->max_occ)
+				if (slen >= opt->min_seed_len)
 					kv_push(bwtintv_t, a->mem, *p);
 			}
 		} else ++x;
@@ -149,7 +149,8 @@ typedef struct {
 
 typedef struct {
 	int n, m, first, rid;
-	int w, kept;
+	uint32_t w:30, kept:2;
+	float frac_rep;
 	int64_t pos;
 	mem_seed_t *seeds;
 } mem_chain_t;
@@ -202,7 +203,8 @@ int mem_chain_weight(const mem_chain_t *c)
 		else if (s->rbeg + s->len > end) w += s->rbeg + s->len - end;
 		end = end > s->qbeg + s->len? end : s->qbeg + s->len;
 	}
-	return w < tmp? w : tmp;
+	w = w < tmp? w : tmp;
+	return w < 1<<30? w : (1<<30)-1;
 }
 
 void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
@@ -224,7 +226,7 @@ void mem_print_chain(const bntseq_t *bns, mem_chain_v *chn)
 
 mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, int len, const uint8_t *seq)
 {
-	int i;
+	int i, b, e, l_rep;
 	int64_t l_pac = bns->l_pac;
 	mem_chain_v chain;
 	kbtree_t(chn) *tree;
@@ -236,12 +238,21 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 
 	aux = smem_aux_init();
 	mem_collect_intv(opt, bwt, len, seq, aux);
+	for (i = 0, b = e = l_rep = 0; i < aux->mem.n; ++i) { // compute frac_rep
+		bwtintv_t *p = &aux->mem.a[i];
+		int sb = (p->info>>32), se = (uint32_t)p->info;
+		if (p->x[2] <= opt->max_occ) continue;
+		if (sb > e) l_rep += e - b, b = sb, e = se;
+		else e = e > se? e : se;
+	}
+	l_rep += e - b;
 	for (i = 0; i < aux->mem.n; ++i) {
 		bwtintv_t *p = &aux->mem.a[i];
-		int slen = (uint32_t)p->info - (p->info>>32); // seed length
+		int step, slen = (uint32_t)p->info - (p->info>>32); // seed length
 		int64_t k;
-		if (slen < opt->min_seed_len || p->x[2] > opt->max_occ) continue; // ignore if too short or too repetitive
-		for (k = 0; k < p->x[2]; ++k) {
+		if (slen < opt->min_seed_len) continue; // ignore if too short or too repetitive
+		step = p->x[2] > opt->max_occ? p->x[2] / opt->max_occ : 1;
+		for (k = 0; k < p->x[2]; k += step) {
 			mem_chain_t tmp, *lower, *upper;
 			mem_seed_t s;
 			int rid, to_add = 0;
@@ -270,6 +281,9 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	#define traverse_func(p_) (chain.a[chain.n++] = *(p_))
 	__kb_traverse(mem_chain_t, tree, traverse_func);
 	#undef traverse_func
+
+	for (i = 0; i < chain.n; ++i) chain.a[i].frac_rep = (float)l_rep / len;
+	if (bwa_verbose >= 4) printf("* fraction of repetitive seeds: %.3f\n", (float)l_rep / len);
 
 	kb_destroy(chn, tree);
 	return chain;
@@ -592,6 +606,7 @@ int mem_chain2aln_short(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t
 	a.score = x.score;
 	a.csub = x.score2;
 	a.rid = c->rid;
+	a.frac_rep = c->frac_rep;
 	if (bwa_verbose >= 4) printf("** Attempted alignment via mem_chain2aln_short(): [%d,%d) <=> [%ld,%ld); score=%d; %d/%d\n", a.qb, a.qe, (long)a.rb, (long)a.re, x.score, a.qe-a.qb, qe-qb);
 	if (x.tb < MEM_SHORT_EXT>>1 || x.te > re - rb - (MEM_SHORT_EXT>>1)) return 1;
 	kv_push(mem_alnreg_t, *av, a);
@@ -759,6 +774,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		}
 		a->w = aw[0] > aw[1]? aw[0] : aw[1];
 		a->seedlen0 = s->len;
+
+		a->frac_rep = c->frac_rep;
 	}
 	free(srt); free(rseq);
 }
@@ -930,6 +947,7 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	if (a->sub_n > 0) mapq -= (int)(4.343 * log(a->sub_n+1) + .499);
 	if (mapq > 60) mapq = 60;
 	if (mapq < 0) mapq = 0;
+	mapq = (int)(mapq * (1. - a->frac_rep) + .499);
 	return mapq;
 }
 
