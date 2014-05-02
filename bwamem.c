@@ -248,11 +248,11 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	l_rep += e - b;
 	for (i = 0; i < aux->mem.n; ++i) {
 		bwtintv_t *p = &aux->mem.a[i];
-		int step, slen = (uint32_t)p->info - (p->info>>32); // seed length
+		int step, count, slen = (uint32_t)p->info - (p->info>>32); // seed length
 		int64_t k;
 		if (slen < opt->min_seed_len) continue; // ignore if too short or too repetitive
 		step = p->x[2] > opt->max_occ? p->x[2] / opt->max_occ : 1;
-		for (k = 0; k < p->x[2]; k += step) {
+		for (k = count = 0; k < p->x[2] && count < opt->max_occ; k += step, ++count) {
 			mem_chain_t tmp, *lower, *upper;
 			mem_seed_t s;
 			int rid, to_add = 0;
