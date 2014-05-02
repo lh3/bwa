@@ -68,7 +68,7 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_hits = 10;
-	o->max_matesw = 100;
+	o->max_matesw = 50;
 	o->mask_level_redun = 0.95;
 	o->min_chain_weight = 0;
 	o->max_chain_extend = 1<<30;
