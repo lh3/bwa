@@ -2,7 +2,7 @@
  * The K8 Javascript interpreter is required to run this script. *
  *                                                               *
  *   Source code: https://github.com/attractivechaos/k8          *
- *   Binary: https://sourceforge.net/projects/lh3/files/         *
+ *   Binary: http://sourceforge.net/projects/lh3/files/k8/       *
  *****************************************************************/
 
 /******************
@@ -338,6 +338,242 @@ function bwa_gff2sam(args)
 	file.close();
 }
 
+
+/******************************
+ *** Generate ALT alignment ***
+ ******************************/
+
+function intv_ovlp(intv, bits) // interval index
+{
+	if (typeof bits == "undefined") bits = 13;
+	intv.sort(function(a,b) {return a[0]-b[0];});
+	// create the index
+	var idx = [], max = 0;
+	for (var i = 0; i < intv.length; ++i) {
+		var b = intv[i][0]>>bits;
+		var e = (intv[i][1]-1)>>bits;
+		if (b != e) {
+			for (var j = b; j <= e; ++j)
+				if (idx[j] == null) idx[j] = i;
+		} else if (idx[b] == null) idx[b] = i;
+		max = max > e? max : e;
+	}
+	// closure
+	return function(_b, _e, is_contained) {
+		var x = _b >> bits;
+		if (x > max) return [];
+		var off = idx[x];
+		if (off == null) {
+			var i;
+			for (i = ((_e - 1) >> bits) - 1; i >= 0; --i)
+				if (idx[i] != null) break;
+			off = i < 0? 0 : idx[i];
+		}
+		var ovlp = [];
+		if (!is_contained) {
+			for (var i = off; i < intv.length && intv[i][0] < _e; ++i)
+				if (intv[i][1] > _b) ovlp.push(intv[i]);
+		} else {
+			for (var i = off; i < intv.length && intv[i][1] <= _e; ++i)
+				if (intv[i][0] >= _b) ovlp.push(intv[i]);
+		}
+		return ovlp;
+	}
+}
+
+function bwa_genalt(args)
+{
+	function cigar2pos(cigar, pos)
+	{
+		var x = 0, y = 0;
+		for (var i = 0; i < cigar.length; ++i) {
+			var op = cigar[i][0], len = cigar[i][1];
+			if (op == 'M') {
+				if (y <= pos && pos < y + len)
+					return x + (pos - y);
+				x += len, y += len;
+			} else if (op == 'D') {
+				x += len;
+			} else if (op == 'I') {
+				if (y <= pos && pos < y + len)
+					return x;
+				y += len;
+			} else if (op == 'S' || op == 'H') {
+				if (y <= pos && pos < y + len)
+					return -1;
+				y += len;
+			}
+		}
+		return -1;
+	}
+
+	var opt = { a:1, b:4, o:6, e:1 };
+
+	if (args.length == 0) {
+		print("Usage: k8 bwa-helper.js genalt <alt.sam> [aln.sam]");
+		exit(1);
+	}
+
+	var re_cigar = /(\d+)([MIDSHN])/g;
+	var file, buf = new Bytes();
+
+	// read the ALT-to-REF alignment and generate the index
+	var intv = {};
+	file = new File(args[0]);
+	while (file.readline(buf) >= 0) {
+		var line = buf.toString();
+		var t = line.split("\t");
+		if (line.charAt(0) == '@') continue;
+		var flag = parseInt(t[1]);
+		var m, cigar = [], l_qaln = 0, l_qclip = 0;
+		while ((m = re_cigar.exec(t[5])) != null) {
+			var l = parseInt(m[1]);
+			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
+			if (m[2] == 'M' || m[2] == 'I') l_qaln += l;
+			else if (m[2] == 'S' || m[2] == 'H') l_qclip += l;
+		}
+		var j = flag&16? cigar.length-1 : 0;
+		var start = cigar[j][0] == 'S'? cigar[j][1] : 0;
+		if (intv[t[0]] == null) intv[t[0]] = [];
+		intv[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
+		//print(start, start + l_qaln, t[2], flag&16? true : false, parseInt(t[3]), cigar);
+	}
+	file.close();
+
+	var idx = {};
+	for (var ctg in intv)
+		idx[ctg] = intv_ovlp(intv[ctg]);
+
+	// process SAM
+	file = args.length >= 2? new File(args[1]) : new File();
+	while (file.readline(buf) >= 0) {
+		var m, line = buf.toString();
+		if (line.charAt(0) == '@' || (m = /\tXA:Z:(\S+)/.exec(line)) == null) { // TODO: this does not work with PE file
+			//print(line);
+			continue;
+		}
+
+		// parse hits
+		var XA_strs = m[1].split(";");
+		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? 0 : parseInt(m[1]);
+		var t = line.split("\t");
+		// a hit element: [0:chr, 1:isRev, 2:start, 3:end, 4:cigar, 5:NM, 6:score, 7+:"lifted info"]
+		var hits = [[t[2], (parseInt(t[1]) & 16)? true : false, parseInt(t[3]) - 1, 0, t[5], NM]]; // the major hit
+		for (var i = 0; i < XA_strs.length; ++i) { // hits in the XA tag
+			if (XA_strs[i] == '') continue; // if the last char is ';', we will have an empty string
+			var s = XA_strs[i].split(",");
+			hits.push([s[0], s[1].charAt(0) == '-'? true : false, parseInt(s[1].substr(1)) - 1, 0, s[2], parseInt(s[3])]);
+		}
+
+		// lift mapping positions to the coordinates on the primary assembly
+		var n_lifted = 0;
+		for (var i = 0; i < hits.length; ++i) {
+			var h = hits[i];
+
+			// parse the cigar
+			var m, l_ins, n_ins, l_del, n_del, l_match, l_skip, l_clip;
+			l_ins = l_del = n_ins = n_del = l_match = l_skip = l_clip = 0;
+			while ((m = re_cigar.exec(h[4])) != null) {
+				var l = parseInt(m[1]);
+				if (m[2] == 'M') l_match += l;
+				else if (m[2] == 'D') ++n_del, l_del += l;
+				else if (m[2] == 'I') ++n_ins, l_ins += l;
+				else if (m[2] == 'N') l_skip += l;
+				else if (m[2] == 'H' || m[2] == 'S') l_clip += l;
+			}
+			h[3] = h[2] + l_match + l_del + l_skip;
+			h[5] = h[5] > l_del + l_ins? h[5] : l_del + l_ins;
+			var score = opt.a * l_match - (opt.a + opt.b) * (h[5] - l_del - l_ins) - opt.o * (n_del + n_ins) - opt.e * (l_del + l_ins);
+			h.push(score);
+
+			if (idx[h[0]] == null) continue;
+			var a = idx[h[0]](h[2], h[3]);
+			if (a == null || a.length == 0) continue;
+
+			// find the approximate position on the primary assembly
+			var regs = [];
+			for (var j = 0; j < a.length; ++j) {
+				var s, e;
+				if (!a[j][4]) { // ALT is mapped to the forward strand of the primary assembly
+					s = cigar2pos(a[j][6], h[2]);
+					e = cigar2pos(a[j][6], h[3] - 1) + 1;
+				} else {
+					s = cigar2pos(a[j][6], a[j][2] - h[3]);
+					e = cigar2pos(a[j][6], a[j][2] - h[2] - 1) + 1;
+				}
+				if (s < 0 || e < 0) continue; // read is mapped to clippings in the ALT-to-chr alignment
+				s += a[j][5]; e += a[j][5];
+				//print("*", a[j][4], h[0], a[j][3], s, e);
+				regs.push([a[j][3], (h[1]!=a[j][4]), s, e]);
+			}
+			if (regs.length == 0) continue;
+			hits[i].push(regs[0][0], regs[0][1], regs[0][2], regs[0][3]); // TODO: regs.length may be larger than one, though this occurs rarely
+			++n_lifted;
+		}
+		if (n_lifted == 0) {
+			//print(line);
+			continue;
+		}
+
+		// group hits
+		var phits = [];
+		for (var i = 0; i < hits.length; ++i) {
+			var h = hits[i];
+			if (h.length > 7) phits.push([h[7], h[9], h[10], -1]); // lifted
+			else phits.push([h[0], h[2], h[3], -1]);
+		}
+		phits.sort(function(a,b) {
+					   if (a[0] != b[0]) return a[0] < b[0]? -1 : 1;
+					   if (a[1] != b[1]) return a[1] - b[1];
+				   });
+		var last_chr = null, end = 0, groupid = -1;
+		for (var i = 0; i < phits.length; ++i) {
+			if (last_chr != phits[i][0]) { // change of chr
+				phits[i][3] = ++groupid;
+				last_chr = phits[i][0], end = phits[i][2];
+			} else if (phits[i][1] >= end) { // no overlap
+				phits[i][3] = ++groupid;
+				end = phits[i][2];
+			} else {
+				phits[i][3] = groupid;
+				end = end > phits[i][2]? end : phits[i][2];
+			}
+		}
+		var n_group0 = 0; // #hits overlapping the reported hit
+		for (var i = 0; i < phits.length; ++i)
+			if (phits[i][3] == phits[0][3])
+				++n_group0;
+		if (n_group0 == 1) { // then keep the reported alignment and mapQ
+			//print(line);
+			continue;
+		}
+
+		// re-estimate mapQ
+		var group_max = [];
+		for (var i = 0; i < phits.length; ++i)
+			if (group_max[phits[i][3]] == null || group_max[phits[i][3]][0] < hits[i][6])
+				group_max[phits[i][3]] = [hits[i][6], phits[i][3]];
+		if (group_max.length > 1)
+			group_max.sort(function(x,y) {return y[0]-x[0]});
+		var mapQ;
+		if (group_max[0][1] == phits[0][3]) { // the best hit is the hit reported in SAM
+			mapQ = group_max.length == 1? 60 : 6 * (group_max[0][0] - group_max[1][0]);
+		} else mapQ = 0;
+		mapQ = mapQ < 60? mapQ : 60;
+		var ori_mapQ = parseInt(t[4]);
+		mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
+
+		t[4] = mapQ;
+		print(t.join("\t"));
+		print("*", mapQ);
+		for (var i = 0; i < hits.length; ++i)
+			print(hits[i]);
+	}
+	file.close();
+
+	buf.destroy();
+}
+
 /*********************
  *** Main function ***
  *********************/
@@ -362,6 +598,7 @@ function main(args)
 	else if (cmd == 'markovlp') bwa_markOvlp(args);
 	else if (cmd == 'pas2reg') bwa_pas2reg(args);
 	else if (cmd == 'reg2cut') bwa_reg2cut(args);
+	else if (cmd == 'genalt') bwa_genalt(args);
 	else if (cmd == 'shortname') bwa_shortname(args);
 	else warn("Unrecognized command");
 }
