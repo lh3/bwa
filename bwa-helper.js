@@ -653,8 +653,8 @@ function bwa_genalt(args)
 		print(t.join("\t"));
 		var cnt = 0;
 		for (var i = 0; i < hits.length; ++i) {
+			if (opt.verbose >= 5) print(obj2str(hits[i]));
 			if (hits[i].g != reported_g || i == reported_i) continue;
-			//print(obj2str(hits[i]));
 			var s = [t[0], flag&0xf10, hits[i].ctg, hits[i].start+1, mapQ, hits[i].cigar, '*', 0, 0];
 			// update name
 			if (flag&0x40) s[0] += "/1";
