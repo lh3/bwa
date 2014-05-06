@@ -411,7 +411,7 @@ function intv_ovlp(intv, bits) // interval index
 		max = max > e? max : e;
 	}
 	// closure
-	return function(_b, _e, is_contained) {
+	return function(_b, _e) {
 		var x = _b >> bits;
 		if (x > max) return [];
 		var off = idx[x];
@@ -422,13 +422,8 @@ function intv_ovlp(intv, bits) // interval index
 			off = i < 0? 0 : idx[i];
 		}
 		var ovlp = [];
-		if (!is_contained) {
-			for (var i = off; i < intv.length && intv[i][0] < _e; ++i)
-				if (intv[i][1] > _b) ovlp.push(intv[i]);
-		} else {
-			for (var i = off; i < intv.length && intv[i][1] <= _e; ++i)
-				if (intv[i][0] >= _b) ovlp.push(intv[i]);
-		}
+		for (var i = off; i < intv.length && intv[i][0] < _e; ++i)
+			if (intv[i][1] > _b) ovlp.push(intv[i]);
 		return ovlp;
 	}
 }
@@ -437,7 +432,7 @@ function bwa_genalt(args)
 {
 	var re_cigar = /(\d+)([MIDSHN])/g;
 
-	function cigar2pos(cigar, pos)
+	function cigar2pos(cigar, pos) // given a pos on ALT and the ALT-to-REF CIGAR, find the pos on REF
 	{
 		var x = 0, y = 0;
 		for (var i = 0; i < cigar.length; ++i) {
@@ -461,7 +456,7 @@ function bwa_genalt(args)
 		return -1;
 	}
 
-	function parse_hit(s, opt)
+	function parse_hit(s, opt) // parse a hit. s looks something like ["chr1", "+12345", "100M", 5]
 	{
 		var h = {};
 		h.ctg = s[0];
@@ -498,7 +493,7 @@ function bwa_genalt(args)
 	}
 
 	var file, buf = new Bytes();
-	var aux = new Bytes();
+	var aux = new Bytes(); // used for reverse and reverse complement
 
 	// read the ALT-to-REF alignment and generate the index
 	var intv = {};
@@ -522,7 +517,7 @@ function bwa_genalt(args)
 		//print(start, start + l_qaln, t[2], flag&16? true : false, parseInt(t[3]), cigar);
 	}
 	file.close();
-
+	// create the interval index
 	var idx = {};
 	for (var ctg in intv)
 		idx[ctg] = intv_ovlp(intv[ctg]);
@@ -544,10 +539,10 @@ function bwa_genalt(args)
 		var flag = parseInt(t[1]);
 		hits.push(parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt));
 		for (var i = 0; i < XA_strs.length; ++i) // hits in the XA tag
-			if (XA_strs[i] != '')
+			if (XA_strs[i] != '') // as the last symbol in an XA tag is ";", the last split is an empty string
 				hits.push(parse_hit(XA_strs[i].split(","), opt));
 
-		// lift mapping positions to the coordinates on the primary assembly
+		// lift mapping positions to coordinates on the primary assembly
 		var n_lifted = 0;
 		for (var i = 0; i < hits.length; ++i) {
 			var h = hits[i];
@@ -579,7 +574,7 @@ function bwa_genalt(args)
 		}
 
 		// group hits
-		for (var i = 0; i < hits.length; ++i) {
+		for (var i = 0; i < hits.length; ++i) { // set keys for sorting
 			if (hits[i].lifted && hits[i].lifted.length) // TODO: only the first element in lifted[] is used
 				hits[i].pctg = hits[i].lifted[0][0], hits[i].pstart = hits[i].lifted[0][2], hits[i].pend = hits[i].lifted[0][3];
 			else hits[i].pctg = hits[i].ctg, hits[i].pstart = hits[i].start, hits[i].pend = hits[i].end;
@@ -634,12 +629,8 @@ function bwa_genalt(args)
 			}
 		}
 
-		// print
+		// generate reversed quality and reverse-complemented sequence if necessary
 		var rs = null, rq = null; // reversed quality and reverse complement sequence
-		t[4] = mapQ;
-		t.push("om:i:"+ori_mapQ);
-		if (hits[reported_i].lifted_str) t.push("lt:Z:" + hits[reported_i].lifted_str);
-		print(t.join("\t"));
 		var need_rev = false;
 		for (var i = 0; i < hits.length; ++i) {
 			if (hits[i].g != reported_g || i == reported_i) continue;
@@ -650,6 +641,12 @@ function bwa_genalt(args)
 			aux.set(t[9], 0); aux.revcomp(); rs = aux.toString();
 			aux.set(t[10],0); aux.reverse(); rq = aux.toString();
 		}
+
+		// print
+		t[4] = mapQ;
+		t.push("om:i:"+ori_mapQ);
+		if (hits[reported_i].lifted_str) t.push("lt:Z:" + hits[reported_i].lifted_str);
+		print(t.join("\t"));
 		var cnt = 0;
 		for (var i = 0; i < hits.length; ++i) {
 			if (hits[i].g != reported_g || i == reported_i) continue;
