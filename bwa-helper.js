@@ -519,8 +519,8 @@ function bwa_genalt(args)
 		var phits = [];
 		for (var i = 0; i < hits.length; ++i) {
 			var h = hits[i];
-			if (h.length > 7) phits.push([h[7], h[9], h[10], -1]); // lifted
-			else phits.push([h[0], h[2], h[3], -1]);
+			if (h.length > 7) phits.push([h[7], h[9], h[10], -1, i]); // lifted
+			else phits.push([h[0], h[2], h[3], -1, i]);
 		}
 		phits.sort(function(a,b) {
 					   if (a[0] != b[0]) return a[0] < b[0]? -1 : 1;
@@ -539,9 +539,12 @@ function bwa_genalt(args)
 				end = end > phits[i][2]? end : phits[i][2];
 			}
 		}
+		var reported_groupid = null;
+		for (var i = 0; i < phits.length; ++i)
+			if (phits[i][4] == 0) reported_groupid = phits[i][3];
 		var n_group0 = 0; // #hits overlapping the reported hit
 		for (var i = 0; i < phits.length; ++i)
-			if (phits[i][3] == phits[0][3])
+			if (phits[i][3] == phits[reported_groupid][3])
 				++n_group0;
 		if (n_group0 == 1) { // then keep the reported alignment and mapQ
 			//print(line);
@@ -551,21 +554,24 @@ function bwa_genalt(args)
 		// re-estimate mapQ
 		var group_max = [];
 		for (var i = 0; i < phits.length; ++i)
-			if (group_max[phits[i][3]] == null || group_max[phits[i][3]][0] < hits[i][6])
-				group_max[phits[i][3]] = [hits[i][6], phits[i][3]];
+			if (group_max[phits[i][3]] == null || group_max[phits[i][3]][0] < hits[phits[i][4]][6])
+				group_max[phits[i][3]] = [hits[phits[i][4]][6], phits[i][3]];
 		if (group_max.length > 1)
 			group_max.sort(function(x,y) {return y[0]-x[0]});
 		var mapQ;
-		if (group_max[0][1] == phits[0][3]) { // the best hit is the hit reported in SAM
+		if (group_max[0][1] == reported_groupid) { // the best hit is the hit reported in SAM
 			mapQ = group_max.length == 1? 60 : 6 * (group_max[0][0] - group_max[1][0]);
 		} else mapQ = 0;
 		mapQ = mapQ < 60? mapQ : 60;
 		var ori_mapQ = parseInt(t[4]);
 		mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
 
+		// print
 		t[4] = mapQ;
 		print(t.join("\t"));
-		print("*", mapQ);
+		for (var i = 0; i < phits.length; ++i) {
+		}
+		print("*", mapQ, ori_mapQ);
 		for (var i = 0; i < hits.length; ++i)
 			print(hits[i]);
 	}
