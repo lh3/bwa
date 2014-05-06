@@ -3,6 +3,10 @@
  *                                                               *
  *   Source code: https://github.com/attractivechaos/k8          *
  *   Binary: http://sourceforge.net/projects/lh3/files/k8/       *
+ *                                                               *
+ * Data file used for generating GRCh38 ALT alignments:          *
+ *                                                               *
+ *   http://sourceforge.net/projects/bio-bwa/files/              *
  *****************************************************************/
 
 /******************
