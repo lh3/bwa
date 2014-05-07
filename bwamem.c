@@ -196,12 +196,12 @@ int mem_chain_weight(const mem_chain_t *c)
 		else if (s->qbeg + s->len > end) w += s->qbeg + s->len - end;
 		end = end > s->qbeg + s->len? end : s->qbeg + s->len;
 	}
-	tmp = w;
+	tmp = w; w = 0;
 	for (j = 0, end = 0; j < c->n; ++j) {
 		const mem_seed_t *s = &c->seeds[j];
 		if (s->rbeg >= end) w += s->len;
 		else if (s->rbeg + s->len > end) w += s->rbeg + s->len - end;
-		end = end > s->qbeg + s->len? end : s->qbeg + s->len;
+		end = end > s->rbeg + s->len? end : s->rbeg + s->len;
 	}
 	w = w < tmp? w : tmp;
 	return w < 1<<30? w : (1<<30)-1;
