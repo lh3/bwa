@@ -65,7 +65,7 @@ typedef struct {
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
 	int seedlen0;   // length of the starting seed
 	int n_comp;     // number of sub-alignments chained together
-	int frac_rep;
+	float frac_rep;
 	uint64_t hash;
 } mem_alnreg_t;
 
