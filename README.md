@@ -57,7 +57,39 @@ in forums such as [BioStar][8] and [SEQanswers][9].
 Please note that the last reference is a preprint hosted at [arXiv.org][13]. I
 do not have plan to submit it to a peer-reviewed journal in the near future.
 
+###Frequently asked questions (FAQs)
 
+####How to map sequences to GRCh38 with ALT contigs?
+
+BWA-backtrack and BWA-MEM partially support mapping to a reference containing
+ALT contigs that represent alternative alleles highly divergent from the
+reference genome. 
+
+	# download the K8 executable required by bwa-helper.js
+	wget http://sourceforge.net/projects/lh3/files/k8/k8-0.2.1.tar.bz2/download
+	tar -jxf k8-0.2.1.tar.bz2
+
+	# download the ALT-to-GRCh38 alignment in the SAM format
+	wget http://sourceforge.net/projects/bio-bwa/files/hs38.alt.sam.gz/download
+
+	# download the GRCh38 sequences with ALT contigs
+	wget ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
+
+	# index and mapping
+	bwa index -p hs38a GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
+	bwa mem -h50 hs38a reads.fq | ./k8-linux bwa-helper.js genalt hs38.alt.sam.gz > out.sam
+
+Here, option `-h50` asks bwa-mem to output multiple hits in the XA tag if the
+read has 50 or fewer hits. For each SAM line containing the XA tag,
+`bwa-helper.js genalt` decodes the alignments in the XA tag, groups hits lifted
+to the same chromosomal region, adjusts mapping quality and outputs all the
+hits overlapping the reported hit. A read may be mapped to both the primary
+assembly and one or more ALT contigs all with high mapping quality.
+
+Note that this procedure assumes reads are single-end and may miss hits to
+highly repetitive regions as these hits will not be reported with option
+`-h50`. `bwa-helper.js` is a prototype implementation not recommended for
+production uses.
 
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
 [2]: https://github.com/lh3/bwa
@@ -74,3 +106,4 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 [13]: http://arxiv.org/
 [14]: http://zlib.net/
 [15]: https://github.com/lh3/bwa/tree/mem
+[16]: ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/
