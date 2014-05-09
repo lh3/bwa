@@ -133,25 +133,6 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 		for (i = 0; i < a->mem1.n; ++i)
 			if ((a->mem1.a[i].info>>32) - (uint32_t)a->mem1.a[i].info >= opt->min_seed_len)
 				kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
-/*
-		{ // third pass:
-			int max_len = 0, max_i = -1;
-			for (i = 0; i < a->mem1.n; ++i) {
-				bwtintv_t *q = &a->mem1.a[i];
-				int start = q->info>>32, end = (int32_t)q->info;
-				if (end - start > max_len)
-					max_len = end - start, max_i = i;
-			}
-			if (max_i >= 0 && max_len > .9 * (end - start) && max_len >= split_len) {
-				bwtintv_t t = a->mem1.a[max_i];
-				int start = t.info>>32, end = (int32_t)t.info;
-				bwt_smem1(bwt, len, seq, (start + end)>>1, t.x[2]+1, &a->mem1, a->tmpv);
-				for (i = 0; i < a->mem1.n; ++i)
-					if ((a->mem1.a[i].info>>32) - (uint32_t)a->mem1.a[i].info >= opt->min_seed_len)
-						kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
-			}
-		}
-*/
 	}
 	// sort
 	ks_introsort(mem_intv, a->mem.n, a->mem.a);
