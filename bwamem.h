@@ -42,6 +42,7 @@ typedef struct {
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float drop_ratio;       // drop a chain if its seed coverage is below drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	float XA_drop_ratio;    // when counting hits for the XA tag, ignore alignments with score < XA_drop_ratio * max_score; only effective for the XA tag
 	float mask_level_redun;
 	float mapQ_coef_len;
 	int mapQ_coef_fac;

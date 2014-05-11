@@ -115,7 +115,7 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	cnt = calloc(a->n, sizeof(int));
 	for (i = 0, tot = 0; i < a->n; ++i) {
 		int j = a->a[i].secondary;
-		if (j >= 0 && a->a[i].score >= a->a[j].score * opt->drop_ratio)
+		if (j >= 0 && a->a[i].score >= a->a[j].score * opt->XA_drop_ratio)
 			++cnt[j], ++tot;
 	}
 	if (tot == 0) goto end_gen_alt;
@@ -123,7 +123,7 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	for (i = 0; i < a->n; ++i) {
 		mem_aln_t t;
 		int j = a->a[i].secondary;
-		if (j < 0 || a->a[i].score < a->a[j].score * opt->drop_ratio) continue; // we don't process the primary alignments as they will be converted to SAM later
+		if (j < 0 || a->a[i].score < a->a[j].score * opt->XA_drop_ratio) continue; // we don't process the primary alignments as they will be converted to SAM later
 		if (cnt[j] > opt->max_hits) continue;
 		t = mem_reg2aln(opt, bns, pac, l_query, query, &a->a[i]);
 		kputs(bns->anns[t.rid].name, &aln[j]);

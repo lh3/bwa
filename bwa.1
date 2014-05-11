@@ -1,4 +1,4 @@
-.TH bwa 1 "31 March 2014" "bwa-0.7.8" "Bioinformatics tools"
+.TH bwa 1 "11 May 2014" "bwa-0.7.9" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -248,6 +248,11 @@ Don't output alignment with score lower than
 .IR INT .
 This option affects output and occasionally SAM flag 2. [30]
 .TP
+.BI -h \ INT
+If a query has not more than
+.I INT
+hits with score higher than 80% of the best hit, output them all in the XA tag [5]
+.TP
 .B -a
 Output all found alignments for single-end or unpaired paired-end reads. These
 alignments will be flagged as secondary alignments.
@@ -257,6 +262,11 @@ Append append FASTA/Q comment to SAM output. This option can be used to
 transfer read meta information (e.g. barcode) to the SAM output. Note that the
 FASTA/Q comment (the string after a space in the header line) must conform the SAM
 spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
+.TP
+.B -Y
+Use soft clipping CIGAR operation for supplementary alignments. By default, BWA-MEM
+uses soft clipping for the primary alignment and hard clipping for
+supplementary alignments.
 .TP
 .B -M
 Mark shorter split hits as secondary (for Picard compatibility).

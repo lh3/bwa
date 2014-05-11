@@ -64,6 +64,7 @@ mem_opt_t *mem_opt_init()
 	o->max_ins = 10000;
 	o->mask_level = 0.50;
 	o->drop_ratio = 0.50;
+	o->XA_drop_ratio = 0.80;
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;

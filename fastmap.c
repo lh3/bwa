@@ -159,6 +159,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -h INT        if #hits < INT, output all in the XA tag [%d]\n", opt->max_hits);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
 		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");

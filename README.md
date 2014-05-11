@@ -14,7 +14,7 @@ BWA-backtrack, BWA-SW and BWA-MEM. The first algorithm is designed for Illumina
 sequence reads up to 100bp, while the rest two for longer sequences ranged from
 70bp to 1Mbp. BWA-MEM and BWA-SW share similar features such as the support of
 long reads and chimeric alignment, but BWA-MEM, which is the latest, is
-generally recommended for high-quality queries as it is faster and more
+generally recommended as it is faster and more
 accurate. BWA-MEM also has better performance than BWA-backtrack for 70-100bp
 Illumina reads.
 
@@ -59,6 +59,38 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 
 ###Frequently asked questions (FAQs)
 
+####What types of data does BWA work with?
+
+BWA works with a variety types of DNA sequence data, though the optimal
+algorithm and setting may vary. The following list gives the recommended
+settings:
+
+* Illumina/454/IonTorrent single-end reads longer than ~70bp or assembly
+  contigs up to a few megabases:
+
+		bwa mem ref.fa reads.fq > aln.sam
+
+* Illumina/454/IonTorrent paired-end reads longer than ~70bp:
+
+		bwa mem ref.fa read1.fq read2.fq > aln-pe.sam
+
+* PacBio subreads to a reference genome:
+
+		bwa mem -x pacbio ref.fa reads.fq > aln.sam
+
+* PacBio subreads to themselves (the output is not SAM):
+
+		bwa mem -x pbread reads.fq reads.fq > overlap.pas
+
+* Illumina single-end reads no longer than ~70bp:
+
+		bwa aln ref.fa reads.fq > reads.sai; bwa samse ref.fa reads.sai reads.fq > aln-se.sam
+
+* Illumina paired-end reads no longer than ~70bp:
+
+		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
+		bwa samse ref.fa reads.sai reads.fq > aln-pe.sam
+
 ####How to map sequences to GRCh38 with ALT contigs?
 
 BWA-backtrack and BWA-MEM partially support mapping to a reference containing
@@ -90,6 +122,8 @@ Note that this procedure assumes reads are single-end and may miss hits to
 highly repetitive regions as these hits will not be reported with option
 `-h50`. `bwa-helper.js` is a prototype implementation not recommended for
 production uses.
+
+
 
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
 [2]: https://github.com/lh3/bwa
