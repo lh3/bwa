@@ -91,6 +91,10 @@ settings:
 		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
 		bwa samse ref.fa reads.sai reads.fq > aln-pe.sam
 
+####Why does a read appear multiple times in the output SAM?
+
+BWA-SW and BWA-MEM perform local alignments.
+
 ####How to map sequences to GRCh38 with ALT contigs?
 
 BWA-backtrack and BWA-MEM partially support mapping to a reference containing
