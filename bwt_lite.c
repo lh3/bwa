@@ -7,7 +7,7 @@
 #  include "malloc_wrap.h"
 #endif
 
-int is_sa(const uint8_t *T, uint32_t *SA, int n);
+int is_sa(const uint8_t *T, int *SA, int n);
 int is_bwt(uint8_t *T, int n);
 
 bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq)

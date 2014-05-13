@@ -93,7 +93,7 @@ settings:
 
 ####Why does a read appear multiple times in the output SAM?
 
-BWA-SW and BWA-MEM perform local alignments.
+BWA-SW and BWA-MEM perform local alignments. 
 
 ####How to map sequences to GRCh38 with ALT contigs?
 
