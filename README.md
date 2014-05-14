@@ -1,4 +1,4 @@
-###Getting started
+##Getting started
 
 	git clone https://github.com/lh3/bwa.git
 	cd bwa; make
@@ -6,7 +6,7 @@
 	./bwa mem ref.fa read-se.fq.gz | gzip -3 > aln-se.sam.gz
 	./bwa mem ref.fa read1.fq read2.fq | gzip -3 > aln-pe.sam.gz
 
-###Introduction
+##Introduction
 
 BWA is a software package for mapping DNA sequences against a large reference
 genome, such as the human genome. It consists of three algorithms:
@@ -22,7 +22,7 @@ reference genome (the **index** command). Alignment algorithms are invoked with
 different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 **bwasw** for BWA-SW and **mem** for the BWA-MEM algorithm.
 
-###Availability
+##Availability
 
 BWA is released under [GPLv3][1]. The latest souce code is [freely
 available at github][2]. Released packages can [be downloaded][3] at
@@ -30,7 +30,7 @@ SourceForge. After you acquire the source code, simply use `make` to compile
 and copy the single executable `bwa` to the destination you want. The only
 dependency required to build BWA is [zlib][14].
 
-###Seeking helps
+##Seeking helps
 
 The detailed usage is described in the man page available together with the
 source code. You can use `man ./bwa.1` to view the man page in a terminal. The
@@ -39,7 +39,7 @@ have questions about BWA, you may [sign up the mailing list][6] and then send
 the questions to [bio-bwa-help@sourceforge.net][7]. You may also ask questions
 in forums such as [BioStar][8] and [SEQanswers][9].
 
-###Citing BWA
+##Citing BWA
 
 * Li H. and Durbin R. (2009) Fast and accurate short read alignment with
  Burrows-Wheeler transform. *Bioinformatics*, **25**, 1754-1760. [PMID:
@@ -56,7 +56,7 @@ in forums such as [BioStar][8] and [SEQanswers][9].
 Please note that the last reference is a preprint hosted at [arXiv.org][13]. I
 do not have plan to submit it to a peer-reviewed journal in the near future.
 
-###Frequently asked questions (FAQs)
+##Frequently asked questions (FAQs)
 
 1. [What types of data does BWA work with?](#type)
 2. [Why does a read appear multiple times in the output SAM?](#multihit)
