@@ -62,10 +62,10 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 2. [Why does a read appear multiple times in the output SAM?](#multihit)
 3. [Does BWA work on reference sequences longer than 4GB in total?](#4gb)
 4. [Why can one read in a pair has high mapping quality but the other has zero?](#pe0)
-5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](endref)
+5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](#endref)
 6. [How to map sequences to GRCh38 with ALT contigs?](#h38)
 
-####<a href="type"></a>1. What types of data does BWA work with?
+####<a name="type"></a>1. What types of data does BWA work with?
 
 BWA works with a variety types of DNA sequence data, though the optimal
 algorithm and setting may vary. The following list gives the recommended
@@ -103,7 +103,7 @@ errors given longer query sequences as the chance of missing all seeds is small.
 As is shown above, with non-default settings, BWA-MEM works with PacBio subreads
 with a sequencing error rate as high as ~15%.
 
-####<a href="multihit"></a>2. Why does a read appear multiple times in the output SAM?
+####<a name="multihit"></a>2. Why does a read appear multiple times in the output SAM?
 
 BWA-SW and BWA-MEM perform local alignments. If there is a translocation, a gene
 fusion or a long deletion, a read bridging the break point may have two hits,
@@ -111,18 +111,18 @@ occupying two lines in the SAM output. With the default setting of BWA-MEM, one
 and only one line is primary and is soft clipped; other lines are tagged with
 0x800 SAM flag (supplementary alignment) and are hard clipped.
 
-####<a href="4gb"></a>3. Does BWA work on reference sequences longer than 4GB in total?
+####<a name="4gb"></a>3. Does BWA work on reference sequences longer than 4GB in total?
 
 Yes. Since 0.6.x, all BWA algorithms work with a genome with total length over
 4GB. However, individual chromosome should not be longer than 2GB.
 
-####<a href="pe0"></a>4. Why can one read in a pair has high mapping quality but the other has zero?
+####<a name="pe0"></a>4. Why can one read in a pair has high mapping quality but the other has zero?
 
 This is correct. Mapping quality is assigned for individual read, not for a read
 pair. It is possible that one read can be mapped unambiguously, but its mate
 falls in a tandem repeat and thus its accurate position cannot be determined.
 
-####<a href="endref"></a>5. How can a BWA-backtrack alignment stands out of the end of a chromosome?
+####<a name="endref"></a>5. How can a BWA-backtrack alignment stands out of the end of a chromosome?
 
 Internally BWA concatenates all reference sequences into one long sequence. A
 read may be mapped to the junction of two adjacent reference sequences. In this
@@ -130,7 +130,7 @@ case, BWA-backtrack will flag the read as unmapped (0x4), but you will see
 position, CIGAR and all the tags. A similar issue may occur to BWA-SW alignment
 as well. BWA-MEM does not have this problem.
 
-####<a href="h38"></a>6. How to map sequences to GRCh38 with ALT contigs?
+####<a name="h38"></a>6. How to map sequences to GRCh38 with ALT contigs?
 
 BWA-backtrack and BWA-MEM partially support mapping to a reference containing
 ALT contigs that represent alternative alleles highly divergent from the
