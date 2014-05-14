@@ -8,15 +8,14 @@
 
 ###Introduction
 
-BWA is a software package for mapping low-divergent sequences against a large
-reference genome, such as the human genome. It consists of three algorithms:
+BWA is a software package for mapping DNA sequences against a large reference
+genome, such as the human genome. It consists of three algorithms:
 BWA-backtrack, BWA-SW and BWA-MEM. The first algorithm is designed for Illumina
 sequence reads up to 100bp, while the rest two for longer sequences ranged from
-70bp to 1Mbp. BWA-MEM and BWA-SW share similar features such as the support of
-long reads and chimeric alignment, but BWA-MEM, which is the latest, is
-generally recommended as it is faster and more
-accurate. BWA-MEM also has better performance than BWA-backtrack for 70-100bp
-Illumina reads.
+70bp to a few megabases. BWA-MEM and BWA-SW share similar features such as the
+support of long reads and chimeric alignment, but BWA-MEM, which is the latest,
+is generally recommended as it is faster and more accurate. BWA-MEM also has
+better performance than BWA-backtrack for 70-100bp Illumina reads.
 
 For all the algorithms, BWA first needs to construct the FM-index for the
 reference genome (the **index** command). Alignment algorithms are invoked with
@@ -26,10 +25,10 @@ different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 ###Availability
 
 BWA is released under [GPLv3][1]. The latest souce code is [freely
-available][2] at github. Released packages can [be downloaded][3] at
+available at github][2]. Released packages can [be downloaded][3] at
 SourceForge. After you acquire the source code, simply use `make` to compile
 and copy the single executable `bwa` to the destination you want. The only
-dependency of BWA is [zlib][14].
+dependency required to build BWA is [zlib][14].
 
 ###Seeking helps
 
@@ -59,20 +58,36 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 
 ###Frequently asked questions (FAQs)
 
-####What types of data does BWA work with?
+1. [What types of data does BWA work with?](#type)
+2. [Why does a read appear multiple times in the output SAM?](#multihit)
+3. [Does BWA work on reference sequences longer than 4GB in total?](#4gb)
+4. [Why can one read in a pair has high mapping quality but the other has zero?](#pe0)
+5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](endref)
+6. [How to map sequences to GRCh38 with ALT contigs?](#h38)
+
+####<a href="type"></a>1. What types of data does BWA work with?
 
 BWA works with a variety types of DNA sequence data, though the optimal
 algorithm and setting may vary. The following list gives the recommended
 settings:
 
 * Illumina/454/IonTorrent single-end reads longer than ~70bp or assembly
-  contigs up to a few megabases:
+  contigs up to a few megabases mapped to a close related reference genome:
 
 		bwa mem ref.fa reads.fq > aln.sam
+
+* Illumina single-end reads no longer than ~70bp:
+
+		bwa aln ref.fa reads.fq > reads.sai; bwa samse ref.fa reads.sai reads.fq > aln-se.sam
 
 * Illumina/454/IonTorrent paired-end reads longer than ~70bp:
 
 		bwa mem ref.fa read1.fq read2.fq > aln-pe.sam
+
+* Illumina paired-end reads no longer than ~70bp:
+
+		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
+		bwa samse ref.fa reads.sai reads.fq > aln-pe.sam
 
 * PacBio subreads to a reference genome:
 
@@ -82,24 +97,44 @@ settings:
 
 		bwa mem -x pbread reads.fq reads.fq > overlap.pas
 
-* Illumina single-end reads no longer than ~70bp:
+BWA-MEM is recommended for query sequences longer than ~70bp for a variety of
+error rates (or sequence divergence). Generally, BWA-MEM is more tolerant with
+errors given longer query sequences as the chance of missing all seeds is small.
+As is shown above, with non-default settings, BWA-MEM works with PacBio subreads
+with a sequencing error rate as high as ~15%.
 
-		bwa aln ref.fa reads.fq > reads.sai; bwa samse ref.fa reads.sai reads.fq > aln-se.sam
+####<a href="multihit"></a>2. Why does a read appear multiple times in the output SAM?
 
-* Illumina paired-end reads no longer than ~70bp:
+BWA-SW and BWA-MEM perform local alignments. If there is a translocation, a gene
+fusion or a long deletion, a read bridging the break point may have two hits,
+occupying two lines in the SAM output. With the default setting of BWA-MEM, one
+and only one line is primary and is soft clipped; other lines are tagged with
+0x800 SAM flag (supplementary alignment) and are hard clipped.
 
-		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
-		bwa samse ref.fa reads.sai reads.fq > aln-pe.sam
+####<a href="4gb"></a>3. Does BWA work on reference sequences longer than 4GB in total?
 
-####Why does a read appear multiple times in the output SAM?
+Yes. Since 0.6.x, all BWA algorithms work with a genome with total length over
+4GB. However, individual chromosome should not be longer than 2GB.
 
-BWA-SW and BWA-MEM perform local alignments. 
+####<a href="pe0"></a>4. Why can one read in a pair has high mapping quality but the other has zero?
 
-####How to map sequences to GRCh38 with ALT contigs?
+This is correct. Mapping quality is assigned for individual read, not for a read
+pair. It is possible that one read can be mapped unambiguously, but its mate
+falls in a tandem repeat and thus its accurate position cannot be determined.
+
+####<a href="endref"></a>5. How can a BWA-backtrack alignment stands out of the end of a chromosome?
+
+Internally BWA concatenates all reference sequences into one long sequence. A
+read may be mapped to the junction of two adjacent reference sequences. In this
+case, BWA-backtrack will flag the read as unmapped (0x4), but you will see
+position, CIGAR and all the tags. A similar issue may occur to BWA-SW alignment
+as well. BWA-MEM does not have this problem.
+
+####<a href="h38"></a>6. How to map sequences to GRCh38 with ALT contigs?
 
 BWA-backtrack and BWA-MEM partially support mapping to a reference containing
 ALT contigs that represent alternative alleles highly divergent from the
-reference genome. 
+reference genome.
 
 	# download the K8 executable required by bwa-helper.js
 	wget http://sourceforge.net/projects/lh3/files/k8/k8-0.2.1.tar.bz2/download
