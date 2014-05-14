@@ -1,3 +1,52 @@
+Release 0.7.9 (11 May, 2014)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This release brings several major changes to BWA-MEM. Notably, BWA-MEM
+now formally supports PacBio reads. It generally runs faster at a minor cost of
+accuracy. The speedup is more significant when GRCh38 is in use. More
+specifically:
+
+ * Support PacBio subreads to reference alignment. Although older BWA-MEM works
+   with PacBio data in principle, the resultant alignments are frequently
+   fragmented. In this release, we fine tuned existing methods and introduced
+   new heuristics to improve PacBio alignment. These changes are not used by
+   default. Users need to add option "-x pacbio" to enable the feature.
+
+ * Support PacBio subread-to-subread alignment. The feature is enabled with
+   option "-x pbread". In this mode, the output only gives the overlapping
+   region between a pair of reads without detailed alignment.
+
+ * Output alternative hits in the XA tag if there are not so many such hits.
+   This feature is originally implemented in BWA-backtrack.
+
+ * EXPERIMENTAL feature to support mapping to ALT contigs in GRCh38. We prodive
+   a script to postprocess hits in the XA tag to adjust the mapping quality and
+   generate new primary alignments to all overlapping ALT contigs. We would NOT
+   recommended this feature for production uses.
+
+ * Improved alignments to many short reference sequences. Older BWA-MEM may
+   generate an alignment bridging two or more adjacent reference sequences.
+   Such alignments are split at a later step as postprocessing. This approach
+   is complex and does not always work. This release forbids these alignments
+   from the very beginning. BWA-MEM should not produce an alignment bridging
+   two or more reference sequences any more.
+
+ * Reduced the maximum seed occurrence from 10000 to 500. Reduced the maximum
+   number of Smith-Waterman mate rescue from 100 to 50. Added a heuristic to
+   lower the mapping quality if a read contains seeds with excessive
+   occurrences. These changes make BWA-MEM XXX faster for mapping short reads
+   to GRCh37 and XXX faster to GRCh38.
+
+ * Added an option "-Y" to use soft clipping for supplementary alignments.
+
+ * Bugfix: incomplete alignment extension in corner cases.
+
+ * Bugfix: integer overflow when aligning low query sequences.
+
+(0.7.9: 11 May 2014, r777)
+
+
+
 Release 0.7.8 (31 March, 2014)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

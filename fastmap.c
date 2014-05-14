@@ -148,7 +148,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -L INT[,INT]  penalty for 5'- and 3'-end clipping [%d,%d]\n", opt->pen_clip5, opt->pen_clip3);
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
 		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
-		fprintf(stderr, "                     pacbio: -k17 -W40 -c1000 -r10 -A2 -B5 -O2 -E1 -L0\n");
+		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A2 -B5 -O2 -E1 -L0\n");
 		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A2 -B5 -O2 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
@@ -156,9 +156,10 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
 		fprintf(stderr, "       -T INT        minimum score to output [%d]\n", opt->T);
-		fprintf(stderr, "       -h INT        if #hits < INT, output all in the XA tag [%d]\n", opt->max_hits);
+		fprintf(stderr, "       -h INT        if there are <INT hits with score >80%% of the max score, output all in XA [%d]\n", opt->max_hits);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
 		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
@@ -180,11 +181,11 @@ int main_mem(int argc, char *argv[])
 			if (!opt0.o_ins) opt->o_ins = 2;
 			if (!opt0.e_ins) opt->e_ins = 1;
 			if (!opt0.b) opt->b = 5;
-			if (!opt0.max_occ) opt->max_occ = 1000;
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
 			if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
 			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
 				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
+				if (!opt0.max_occ) opt->max_occ = 1000;
 				if (!opt0.min_seed_len) opt->min_seed_len = 13;
 				if (!opt0.max_chain_extend) opt->max_chain_extend = 25;
 				if (opt0.drop_ratio == 0.) opt->drop_ratio = .001;

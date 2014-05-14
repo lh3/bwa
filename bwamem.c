@@ -64,6 +64,7 @@ mem_opt_t *mem_opt_init()
 	o->max_ins = 10000;
 	o->mask_level = 0.50;
 	o->drop_ratio = 0.50;
+	o->XA_drop_ratio = 0.80;
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
@@ -972,7 +973,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
-		*q = mem_reg2aln2(opt, bns, pac, s->l_seq, s->seq, p, s->name);
+		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
 		assert(q->rid >= 0); // this should not happen with the new code
 		q->XA = XA? XA[k] : 0;
 		q->flag |= extra_flag; // flag secondary
@@ -1037,7 +1038,7 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	return regs;
 }
 
-mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar, const char *name)
+mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
 {
 	mem_aln_t a;
 	int i, w2, tmp, qb, qe, NM, score, is_rev, last_sc = -(1<<30), l_MD;
@@ -1106,11 +1107,6 @@ mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t 
 	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
 	free(query);
 	return a;
-}
-
-mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const char *query_, const mem_alnreg_t *ar)
-{
-	return mem_reg2aln2(opt, bns, pac, l_query, query_, ar, 0);
 }
 
 typedef struct {
