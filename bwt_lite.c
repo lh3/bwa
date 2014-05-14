@@ -20,7 +20,7 @@ bwtl_t *bwtl_seq2bwtl(int len, const uint8_t *seq)
 	{ // calculate b->bwt
 		uint8_t *s;
 		b->sa = (uint32_t*)calloc(len + 1, 4);
-		is_sa(seq, b->sa, len);
+		is_sa(seq, (int*)b->sa, len);
 		s = (uint8_t*)calloc(len + 1, 1);
 		for (i = 0; i <= len; ++i) {
 			if (b->sa[i] == 0) b->primary = i;
