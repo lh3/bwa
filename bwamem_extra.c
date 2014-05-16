@@ -68,13 +68,13 @@ const bwtintv_v *smem_next(smem_i *itr)
 
 mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq_)
 { // the difference from mem_align1_core() is that this routine: 1) calls mem_mark_primary_se(); 2) does not modify the input sequence
-	extern mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq);
+	extern mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq, void *buf);
 	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id);
 	mem_alnreg_v ar;
 	char *seq;
 	seq = malloc(l_seq);
 	memcpy(seq, seq_, l_seq); // makes a copy of seq_
-	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq);
+	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq, 0);
 	mem_mark_primary_se(opt, ar.n, ar.a, lrand48());
 	free(seq);
 	return ar;
