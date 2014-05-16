@@ -335,8 +335,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// free XA
 		for (i = 0; i < 2; ++i) {
 			if (XA[i]) {
-				for (j = 0; j < a[i].n; ++j)
-					free(XA[i][j]);
+				for (j = 0; j < a[i].n; ++j) free(XA[i][j]);
 				free(XA[i]);
 			}
 		}

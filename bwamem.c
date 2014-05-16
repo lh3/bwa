@@ -992,14 +992,14 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 	} else {
 		for (k = 0; k < aa.n; ++k)
 			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m, opt->flag&MEM_F_SOFTCLIP);
-		for (k = 0; k < aa.n; ++k) {
-			free(aa.a[k].cigar);
-			free(aa.a[k].XA);
-		}
+		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
 		free(aa.a);
 	}
 	s->sam = str.s;
-	if (XA) free(XA);
+	if (XA) {
+		for (k = 0; k < a->n; ++k) free(XA[k]);
+		free(XA);
+	}
 }
 
 mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int l_seq, char *seq, void *buf)
