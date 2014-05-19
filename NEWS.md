@@ -55,7 +55,7 @@ Changes in BWA-backtrack:
  * Bugfix: a segmentation fault when an alignment stands out of the end of the
    last chromosome.
 
-(0.7.9: 19 May 2014, r782)
+(0.7.9: 19 May 2014, r783)
 
 
 
