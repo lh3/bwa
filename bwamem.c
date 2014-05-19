@@ -358,7 +358,6 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a)
 		if (c->kept == 0) free(c->seeds);
 		else a[k++] = a[i];
 	}
-	n_chn = k;
 	return k;
 }
 
