@@ -1,5 +1,6 @@
 #ifndef BAMLITE_H_
 #define BAMLITE_H_
+#ifndef USE_HTSLIB
 
 #include <stdint.h>
 #include <zlib.h>
@@ -111,4 +112,5 @@ extern "C" {
 }
 #endif
 
+#endif
 #endif
