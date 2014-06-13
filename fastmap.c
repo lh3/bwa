@@ -277,7 +277,8 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -V            output the reference FASTA header in the XR tag\n");
 		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
-		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
+		fprintf(stderr, "       -M            mark shorter split hits of a chimeric alignment as\n");
+		fprintf(stderr, "                     'secondary' instead of 'supplementary'\n\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
