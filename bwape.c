@@ -59,6 +59,7 @@ pe_opt_t *bwa_init_pe_opt()
 	po->max_occ = 100000;
 	po->n_multi = 3;
 	po->N_multi = 10;
+	po->clip_score = 3;
 	po->type = BWA_PET_STD;
 	po->is_sw = 1;
 	po->ap_prior = 1e-5;
@@ -573,7 +574,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 					if (__cigar_op(cigar[k][0]) == 3) clip += __cigar_len(cigar[k][0]);
 					if (__cigar_op(cigar[k][n_cigar[k]-1]) == 3) clip += __cigar_len(cigar[k][n_cigar[k]-1]);
 					s_old = (int)((p[k]->n_mm * 9 + p[k]->n_gapo * 13 + p[k]->n_gape * 2) / 3. * 8. + .499);
-					s_new = (int)(((cnt[k]>>16) * 9 + (cnt[k]>>8&0xff) * 13 + (cnt[k]&0xff) * 2 + clip * 3) / 3. * 8. + .499);
+					s_new = (int)(((cnt[k]>>16) * 9 + (cnt[k]>>8&0xff) * 13 + (cnt[k]&0xff) * 2 + clip * popt->clip_score) / 3. * 8. + .499);
 					s_old += -4.343 * log(ii->ap_prior / bns->l_pac);
 					s_new += (int)(-4.343 * log(.5 * erfc(M_SQRT1_2 * 1.5) + .499)); // assume the mapped isize is 1.5\sigma
 					if (s_old < s_new) { // reject SW alignment
@@ -736,7 +737,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	char *prefix, *rg_line = 0;
 
 	popt = bwa_init_pe_opt();
-	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
+	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:C:")) >= 0) {
 		switch (c) {
 		case 'r':
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
@@ -747,6 +748,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		case 'P': popt->is_preload = 1; break;
 		case 'n': popt->n_multi = atoi(optarg); break;
 		case 'N': popt->N_multi = atoi(optarg); break;
+		case 'C': popt->clip_score = atoi(optarg); break;
 		case 'c': popt->ap_prior = atof(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'A': popt->force_isize = 1; break;
@@ -766,6 +768,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "         -r STR   read group header line such as `@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "         -P       preload index into memory (for base-space reads only)\n");
 		fprintf(stderr, "         -s       disable Smith-Waterman for the unmapped mate\n");
+		fprintf(stderr, "         -C INT   clipping penalty when doing SW for unmapped mate (%d)\n",popt->clip_score);
 		fprintf(stderr, "         -A       disable insert size estimate (force -s)\n\n");
 		fprintf(stderr, "Notes: 1. For SOLiD reads, <in1.fq> corresponds R3 reads and <in2.fq> to F3.\n");
 		fprintf(stderr, "       2. For reads shorter than 30bp, applying a smaller -o is recommended to\n");
