@@ -383,6 +383,7 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	double r;
 	if (bns == 0 || pac == 0 || query == 0) return 0;
 	assert(a->rid == b->rid && a->rb <= b->rb);
+	if (a->rb < bns->l_pac && b->rb >= bns->l_pac) return 0; // on different strands
 	if (a->qb >= b->qb || a->qe >= b->qe || a->re >= b->re) return 0; // not colinear
 	w = (a->re - b->rb) - (a->qe - b->qb); // required bandwidth
 	w = w > 0? w : -w; // l = abs(l)
