@@ -1,3 +1,22 @@
+Release 0.7.10 (13 July, 2014)
+------------------------------
+
+Notable changes to BWA-MEM:
+
+ * Fixed a segmentation fault due to an alignment bridging the forward-reverse
+   boundary. This is a bug.
+
+ * Use the PacBio heuristic to map contigs to the reference genome. The old
+   heuristic evaluates the necessity of full extension for each chain. This may
+   not work in long low-complexity regions. The PacBio heuristic performs
+   SSE2-SW around each short seed. It works better. Note that the heuristic is
+   only applied to long query sequences. For Illumina reads, the output is
+   identical to the previous version.
+
+(0.7.10: 13 July 2014, r789)
+
+
+
 Release 0.7.9 (19 May, 2014)
 ----------------------------
 
