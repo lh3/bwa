@@ -95,7 +95,8 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 	kstring_t str;
 	const char *int2base;
 
-	*n_cigar = 0; *NM = -1;
+	if (n_cigar) *n_cigar = 0;
+	if (NM) *NM = -1;
 	if (l_query <= 0 || rb >= re || (rb < l_pac && re > l_pac)) return 0; // reject if negative length or bridging the forward and reverse strand
 	rseq = bns_get_seq(l_pac, pac, rb, re, &rlen);
 	if (re - rb != rlen) goto ret_gen_cigar; // possible if out of range
@@ -106,10 +107,12 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 			tmp = rseq[i], rseq[i] = rseq[rlen - 1 - i], rseq[rlen - 1 - i] = tmp;
 	}
 	if (l_query == re - rb && w_ == 0) { // no gap; no need to do DP
-		// FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
-		cigar = malloc(4);
-		cigar[0] = l_query<<4 | 0;
-		*n_cigar = 1;
+		// UPDATE: we come to this block now... FIXME: due to an issue in mem_reg2aln(), we never come to this block. This does not affect accuracy, but it hurts performance.
+		if (n_cigar) {
+			cigar = malloc(4);
+			cigar[0] = l_query<<4 | 0;
+			*n_cigar = 1;
+		}
 		for (i = 0, *score = 0; i < l_query; ++i)
 			*score += mat[rseq[i]*5 + query[i]];
 	} else {
@@ -131,7 +134,7 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 		}
 		*score = ksw_global2(l_query, query, rlen, rseq, 5, mat, o_del, e_del, o_ins, e_ins, w, n_cigar, &cigar);
 	}
-	{// compute NM and MD
+	if (NM && n_cigar) {// compute NM and MD
 		int k, x, y, u, n_mm = 0, n_gap = 0;
 		str.l = str.m = *n_cigar * 4; str.s = (char*)cigar; // append MD to CIGAR
 		int2base = rb < l_pac? "ACGTN" : "TGCAN";
@@ -174,56 +177,6 @@ ret_gen_cigar:
 uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM)
 {
 	return bwa_gen_cigar2(mat, q, r, q, r, w_, l_pac, pac, l_query, query, rb, re, score, n_cigar, NM);
-}
-
-int bwa_fix_xref2(const int8_t mat[25], int o_del, int e_del, int o_ins, int e_ins, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
-{
-	int is_rev;
-	int64_t cb, ce, fm;
-	bntann1_t *ra;
-	if (*rb < bns->l_pac && *re > bns->l_pac) { // cross the for-rev boundary; actually with BWA-MEM, we should never come to here
-		*qb = *qe = *rb = *re = -1;
-		return -1; // unable to fix
-	}
-	fm = bns_depos(bns, (*rb + *re) >> 1, &is_rev); // coordinate of the middle point on the forward strand
-	ra = &bns->anns[bns_pos2rid(bns, fm)]; // annotation of chr corresponding to the middle point
-	cb = is_rev? (bns->l_pac<<1) - (ra->offset + ra->len) : ra->offset; // chr start on the mapping strand
-	ce = cb + ra->len; // chr end
-	if (cb > *rb || ce < *re) { // fix is needed
-		int i, score, n_cigar, y, NM;
-		uint32_t *cigar;
-		int64_t x;
-		cb = cb > *rb? cb : *rb;
-		ce = ce < *re? ce : *re;
-		cigar = bwa_gen_cigar2(mat, o_del, e_del, o_ins, e_ins, w, bns->l_pac, pac, *qe - *qb, query + *qb, *rb, *re, &score, &n_cigar, &NM);
-		for (i = 0, x = *rb, y = *qb; i < n_cigar; ++i) {
-			int op = cigar[i]&0xf, len = cigar[i]>>4;
-			if (op == 0) {
-				if (x <= cb && cb < x + len)
-					*qb = y + (cb - x), *rb = cb;
-				if (x < ce && ce <= x + len) {
-					*qe = y + (ce - x), *re = ce;
-					break;
-				} else x += len, y += len;
-			} else if (op == 1) {
-				y += len;
-			} else if (op == 2) {
-				if (x <= cb && cb < x + len)
-					*qb = y, *rb = x + len;
-				if (x < ce && ce <= x + len) {
-					*qe = y, *re = x;
-					break;
-				} else x += len;
-			} else abort(); // should not be here
-		}
-		free(cigar);
-	}
-	return (*qb == *qe || *rb == *re)? -2 : 0;
-}
-
-int bwa_fix_xref(const int8_t mat[25], int q, int r, int w, const bntseq_t *bns, const uint8_t *pac, uint8_t *query, int *qb, int *qe, int64_t *rb, int64_t *re)
-{
-	return bwa_fix_xref2(mat, q, r, q, r, w, bns, pac, query, qb, qe, rb, re);
 }
 
 /*********************

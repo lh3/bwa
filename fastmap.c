@@ -18,6 +18,22 @@ extern unsigned char nst_nt4_table[256];
 void *kopen(const char *fn, int *_fd);
 int kclose(void *a);
 
+static void update_a(mem_opt_t *opt, const mem_opt_t *opt0)
+{
+	if (opt0->a) { // matching score is changed
+		if (!opt0->b) opt->b *= opt->a;
+		if (!opt0->T) opt->T *= opt->a;
+		if (!opt0->o_del) opt->o_del *= opt->a;
+		if (!opt0->e_del) opt->e_del *= opt->a;
+		if (!opt0->o_ins) opt->o_ins *= opt->a;
+		if (!opt0->e_ins) opt->e_ins *= opt->a;
+		if (!opt0->zdrop) opt->zdrop *= opt->a;
+		if (!opt0->pen_clip5) opt->pen_clip5 *= opt->a;
+		if (!opt0->pen_clip3) opt->pen_clip3 *= opt->a;
+		if (!opt0->pen_unpaired) opt->pen_unpaired *= opt->a;
+	}
+}
+
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt, opt0;
@@ -27,6 +43,7 @@ int main_mem(int argc, char *argv[])
 	bseq1_t *seqs;
 	bwaidx_t *idx;
 	char *p, *rg_line = 0;
+	const char *mode = 0;
 	void *ko = 0, *ko2 = 0;
 	int64_t n_processed = 0;
 	mem_pestat_t pes[4], *pes0 = 0;
@@ -35,11 +52,11 @@ int main_mem(int argc, char *argv[])
 	for (i = 0; i < 4; ++i) pes[i].failed = 1;
 
 	opt = mem_opt_init();
-	opt0.a = opt0.b = opt0.o_del = opt0.e_del = opt0.o_ins = opt0.e_ins = opt0.pen_unpaired = -1;
-	opt0.pen_clip5 = opt0.pen_clip3 = opt0.zdrop = opt0.T = -1;
-	while ((c = getopt(argc, argv, "epaMCSPHk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:")) >= 0) {
-		if (c == 'k') opt->min_seed_len = atoi(optarg);
-		else if (c == 'w') opt->w = atoi(optarg);
+	memset(&opt0, 0, sizeof(mem_opt_t));
+	while ((c = getopt(argc, argv, "epaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:")) >= 0) {
+		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
+		else if (c == 'x') mode = optarg;
+		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
 		else if (c == 'A') opt->a = atoi(optarg), opt0.a = 1;
 		else if (c == 'B') opt->b = atoi(optarg), opt0.b = 1;
 		else if (c == 'T') opt->T = atoi(optarg), opt0.T = 1;
@@ -50,16 +67,23 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'p') opt->flag |= MEM_F_PE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
-		else if (c == 'e') opt->flag |= MEM_F_NO_EXACT;
-		else if (c == 'c') opt->max_occ = atoi(optarg);
+		else if (c == 'e') opt->flag |= MEM_F_SELF_OVLP;
+		else if (c == 'F') opt->flag |= MEM_F_ALN_REG;
+		else if (c == 'Y') opt->flag |= MEM_F_SOFTCLIP;
+		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
-		else if (c == 'r') opt->split_factor = atof(optarg);
-		else if (c == 'D') opt->chain_drop_ratio = atof(optarg);
-		else if (c == 'm') opt->max_matesw = atoi(optarg);
-		else if (c == 's') opt->split_width = atoi(optarg);
+		else if (c == 'r') opt->split_factor = atof(optarg), opt0.split_factor = 1.;
+		else if (c == 'D') opt->drop_ratio = atof(optarg), opt0.drop_ratio = 1.;
+		else if (c == 'm') opt->max_matesw = atoi(optarg), opt0.max_matesw = 1;
+		else if (c == 'h') opt->max_hits = atoi(optarg), opt0.max_hits = 1;
+		else if (c == 's') opt->split_width = atoi(optarg), opt0.split_width = 1;
+		else if (c == 'G') opt->max_chain_gap = atoi(optarg), opt0.max_chain_gap = 1;
+		else if (c == 'N') opt->max_chain_extend = atoi(optarg), opt0.max_chain_extend = 1;
+		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'Q') {
+			opt0.mapQ_coef_len = 1;
 			opt->mapQ_coef_len = atoi(optarg);
 			opt->mapQ_coef_fac = opt->mapQ_coef_len > 0? log(opt->mapQ_coef_len) : 0;
 		} else if (c == 'O') {
@@ -111,49 +135,73 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -r FLOAT      look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
 //		fprintf(stderr, "       -s INT        look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT        skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
-		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->chain_drop_ratio);
+		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->drop_ratio);
+		fprintf(stderr, "       -W INT        discard a chain if seeded bases shorter than INT [0]\n");
 		fprintf(stderr, "       -m INT        perform at most INT rounds of mate rescues for each read [%d]\n", opt->max_matesw);
 		fprintf(stderr, "       -S            skip mate rescue\n");
 		fprintf(stderr, "       -P            skip pairing; mate rescue performed unless -S also in use\n");
 		fprintf(stderr, "       -e            discard full-length exact matches\n");
-		fprintf(stderr, "       -A INT        score for a sequence match, which scales [-TdBOELU] unless overridden [%d]\n", opt->a);
+		fprintf(stderr, "       -A INT        score for a sequence match, which scales options -TdBOELU unless overridden [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT        penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT[,INT]  gap open penalties for deletions and insertions [%d,%d]\n", opt->o_del, opt->o_ins);
 		fprintf(stderr, "       -E INT[,INT]  gap extension penalty; a gap of size k cost '{-O} + {-E}*k' [%d,%d]\n", opt->e_del, opt->e_ins);
 		fprintf(stderr, "       -L INT[,INT]  penalty for 5'- and 3'-end clipping [%d,%d]\n", opt->pen_clip5, opt->pen_clip3);
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
+		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
+		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A2 -B5 -O2 -E1 -L0\n");
+		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A2 -B5 -O2 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
 		fprintf(stderr, "       -T INT        minimum score to output [%d]\n", opt->T);
+		fprintf(stderr, "       -h INT        if there are <INT hits with score >80%% of the max score, output all in XA [%d]\n", opt->max_hits);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
 		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
 		fprintf(stderr, "                     FR orientation only. [inferred]\n");
-		fprintf(stderr, "\nNote: Please read the man page for detailed description of the command line and options.\n");
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Note: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
 		free(opt);
 		return 1;
 	}
 
-	if (opt0.a == 1) { // matching score is changed
-		if (opt0.b != 1) opt->b *= opt->a;
-		if (opt0.T != 1) opt->T *= opt->a;
-		if (opt0.o_del != 1) opt->o_del *= opt->a;
-		if (opt0.e_del != 1) opt->e_del *= opt->a;
-		if (opt0.o_ins != 1) opt->o_ins *= opt->a;
-		if (opt0.e_ins != 1) opt->e_ins *= opt->a;
-		if (opt0.zdrop != 1) opt->zdrop *= opt->a;
-		if (opt0.pen_clip5 != 1) opt->pen_clip5 *= opt->a;
-		if (opt0.pen_clip3 != 1) opt->pen_clip3 *= opt->a;
-		if (opt0.pen_unpaired != 1) opt->pen_unpaired *= opt->a;
-	}
+	if (mode) {
+		if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
+			if (!opt0.a) opt->a = 2, opt0.a = 1;
+			update_a(opt, &opt0);
+			if (!opt0.o_del) opt->o_del = 2;
+			if (!opt0.e_del) opt->e_del = 1;
+			if (!opt0.o_ins) opt->o_ins = 2;
+			if (!opt0.e_ins) opt->e_ins = 1;
+			if (!opt0.b) opt->b = 5;
+			if (opt0.split_factor == 0.) opt->split_factor = 10.;
+			if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
+			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
+				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
+				if (!opt0.max_occ) opt->max_occ = 1000;
+				if (!opt0.min_seed_len) opt->min_seed_len = 13;
+				if (!opt0.max_chain_extend) opt->max_chain_extend = 25;
+				if (opt0.drop_ratio == 0.) opt->drop_ratio = .001;
+			} else {
+				if (!opt0.min_seed_len) opt->min_seed_len = 17;
+				if (!opt0.pen_clip5) opt->pen_clip5 = 0;
+				if (!opt0.pen_clip3) opt->pen_clip3 = 0;
+			}
+		} else {
+			fprintf(stderr, "[E::%s] unknown read type '%s'\n", __func__, mode);
+			return 1; // FIXME memory leak
+		}
+	} else update_a(opt, &opt0);
+//	if (opt->T < opt->min_HSP_score) opt->T = opt->min_HSP_score; // TODO: tie ->T to MEM_HSP_COEF
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
+
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
 
 	ko = kopen(argv[optind + 1], &fd);
@@ -178,7 +226,8 @@ int main_mem(int argc, char *argv[])
 			opt->flag |= MEM_F_PE;
 		}
 	}
-	bwa_print_sam_hdr(idx->bns, rg_line);
+	if (!(opt->flag & MEM_F_ALN_REG))
+		bwa_print_sam_hdr(idx->bns, rg_line);
 	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
@@ -196,7 +245,7 @@ int main_mem(int argc, char *argv[])
 		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
-			err_fputs(seqs[i].sam, stdout);
+			if (seqs[i].sam) err_fputs(seqs[i].sam, stdout);
 			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
 		}
 		free(seqs);
@@ -215,7 +264,7 @@ int main_mem(int argc, char *argv[])
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, split_width = 0;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -223,9 +272,8 @@ int main_fastmap(int argc, char *argv[])
 	const bwtintv_v *a;
 	bwaidx_t *idx;
 
-	while ((c = getopt(argc, argv, "w:l:ps:")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:p")) >= 0) {
 		switch (c) {
-			case 's': split_width = atoi(optarg); break;
 			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
@@ -233,7 +281,7 @@ int main_fastmap(int argc, char *argv[])
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-p] [-s splitWidth=%d] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", split_width, min_len, min_iwidth);
+		fprintf(stderr, "Usage: bwa fastmap [-p] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
 		return 1;
 	}
 
@@ -250,7 +298,7 @@ int main_fastmap(int argc, char *argv[])
 		for (i = 0; i < seq->seq.l; ++i)
 			seq->seq.s[i] = nst_nt4_table[(int)seq->seq.s[i]];
 		smem_set_query(itr, seq->seq.l, (uint8_t*)seq->seq.s);
-		while ((a = smem_next(itr, min_len<<1, split_width)) != 0) {
+		while ((a = smem_next(itr)) != 0) {
 			for (i = 0; i < a->n; ++i) {
 				bwtintv_t *p = &a->a[i];
 				if ((uint32_t)p->info - (p->info>>32) < min_len) continue;

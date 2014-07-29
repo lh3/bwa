@@ -1,5 +1,85 @@
+Release 0.7.10 (13 July, 2014)
+------------------------------
+
+Notable changes to BWA-MEM:
+
+ * Fixed a segmentation fault due to an alignment bridging the forward-reverse
+   boundary. This is a bug.
+
+ * Use the PacBio heuristic to map contigs to the reference genome. The old
+   heuristic evaluates the necessity of full extension for each chain. This may
+   not work in long low-complexity regions. The PacBio heuristic performs
+   SSE2-SW around each short seed. It works better. Note that the heuristic is
+   only applied to long query sequences. For Illumina reads, the output is
+   identical to the previous version.
+
+(0.7.10: 13 July 2014, r789)
+
+
+
+Release 0.7.9 (19 May, 2014)
+----------------------------
+
+This release brings several major changes to BWA-MEM. Notably, BWA-MEM now
+formally supports PacBio read-to-reference alignment and experimentally supports
+PacBio read-to-read alignment. BWA-MEM also runs faster at a minor cost of
+accuracy. The speedup is more significant when GRCh38 is in use. More
+specifically:
+
+ * Support PacBio subread-to-reference alignment. Although older BWA-MEM works
+   with PacBio data in principle, the resultant alignments are frequently
+   fragmented. In this release, we fine tuned existing methods and introduced
+   new heuristics to improve PacBio alignment. These changes are not used by
+   default. Users need to add option "-x pacbio" to enable the feature.
+
+ * Support PacBio subread-to-subread alignment (EXPERIMENTAL). This feature is
+   enabled with option "-x pbread". In this mode, the output only gives the
+   overlapping region between a pair of reads without detailed alignment.
+
+ * Output alternative hits in the XA tag if there are not so many of them. This
+   is a BWA-backtrack feature.
+
+ * Support mapping to ALT contigs in GRCh38 (EXPERIMENTAL). We provide a script
+   to postprocess hits in the XA tag to adjust the mapping quality and generate
+   new primary alignments to all overlapping ALT contigs. We would *NOT*
+   recommend this feature for production uses.
+
+ * Improved alignments to many short reference sequences. Older BWA-MEM may
+   generate an alignment bridging two or more adjacent reference sequences.
+   Such alignments are split at a later step as postprocessing. This approach
+   is complex and does not always work. This release forbids these alignments
+   from the very beginning. BWA-MEM should not produce an alignment bridging
+   two or more reference sequences any more.
+
+ * Reduced the maximum seed occurrence from 10000 to 500. Reduced the maximum
+   rounds of Smith-Waterman mate rescue from 100 to 50. Added a heuristic to
+   lower the mapping quality if a read contains seeds with excessive
+   occurrences. These changes make BWA-MEM faster at a minor cost of accuracy
+   in highly repetitive regions.
+
+ * Added an option "-Y" to use soft clipping for supplementary alignments.
+
+ * Bugfix: incomplete alignment extension in corner cases.
+
+ * Bugfix: integer overflow when aligning long query sequences.
+
+ * Bugfix: chain score is not computed correctly (almost no practical effect)
+
+ * General code cleanup
+
+ * Added FAQs to README
+
+Changes in BWA-backtrack:
+
+ * Bugfix: a segmentation fault when an alignment stands out of the end of the
+   last chromosome.
+
+(0.7.9: 19 May 2014, r783)
+
+
+
 Release 0.7.8 (31 March, 2014)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------
 
 Changes in BWA-MEM:
 
@@ -7,7 +87,7 @@ Changes in BWA-MEM:
    Short-read alignment is not affected.
 
  * Bugfix: unnecessarily large bandwidth used during global alignment,
-   which reduces the mapping speed by ~5% for short reads. Results are not
+   which reduces the mapping speed by -5% for short reads. Results are not
    affected.
 
  * Bugfix: when the matching score is not one, paired-end mapping quality is
@@ -31,14 +111,14 @@ With the default setting, 0.7.8 and 0.7.7 gave identical output on one million
 
 
 Release 0.7.7 (25 Feburary, 2014)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 This release fixes incorrect MD tags in the BWA-MEM output.
 
 A note about short-read mapping to GRCh38. The new human reference genome
 GRCh38 contains 60Mbp program generated alpha repeat arrays, some of which are
 hard masked as they cannot be localized. These highly repetitive arrays make
-BWA-MEM ~50% slower. If you are concerned with the performance of BWA-MEM, you
+BWA-MEM -50% slower. If you are concerned with the performance of BWA-MEM, you
 may consider to use option "-c2000 -m50". On simulated data, this setting helps
 the performance at a very minor cost on accuracy. I may consider to change the
 default in future releases.
@@ -48,7 +128,7 @@ default in future releases.
 
 
 Release 0.7.6 (31 Januaray, 2014)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 Changes in BWA-MEM:
 
@@ -104,7 +184,7 @@ where BWA-SW may excel.
 
 
 Release 0.7.5a (30 May, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 Fixed a bug in BWA-backtrack which leads to off-by-one mapping errors in rare
 cases.
@@ -114,7 +194,7 @@ cases.
 
 
 Release 0.7.5 (29 May, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------
 
 Changes in all components:
 
@@ -166,7 +246,7 @@ Thank you.
 
 
 Release 0.7.4 (23 April, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------
 
 This is a bugfix release. Most of bugs are considered to be minor which only
 occur very rarely.
@@ -198,7 +278,7 @@ BWA-backtrack for short-read mapping.
 
 
 Release 0.7.3a (15 March, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------
 
 In 0.7.3, the wrong CIGAR bug was only fixed in one scenario, but not fixed
 in another corner case.
@@ -208,7 +288,7 @@ in another corner case.
 
 
 Release 0.7.3 (15 March, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------
 
 Changes to BWA-MEM:
 
@@ -224,7 +304,7 @@ Changes to BWA-MEM:
    we can see the entire picture of alignment from one SAM line. XP gives the
    position, CIGAR, NM and mapQ of each aligned subsequence of the query.
 
-BWA-MEM has been used to align ~300Gbp 100-700bp SE/PE reads. SNP/indel calling
+BWA-MEM has been used to align -300Gbp 100-700bp SE/PE reads. SNP/indel calling
 has also been evaluated on part of these data. BWA-MEM generally gives better
 pre-filtered SNP calls than BWA. No significant issues have been observed since
 0.7.2, though minor improvements or bugs (e.g. the bug fixed in this release)
@@ -239,17 +319,17 @@ In addition, more detailed description of the BWA-MEM algorithm can be found at
 
 
 Release 0.7.2 (9 March, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 Emergent bug fix: 0.7.0 and 0.7.1 give a wrong sign to TLEN. In addition,
-flagging `properly paired' also gets improved a little.
+flagging 'properly paired' also gets improved a little.
 
 (0.7.2: 9 March 2013, r351)
 
 
 
 Release 0.7.1 (8 March, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 Changes to BWA-MEM:
 
@@ -276,7 +356,7 @@ Changes to other components:
 
 An important note is that like BWA-SW, BWA-MEM may output multiple primary
 alignments for a read, which may cause problems to some tools. For aligning
-sequence reads, it is advised to use `-M' to flag extra hits as secondary. This
+sequence reads, it is advised to use '-M' to flag extra hits as secondary. This
 option is not the default because multiple primary alignments are theoretically
 possible in sequence alignment.
 
@@ -285,7 +365,7 @@ possible in sequence alignment.
 
 
 Beta Release 0.7.0 (28 Feburary, 2013)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------
 
 This release comes with a new alignment algorithm, BWA-MEM, for 70bp-1Mbp query
 sequences. BWA-MEM essentially seeds alignments with a variant of the fastmap
@@ -322,7 +402,7 @@ handy features in practical aspects:
     (bwa mem ref.fa '<bzcat r1.fq.bz2' '<bzcat r2.fq.bz2') to map bzip'd read
     files without replying on bash features.
 
- 6. BWA-MEM provides a few basic APIs for single-end mapping. The `example.c'
+ 6. BWA-MEM provides a few basic APIs for single-end mapping. The 'example.c'
     program in the source code directory implements a full single-end mapper in
     50 lines of code.
 
@@ -338,7 +418,7 @@ reads. Change of mappers will be necessary sooner or later.
 
 
 Release 0.6.2 (19 June, 2012)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 This is largely a bug-fix release. Notable changes in BWA-short and BWA-SW:
 
@@ -357,7 +437,7 @@ This is largely a bug-fix release. Notable changes in BWA-short and BWA-SW:
 
 
 Release 0.6.1 (28 November, 2011)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 Notable changes to BWA-short:
 
@@ -392,7 +472,7 @@ Changes to fastmap:
 
 
 Release 0.5.10 and 0.6.0 (12 November, 2011)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------------
 
 The 0.6.0 release comes with two major changes. Firstly, the index data
 structure has been changed to support genomes longer than 4GB. The forward and
@@ -411,7 +491,7 @@ branch unless I find critical bugs in future.
 
 Other notable changes:
 
- * Added the `fastmap' command that finds super-maximal exact matches. It does
+ * Added the 'fastmap' command that finds super-maximal exact matches. It does
    not give the final alignment, but runs much faster. It can be a building
    block for other alignment algorithms. [0.6.0 only]
 
@@ -441,13 +521,13 @@ you.
 
 
 Beta Release 0.5.9 (24 January, 2011)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------
 
 Notable changes:
 
- * Feature: barcode support via the `-B' option.
+ * Feature: barcode support via the '-B' option.
 
- * Feature: Illumina 1.3+ read format support via the `-I' option.
+ * Feature: Illumina 1.3+ read format support via the '-I' option.
 
  * Bugfix: RG tags are not attached to unmapped reads.
 
@@ -468,7 +548,7 @@ committed to this repository.
 
 
 Beta Release Candidate 0.5.9rc1 (10 December, 2010)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------------------
 
 Notable changes in bwasw:
 
@@ -500,7 +580,7 @@ happens, please report the bugs to the bio-bwa-help mailing list.
 
 
 Beta Release 0.5.8 (8 June, 2010)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 Notable changes in bwasw:
 
@@ -520,20 +600,20 @@ Notable changes in bwa-short:
  * Fixed a typo/bug in sampe which leads to unnecessarily large memory
    usage in some cases.
 
- * Further reduced the chance of reporting `weird pairing'.
+ * Further reduced the chance of reporting 'weird pairing'.
 
 (0.5.8: 8 June 2010, r1442)
 
 
 
 Beta Release 0.5.7 (1 March, 2010)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 This release only has an effect on paired-end data with fat insert-size
 distribution. Users are still recommended to update as the new release
 improves the robustness to poor data.
 
- * The fix for `weird pairing' was not working in version 0.5.6, pointed
+ * The fix for 'weird pairing' was not working in version 0.5.6, pointed
    out by Carol Scott. It should work now.
 
  * Optionally output to a normal file rather than to stdout (by Tim
@@ -544,7 +624,7 @@ improves the robustness to poor data.
 
 
 Beta Release 0.5.6 (10 Feburary, 2010)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------
 
 Notable changes in bwa-short:
 
@@ -585,7 +665,7 @@ Notable changes in bwa-short:
 
 
 Beta Release 0.5.5 (10 November, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------
 
 This is a bug fix release:
 
@@ -605,7 +685,7 @@ This is a bug fix release:
 
 
 Beta Release 0.5.4 (9 October, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 Since this version, the default seed length used in the "aln" command is
 changed to 32.
@@ -634,7 +714,7 @@ Notable changes in dBWT-SW/BWA-SW:
 
 
 Beta Release 0.5.3 (15 September, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 Fixed a critical bug in bwa-short: reads mapped to the reverse strand
 are not complemented.
@@ -644,11 +724,11 @@ are not complemented.
 
 
 Beta Release 0.5.2 (13 September, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------------
 
 Notable changes in bwa-short:
 
- * Optionally trim reads before alignment. See the manual page on `aln
+ * Optionally trim reads before alignment. See the manual page on 'aln
    -q' for detailed description.
 
  * Fixed a bug in calculating the NM tag for a gapped alignment.
@@ -668,7 +748,7 @@ Notable changes in dBWT-SW:
 
 
 Beta Release 0.5.1 (2 September, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------
 
 Notable changes in the short read alignment component:
 
@@ -692,7 +772,7 @@ Notable changes in dBWT-SW:
 
 
 Beta Release 0.5.0 (20 August, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 This release implements a novel algorithm, dBWT-SW, specifically
 designed for long reads. It is 10-50 times faster than SSAHA2, depending
@@ -724,7 +804,7 @@ Other notable changes in BWA are:
 
 
 Beta Release 0.4.9 (19 May, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 Interestingly, the integer overflow bug claimed to be fixed in 0.4.7 has
 not in fact. Now I have fixed the bug. Sorry for this and thank Quan
@@ -735,9 +815,9 @@ Long for pointing out the bug (again).
 
 
 Beta Release 0.4.8 (18 May, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
-One change to "aln -R". Now by default, if there are no more than `-R'
+One change to "aln -R". Now by default, if there are no more than '-R'
 equally best hits, bwa will search for suboptimal hits. This change
 affects the ability in finding SNPs in segmental duplications.
 
@@ -749,7 +829,7 @@ likely to cause new bugs. Hope I am right.
 
 
 Beta Release 0.4.7 (12 May, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+---------------------------------
 
 Notable changes:
 
@@ -771,12 +851,12 @@ Notable changes:
 
 
 Beta Release 0.4.6 (9 March, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 This release improves the SOLiD support. First, a script for converting
 SOLiD raw data is provided. This script is adapted from solid2fastq.pl
 in the MAQ package. Second, a nucleotide reference file can be directly
-used with `bwa index'. Third, SOLiD paired-end support is
+used with 'bwa index'. Third, SOLiD paired-end support is
 completed. Fourth, color-space reads will be converted to nucleotides
 when SAM output is generated. Color errors are corrected in this
 process. Please note that like MAQ, BWA cannot make use of the primer
@@ -790,7 +870,7 @@ little bit, although end-users may barely observe the difference.
 
 
 Beta Release 0.4.5 (18 Feburary, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------
 
 Not much happened, but I think it would be good to let the users use the
 latest version.
@@ -801,10 +881,10 @@ Notable changes (Thank Bob Handsaker for catching the two bugs):
    alignment coordinates in rare cases.
 
  * Fixed a bug in SW alignment when no residue matches. This only
-   affects the `sampe' command.
+   affects the 'sampe' command.
 
  * Robustly estimate insert size without setting the maximum on the
-   command line. Since this release `sampe -a' only has an effect if
+   command line. Since this release 'sampe -a' only has an effect if
    there are not enough good pairs to infer the insert size
    distribution.
 
@@ -817,7 +897,7 @@ Notable changes (Thank Bob Handsaker for catching the two bugs):
 
 
 Beta Release 0.4.4 (15 Feburary, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------------
 
 This is mainly a bug fix release. Notable changes are:
 
@@ -834,7 +914,7 @@ This is mainly a bug fix release. Notable changes are:
 
 
 Beta Release 0.4.3 (22 January, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 Notable changes:
 
@@ -862,7 +942,7 @@ Notable changes:
 
 
 Beta Release 0.4.2 (9 January, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 Aaron Quinlan found a bug in the indexer: the bwa indexer segfaults if
 there are no comment texts in the FASTA header. This is a critical
@@ -873,7 +953,7 @@ bug. Nothing else was changed.
 
 
 Beta Release 0.4.1 (7 January, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 I am sorry for the quick updates these days. I like to set a milestone
 for BWA and this release seems to be. For paired end reads, BWA also
@@ -886,24 +966,24 @@ maq. Benchmark is also updated accordingly.
 
 
 Beta Release 0.4.0 (6 January, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 In comparison to the release two days ago, this release is mainly tuned
 for performance with some tricks I learnt from Bowtie. However, as the
 indexing format has also been changed, I have to increase the version
 number to 0.4.0 to emphasize that *DATABASE MUST BE RE-INDEXED* with
-`bwa index'.
+'bwa index'.
 
  * Improved the speed by about 20%.
 
- * Added multi-threading to `bwa aln'.
+ * Added multi-threading to 'bwa aln'.
 
 (0.4.0: 6 January 2009, r756)
 
 
 
 Beta Release 0.3.0 (4 January, 2009)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
  * Added paired-end support by separating SA calculation and alignment
    output.
@@ -917,7 +997,7 @@ Beta Release 0.3.0 (4 January, 2009)
 
 
 Beta Release 0.2.0 (15 Augusst, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------
 
  * Take the subsequence at the 5'-end as seed. Seeding strategy greatly
    improves the speed for long reads, at the cost of missing a few true
@@ -932,7 +1012,7 @@ Beta Release 0.2.0 (15 Augusst, 2008)
 
 
 Beta Release 0.1.6 (08 Augusst, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------------
 
  * Give accurate CIGAR string.
 
@@ -943,7 +1023,7 @@ Beta Release 0.1.6 (08 Augusst, 2008)
 
 
 Beta Release 0.1.5 (27 July, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
  * Improve the speed. This version is expected to give the same results.
 
@@ -952,7 +1032,7 @@ Beta Release 0.1.5 (27 July, 2008)
 
 
 Beta Release 0.1.4 (22 July, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
  * Fixed a bug which may cause missing gapped alignments.
 
@@ -967,7 +1047,7 @@ Beta Release 0.1.4 (22 July, 2008)
 
 
 Beta Release 0.1.3 (21 July, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 Improve the speed with some tricks on retrieving occurences. The results
 should be exactly the same as that of 0.1.2.
@@ -977,7 +1057,7 @@ should be exactly the same as that of 0.1.2.
 
 
 Beta Release 0.1.2 (17 July, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+----------------------------------
 
 Support gapped alignment. Codes for ungapped alignment has been removed.
 
@@ -986,12 +1066,9 @@ Support gapped alignment. Codes for ungapped alignment has been removed.
 
 
 Beta Release 0.1.1 (03 June, 2008)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------------
 
 This is the first release of BWA, Burrows-Wheeler Alignment tool. Please
 read man page for more information about this software.
 
 (0.1.1: 03 June 2008, r349)
-
-
-

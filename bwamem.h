@@ -16,7 +16,9 @@ typedef struct __smem_i smem_i;
 #define MEM_F_ALL       0x8
 #define MEM_F_NO_MULTI  0x10
 #define MEM_F_NO_RESCUE 0x20
-#define MEM_F_NO_EXACT  0x40
+#define MEM_F_SELF_OVLP 0x40
+#define MEM_F_ALN_REG   0x80
+#define MEM_F_SOFTCLIP  0x200
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
@@ -30,6 +32,8 @@ typedef struct {
 	int T;                  // output score threshold; only affecting output
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
+	int min_chain_weight;
+	int max_chain_extend;
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
 	int split_width;        // split into a seed if its occurence is smaller than this value
 	int max_occ;            // skip a seed if its occurence is larger than this value
@@ -37,18 +41,21 @@ typedef struct {
 	int n_threads;          // number of threads
 	int chunk_size;         // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
-	float chain_drop_ratio; // drop a chain if its seed coverage is below chain_drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	float drop_ratio;       // drop a chain if its seed coverage is below drop_ratio times the seed coverage of a better chain overlapping with the small chain
+	float XA_drop_ratio;    // when counting hits for the XA tag, ignore alignments with score < XA_drop_ratio * max_score; only effective for the XA tag
 	float mask_level_redun;
 	float mapQ_coef_len;
 	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
+	int max_hits;           // if there are max_hits or fewer, output them all
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;
 
 typedef struct {
 	int64_t rb, re; // [rb,re): reference sequence in the alignment
 	int qb, qe;     // [qb,qe): query sequence in the alignment
+	int rid;        // reference seq ID
 	int score;      // best local SW score
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
@@ -57,6 +64,9 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
+	int seedlen0;   // length of the starting seed
+	int n_comp;     // number of sub-alignments chained together
+	float frac_rep;
 	uint64_t hash;
 } mem_alnreg_t;
 
@@ -75,6 +85,7 @@ typedef struct { // This struct is only used for the convenience of API.
 	uint32_t is_rev:1, mapq:8, NM:23; // is_rev: whether on the reverse strand; mapq: mapping quality; NM: edit distance
 	int n_cigar;     // number of CIGAR operations
 	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
+	char *XA;        // alternative mappings
 
 	int score, sub;
 } mem_aln_t;
@@ -86,7 +97,7 @@ extern "C" {
 	smem_i *smem_itr_init(const bwt_t *bwt);
 	void smem_itr_destroy(smem_i *itr);
 	void smem_set_query(smem_i *itr, int len, const uint8_t *query);
-	const bwtintv_v *smem_next(smem_i *itr, int split_len, int split_width);
+	const bwtintv_v *smem_next(smem_i *itr);
 
 	mem_opt_t *mem_opt_init(void);
 	void mem_fill_scmat(int a, int b, int8_t mat[25]);
@@ -145,6 +156,7 @@ extern "C" {
 	 * @return       CIGAR, strand, mapping quality and forward-strand position
 	 */
 	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar);
+	mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar, const char *name);
 
 	/**
 	 * Infer the insert size distribution from interleaved alignment regions
