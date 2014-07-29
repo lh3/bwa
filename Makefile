@@ -1,4 +1,4 @@
-CC=			gcc
+CC=			icc
 #CC=			clang --analyze
 CFLAGS=		-g -Wall -O2 -Wno-unused-function
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
@@ -8,8 +8,8 @@ LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_p
 AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o kopen.o pemerge.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
-			bwtsw2_chain.o fastmap.o bwtsw2_pair.o
-PROG=		bwa
+			bwtsw2_chain.o fastmap.o tbb_mem.o bwtsw2_pair.o
+PROG=		bwa_tbb
 INCLUDES=	
 LIBS=		-lm -lz -lpthread
 SUBDIRS=	.
@@ -19,10 +19,13 @@ SUBDIRS=	.
 .c.o:
 		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
 
+.cpp.o:
+		$(CC) -c -std=c++11 $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+
 all:$(PROG)
 
-bwa:libbwa.a $(AOBJS) main.o
-		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
+bwa_tbb:libbwa.a $(AOBJS) main.o
+		$(CC) -tbb $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
 
 bwamem-lite:libbwa.a example.o
 		$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
@@ -75,3 +78,4 @@ main.o: utils.h
 malloc_wrap.o: malloc_wrap.h
 pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
 utils.o: utils.h ksort.h malloc_wrap.h kseq.h
+tbb_mem.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
