@@ -262,7 +262,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 			s.qbeg = p->info>>32;
 			s.score= s.len = slen;
 			rid = bns_intv2rid(bns, s.rbeg, s.rbeg + s.len);
-			if (rid < 0) continue; // bridging multiple reference sequences or the forward-reverse boundary
+			if (rid < 0) continue; // bridging multiple reference sequences or the forward-reverse boundary; TODO: split the seed; don't discard it!!!
 			if (kb_size(tree)) {
 				kb_intervalp(chn, tree, &tmp, &lower, &upper); // find the closest chain
 				if (!lower || !test_and_merge(opt, l_pac, lower, &s, rid)) to_add = 1;
@@ -383,6 +383,7 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	double r;
 	if (bns == 0 || pac == 0 || query == 0) return 0;
 	assert(a->rid == b->rid && a->rb <= b->rb);
+	if (a->rb < bns->l_pac && b->rb >= bns->l_pac) return 0; // on different strands
 	if (a->qb >= b->qb || a->qe >= b->qe || a->re >= b->re) return 0; // not colinear
 	w = (a->re - b->rb) - (a->qe - b->qb); // required bandwidth
 	w = w > 0? w : -w; // l = abs(l)
@@ -507,7 +508,9 @@ void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t i
 #define MEM_SHORT_EXT 50
 #define MEM_SHORT_LEN 200
 
-#define MEM_HSP_COEF 1.1
+#define MEM_HSP_COEF 1.1f
+#define MEM_MINSC_COEF 5.5f
+#define MEM_SEEDSW_COEF 0.05f
 
 int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_seed_t *s)
 {
@@ -516,6 +519,7 @@ int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, i
 	uint8_t *rseq = 0;
 	kswr_t x;
 
+	if (s->len >= MEM_SHORT_LEN) return -1; // the seed is longer than the max-extend; no need to do SW
 	qb = s->qbeg, qe = s->qbeg + s->len;
 	rb = s->rbeg, re = s->rbeg + s->len;
 	mid = (rb + re) >> 1;
@@ -527,7 +531,7 @@ int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, i
 		if (mid < l_pac) re = l_pac;
 		else rb = l_pac;
 	}
-	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return -1;
+	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return -1; // the seed seems good enough; no need to do SW
 
 	rseq = bns_fetch_seq(bns, pac, &rb, mid, &re, &rid);
 	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, KSW_XSTART, 0);
@@ -537,14 +541,18 @@ int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, i
 
 void mem_flt_chained_seeds(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, int n_chn, mem_chain_t *a)
 {
-	int i, j, k, min_HSP_score = (int)(opt->min_chain_weight * opt->a * MEM_HSP_COEF + .499);
+	double min_l = opt->min_chain_weight? MEM_HSP_COEF * opt->min_chain_weight : MEM_MINSC_COEF * log(l_query);
+	int i, j, k, min_HSP_score = (int)(opt->a * min_l + .499);
+	if (min_l > MEM_SEEDSW_COEF * l_query) return; // don't run the following for short reads
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &a[i];
 		for (j = k = 0; j < c->n; ++j) {
 			mem_seed_t *s = &c->seeds[j];
 			s->score = mem_seed_sw(opt, bns, pac, l_query, query, s);
-			if (s->score < 0 || s->score >= min_HSP_score)
+			if (s->score < 0 || s->score >= min_HSP_score) {
+				s->score = s->score < 0? s->len * opt->a : s->score;
 				c->seeds[k++] = *s;
+			}
 		}
 		c->n = k;
 	}
@@ -553,66 +561,6 @@ void mem_flt_chained_seeds(const mem_opt_t *opt, const bntseq_t *bns, const uint
 /****************************************
  * Construct the alignment from a chain *
  ****************************************/
-
-/* mem_chain2aln() vs mem_chain2aln_short()
- *
- * mem_chain2aln() covers all the functionality of mem_chain2aln_short().
- * However, it may waste time on extracting the reference sequences given a
- * very long query. mem_chain2aln_short() is faster for very short chains in a
- * long query. It may fail when the matches are long or reach the end of the
- * query. In this case, mem_chain2aln() will be called again.
- * mem_chain2aln_short() is almost never used for short-read alignment.
- */
-
-int mem_chain2aln_short(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, const mem_chain_t *c, mem_alnreg_v *av)
-{
-	int i, qb, qe, xtra, rid;
-	int64_t rb, re, l_pac = bns->l_pac;
-	uint8_t *rseq = 0;
-	mem_alnreg_t a;
-	kswr_t x;
-
-	if (c->n == 0) return -1;
-	qb = l_query;  qe = 0;
-	rb = l_pac<<1; re = 0;
-	memset(&a, 0, sizeof(mem_alnreg_t));
-	for (i = 0; i < c->n; ++i) {
-		const mem_seed_t *s = &c->seeds[i];
-		qb = qb < s->qbeg? qb : s->qbeg;
-		qe = qe > s->qbeg + s->len? qe : s->qbeg + s->len;
-		rb = rb < s->rbeg? rb : s->rbeg;
-		re = re > s->rbeg + s->len? re : s->rbeg + s->len;
-		a.seedcov += s->len;
-	}
-	qb -= MEM_SHORT_EXT; qe += MEM_SHORT_EXT;
-	if (qb <= 10 || qe >= l_query - 10) return 1; // because ksw_align() does not support end-to-end alignment
-	rb -= MEM_SHORT_EXT; re += MEM_SHORT_EXT;
-	rb = rb > 0? rb : 0;
-	re = re < l_pac<<1? re : l_pac<<1;
-	if (rb < l_pac && l_pac < re) {
-		if (c->seeds[0].rbeg < l_pac) re = l_pac;
-		else rb = l_pac;
-	}
-	if ((re - rb) - (qe - qb) > MEM_SHORT_EXT || (qe - qb) - (re - rb) > MEM_SHORT_EXT) return 1;
-	if (qe - qb >= opt->w * 4 || re - rb >= opt->w * 4) return 1;
-	if (qe - qb >= MEM_SHORT_LEN || re - rb >= MEM_SHORT_LEN) return 1;
-
-	rseq = bns_fetch_seq(bns, pac, &rb, c->seeds[0].rbeg, &re, &rid);
-	assert(c->rid == rid);
-	xtra = KSW_XSUBO | KSW_XSTART | ((qe - qb) * opt->a < 250? KSW_XBYTE : 0) | (opt->min_seed_len * opt->a);
-	x = ksw_align2(qe - qb, (uint8_t*)query + qb, re - rb, rseq, 5, opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, xtra, 0);
-	free(rseq);
-	a.rb = rb + x.tb; a.re = rb + x.te + 1;
-	a.qb = qb + x.qb; a.qe = qb + x.qe + 1;
-	a.score = x.score;
-	a.csub = x.score2;
-	a.rid = c->rid;
-	a.frac_rep = c->frac_rep;
-	if (bwa_verbose >= 4) printf("** Attempted alignment via mem_chain2aln_short(): [%d,%d) <=> [%ld,%ld); score=%d; %d/%d\n", a.qb, a.qe, (long)a.rb, (long)a.re, x.score, a.qe-a.qb, qe-qb);
-	if (x.tb < MEM_SHORT_EXT>>1 || x.te > re - rb - (MEM_SHORT_EXT>>1)) return 1;
-	kv_push(mem_alnreg_t, *av, a);
-	return 0;
-}
 
 static inline int cal_max_gap(const mem_opt_t *opt, int qlen)
 {
@@ -1012,17 +960,14 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 
 	chn = mem_chain(opt, bwt, bns, l_seq, (uint8_t*)seq, buf);
 	chn.n = mem_chain_flt(opt, chn.n, chn.a);
-	if (opt->min_chain_weight > 0) mem_flt_chained_seeds(opt, bns, pac, l_seq, (uint8_t*)seq, chn.n, chn.a);
+	mem_flt_chained_seeds(opt, bns, pac, l_seq, (uint8_t*)seq, chn.n, chn.a);
 	if (bwa_verbose >= 4) mem_print_chain(bns, &chn);
 
 	kv_init(regs);
 	for (i = 0; i < chn.n; ++i) {
 		mem_chain_t *p = &chn.a[i];
-		int ret = 1;
 		if (bwa_verbose >= 4) err_printf("* ---> Processing chain(%d) <---\n", i);
-		if (opt->min_chain_weight == 0)
-			ret = mem_chain2aln_short(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
-		if (ret > 0) mem_chain2aln(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
+		mem_chain2aln(opt, bns, pac, l_seq, (uint8_t*)seq, p, &regs);
 		free(chn.a[i].seeds);
 	}
 	free(chn.a);
