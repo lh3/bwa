@@ -306,8 +306,8 @@ DIST_TYPE edit_dist(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen
 #endif
       alignedQLenLow = alignedQLenHigh = queryLen ;
       alignedRLenLow = alignedRLenHigh = queryLen ;
-      maxScoreLow = queryLen - hdist - hdist * 6 ;
-      maxScoreHigh = queryLen - hdist - hdist * 4 ;
+      maxScoreLow = initScore + queryLen - hdist - hdist * 6 ;
+      maxScoreHigh = initScore + queryLen - hdist - hdist * 4 ;
 
       return hdist ;
     }
