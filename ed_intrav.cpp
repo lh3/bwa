@@ -17,7 +17,6 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 #include "ed_intrav.h"
 #include "ed_fine.h"
-#include "filter.h"
 
 
 //using namespace std ;
@@ -38,6 +37,9 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #define SW_FEEDBACK 
 #endif
 
+extern "C" {
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off) ;
+}
 
 int run_ksw_extend(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
 		   int bandW, int initScore, int endBonus, int zdrop, int costMatrixRowCnt,

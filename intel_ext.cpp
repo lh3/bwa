@@ -1,5 +1,9 @@
 #include "intel_ext.h"
 
+extern "C" {
+int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
+}
+
 // Needs to be called only once per program to set up static arrays
 void init_ed_dist() ;
 
@@ -56,5 +60,19 @@ void intel_init()
 void intel_filter(uint8_t *refSeq, int refLen, uint8_t *querySeq, int queryLen, int initScore, int endBonus,
 				  int *alignedQLen, int *alignedRLen, int *score, float *confidence)
 {
+	if (queryLen < INTEL_MIN_LEN || queryLen > INTEL_MAX_LEN) {
+		*confidence = 0.0;
+		return;
+	}
 	extend_with_edit_dist(refSeq, refLen, querySeq, queryLen, initScore, endBonus, *alignedQLen, *alignedRLen, *score, *confidence);
+}
+
+int intel_extend(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off)
+{
+	if (qlen >= INTEL_MIN_LEN && qlen <= INTEL_MAX_LEN && tlen >= INTEL_MIN_LEN && tlen <= INTEL_MAX_LEN) {
+		int score, a = mat[0];
+		filter_and_extend(target, tlen, query, qlen, h0/a, !!(end_bonus > 0), zdrop/a, *qle, *tle, score);
+		*max_off = w; *gtle = *tle; *gscore = score;
+		return score * a;
+	} else return ksw_extend(qlen, query, tlen, target, m, mat, gapo, gape, w, end_bonus, zdrop, h0, qle, tle, gtle, gscore, max_off);
 }

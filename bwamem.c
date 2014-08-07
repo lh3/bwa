@@ -666,20 +666,9 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			tmp = s->rbeg - rmax[0];
 			rs = malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
-			if (opt->flag & MEM_F_FASTFLT) {
-				int alignedQLen, alignedRlen, score;
-				float confidence;
-				intel_filter(rs, tmp, qs, s->qbeg, s->len, 0, &alignedQLen, &alignedRlen, &score, &confidence);
-				if (confidence == 1.0) {
-					if (alignedQLen == tmp) {
-						a->score = a->truesc = score * opt->a;
-						a->qb = 0; a->rb = s->rbeg - alignedRlen;
-					} else if (alignedQLen == 0) {
-						a->score = a->truesc = s->len * opt->a;
-						a->qb = s->qbeg; a->rb = s->rbeg;
-					}
-					goto end_left_extend;
-				}
+			if (opt->flag & MEM_F_FASTEXT) {
+				a->score = intel_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->o_del, opt->e_del, aw[0], opt->pen_clip5, opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
+				goto end_left_extend;
 			}
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
@@ -711,19 +700,9 @@ end_left_extend:
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
 			assert(re >= 0);
-			if (opt->flag & MEM_F_FASTFLT) {
-				int alignedQLen, alignedRlen, score;
-				float confidence;
-				intel_filter(rseq + re, rmax[1] - rmax[0] - re, query + qe, l_query - qe, a->score / opt->a, 0, &alignedQLen, &alignedRlen, &score, &confidence);
-				if (confidence == 1.0) {
-					if (alignedQLen == tmp) {
-						a->score = a->truesc = score * opt->a;
-						a->qe = l_query; a->re = rmax[0] + re + alignedRlen;
-					} else if (alignedQLen == 0) {
-						a->qe = qe; a->rb = rmax[0] + re;
-					}
-					goto end_right_extend;
-				}
+			if (opt->flag & MEM_F_FASTEXT) {
+				a->score = intel_extend(l_query - qe, (uint8_t*)query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->o_del, opt->e_del, aw[1], opt->pen_clip3, opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
+				goto end_right_extend;
 			}
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;

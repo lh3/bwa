@@ -1,6 +1,7 @@
 CC=			gcc
 #CC=			clang --analyze
 CFLAGS=		-g -Wall -Wno-unused-function -O2
+CXXFLAGS=	-g -Wall -Wno-unused-variable -O3
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
@@ -20,7 +21,7 @@ SUBDIRS=	.
 		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
 
 .cpp.o:
-		$(CXX) -c $(CXXFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+		$(CXX) -c $(CXXFLAGS) $(INCLUDES) $< -o $@
 
 all:$(PROG)
 
@@ -33,11 +34,14 @@ bwamem-lite:libbwa.a example.o
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
+ed_intrav.o:ed_intrav.cpp
+		$(CXX) -c $(CXXFLAGS) $(INCLUDES) -DSW_FILTER_AND_EXTEND -o $@ $<
+
 clean:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a
 
 depend:
-	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c )
+	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c *.cpp )
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
@@ -46,7 +50,7 @@ bamlite.o: bamlite.h malloc_wrap.h
 bntseq.o: bntseq.h utils.h kseq.h malloc_wrap.h
 bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h kstring.h malloc_wrap.h kseq.h
 bwamem.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h ksw.h kvec.h
-bwamem.o: ksort.h utils.h kbtree.h
+bwamem.o: ksort.h utils.h intel_ext.h kbtree.h
 bwamem_extra.o: bwa.h bntseq.h bwt.h bwamem.h kstring.h malloc_wrap.h
 bwamem_pair.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h kvec.h
 bwamem_pair.o: utils.h ksw.h
@@ -71,6 +75,7 @@ bwtsw2_pair.o: utils.h bwt.h bntseq.h bwtsw2.h bwt_lite.h kstring.h
 bwtsw2_pair.o: malloc_wrap.h ksw.h
 example.o: bwamem.h bwt.h bntseq.h bwa.h kseq.h malloc_wrap.h
 fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
+fastmap.o: intel_ext.h
 is.o: malloc_wrap.h
 kopen.o: malloc_wrap.h
 kstring.o: kstring.h malloc_wrap.h
@@ -78,5 +83,7 @@ ksw.o: ksw.h malloc_wrap.h
 main.o: kstring.h malloc_wrap.h utils.h
 malloc_wrap.o: malloc_wrap.h
 pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
-test-extend.o: ksw.h
 utils.o: utils.h ksort.h malloc_wrap.h kseq.h
+ed_intrav.o: ed_intrav64.h ed_intrav64x2.h ed_intrav.h ed_intravED.h
+ed_intrav.o: ed_fine.h
+intel_ext.o: intel_ext.h
