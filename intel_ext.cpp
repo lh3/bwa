@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "intel_ext.h"
 
 extern "C" {
@@ -72,7 +73,11 @@ int intel_extend(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, con
 	if (qlen >= INTEL_MIN_LEN && qlen <= INTEL_MAX_LEN && tlen >= INTEL_MIN_LEN && tlen <= INTEL_MAX_LEN) {
 		int score, a = mat[0];
 		filter_and_extend(target, tlen, query, qlen, h0/a, !!(end_bonus > 0), zdrop/a, *qle, *tle, score);
-		*max_off = w; *gtle = *tle; *gscore = score;
-		return score * a;
+		*max_off = 0; *gtle = *tle; *gscore = score;
+		score *= a;
+		int score2 = score, qle2 = *qle, tle2 = *tle;
+		score = ksw_extend(qlen, query, tlen, target, m, mat, gapo, gape, w, end_bonus, zdrop, h0, qle, tle, gtle, gscore, max_off);
+		fprintf(stderr, "[%d,%d,%d] %d:%d; %d:%d; %d:%d\n", qlen, tlen, h0, score, score2, *qle, qle2, *tle, tle2);
+		return score;
 	} else return ksw_extend(qlen, query, tlen, target, m, mat, gapo, gape, w, end_bonus, zdrop, h0, qle, tle, gtle, gscore, max_off);
 }

@@ -682,6 +682,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				if (bwa_verbose >= 4) { printf("*** Left extension: prev_score=%d; score=%d; bandwidth=%d; max_off_diagonal_dist=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout); }
 				if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 			}
+
+end_left_extend:
 			// check whether we prefer to reach the end of the query
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip5) { // local extension
 				a->qb = s->qbeg - qle, a->rb = s->rbeg - tle;
@@ -690,8 +692,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				a->qb = 0, a->rb = s->rbeg - gtle;
 				a->truesc = gscore;
 			}
-
-end_left_extend:
 			free(qs); free(rs);
 		} else a->score = a->truesc = s->len * opt->a, a->qb = 0, a->rb = s->rbeg;
 
@@ -716,6 +716,8 @@ end_left_extend:
 				if (bwa_verbose >= 4) { printf("*** Right extension: prev_score=%d; score=%d; bandwidth=%d; max_off_diagonal_dist=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout); }
 				if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 			}
+
+end_right_extend:
 			// similar to the above
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip3) { // local extension
 				a->qe = qe + qle, a->re = rmax[0] + re + tle;
@@ -726,8 +728,6 @@ end_left_extend:
 			}
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d; {left,right}_bandwidth={%d,%d}\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score, aw[0], aw[1]);
-
-end_right_extend:
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
