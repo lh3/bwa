@@ -468,6 +468,7 @@ function bwa_genalt(args)
 		h.rev = (s[1].charAt(0) == '-');
 		h.cigar = s[2];
 		h.NM = parseInt(s[3]);
+		h.hard = false;
 		var m, l_ins, n_ins, l_del, n_del, l_match, l_skip, l_clip;
 		l_ins = l_del = n_ins = n_del = l_match = l_skip = l_clip = 0;
 		while ((m = re_cigar.exec(h.cigar)) != null) {
@@ -476,7 +477,10 @@ function bwa_genalt(args)
 			else if (m[2] == 'D') ++n_del, l_del += l;
 			else if (m[2] == 'I') ++n_ins, l_ins += l;
 			else if (m[2] == 'N') l_skip += l;
-			else if (m[2] == 'H' || m[2] == 'S') l_clip += l;
+			else if (m[2] == 'H' || m[2] == 'S') {
+				l_clip += l;
+				if (m[2] == 'H') h.hard = true;
+			}
 		}
 		h.end = h.start + l_match + l_del + l_skip;
 		h.NM = h.NM > l_del + l_ins? h.NM : l_del + l_ins;
@@ -541,7 +545,12 @@ function bwa_genalt(args)
 		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
 		var t = line.split("\t");
 		var flag = parseInt(t[1]);
-		hits.push(parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt));
+		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
+		if (h.hard) { // the following does not work with hard clipped SEQ
+			print(line);
+			continue;
+		}
+		hits.push(h);
 		for (var i = 0; i < XA_strs.length; ++i) // hits in the XA tag
 			if (XA_strs[i] != '') // as the last symbol in an XA tag is ";", the last split is an empty string
 				hits.push(parse_hit(XA_strs[i].split(","), opt));
