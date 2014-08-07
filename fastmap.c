@@ -11,6 +11,7 @@
 #include "utils.h"
 #include "kseq.h"
 #include "utils.h"
+#include "intel_ext.h"
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
@@ -51,6 +52,7 @@ int main_mem(int argc, char *argv[])
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
 	for (i = 0; i < 4; ++i) pes[i].failed = 1;
 
+	intel_init();
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
 	while ((c = getopt(argc, argv, "epaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:")) >= 0) {
