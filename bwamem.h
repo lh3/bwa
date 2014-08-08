@@ -128,7 +128,8 @@ extern "C" {
 	 *               corresponding to each FF, FR, RF and RR orientation. See mem_pestat() for more info.
 	 * @param h      the BAM header, NULL if not using HTSLIB
 	 */
-	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0, bam_hdr_t *h);
+	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0);
+	void mem_process_seqs2(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0, bam_hdr_t *h);
 
 	/**
 	 * Find the aligned regions for one query sequence
@@ -160,7 +161,6 @@ extern "C" {
 	 * @return       CIGAR, strand, mapping quality and forward-strand position
 	 */
 	mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar);
-	mem_aln_t mem_reg2aln2(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_seq, const char *seq, const mem_alnreg_t *ar, const char *name);
 
 	/**
 	 * Infer the insert size distribution from interleaved alignment regions

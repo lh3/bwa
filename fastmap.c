@@ -127,10 +127,8 @@ int main_mem(int argc, char *argv[])
 #ifdef USE_HTSLIB
 		} else if (c == 'o') { 
 			opt->bam_output = atoi(optarg); 
-		}
-#else
-		}
 #endif
+		}
 		else return 1;
 	}
 	if (opt->n_threads < 1) opt->n_threads = 1;
@@ -280,7 +278,7 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0, h);
+		mem_process_seqs2(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0, h);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
 #ifdef USE_HTSLIB
