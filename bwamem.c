@@ -16,6 +16,8 @@
 #include "ksort.h"
 #include "utils.h"
 
+#include "intel_ext.h"
+
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
 #endif
@@ -727,6 +729,10 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			tmp = s->rbeg - rmax[0];
 			rs = malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
+			if (opt->flag & MEM_F_FASTEXT) {
+				a->score = intel_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->o_del, opt->e_del, aw[0], opt->pen_clip5, opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
+				goto end_left_extend;
+			}
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
 				aw[0] = opt->w << i;
@@ -739,6 +745,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				if (bwa_verbose >= 4) { printf("*** Left extension: prev_score=%d; score=%d; bandwidth=%d; max_off_diagonal_dist=%d\n", prev, a->score, aw[0], max_off[0]); fflush(stdout); }
 				if (a->score == prev || max_off[0] < (aw[0]>>1) + (aw[0]>>2)) break;
 			}
+
+end_left_extend:
 			// check whether we prefer to reach the end of the query
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip5) { // local extension
 				a->qb = s->qbeg - qle, a->rb = s->rbeg - tle;
@@ -755,6 +763,10 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			qe = s->qbeg + s->len;
 			re = s->rbeg + s->len - rmax[0];
 			assert(re >= 0);
+			if (opt->flag & MEM_F_FASTEXT) {
+				a->score = intel_extend(l_query - qe, (uint8_t*)query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->o_del, opt->e_del, aw[1], opt->pen_clip3, opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
+				goto end_right_extend;
+			}
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
 				aw[1] = opt->w << i;
@@ -767,6 +779,8 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 				if (bwa_verbose >= 4) { printf("*** Right extension: prev_score=%d; score=%d; bandwidth=%d; max_off_diagonal_dist=%d\n", prev, a->score, aw[1], max_off[1]); fflush(stdout); }
 				if (a->score == prev || max_off[1] < (aw[1]>>1) + (aw[1]>>2)) break;
 			}
+
+end_right_extend:
 			// similar to the above
 			if (gscore <= 0 || gscore <= a->score - opt->pen_clip3) { // local extension
 				a->qe = qe + qle, a->re = rmax[0] + re + tle;
@@ -777,7 +791,6 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			}
 		} else a->qe = l_query, a->re = s->rbeg + s->len;
 		if (bwa_verbose >= 4) printf("*** Added alignment region: [%d,%d) <=> [%ld,%ld); score=%d; {left,right}_bandwidth={%d,%d}\n", a->qb, a->qe, (long)a->rb, (long)a->re, a->score, aw[0], aw[1]);
-
 		// compute seedcov
 		for (i = 0, a->seedcov = 0; i < c->n; ++i) {
 			const mem_seed_t *t = &c->seeds[i];
