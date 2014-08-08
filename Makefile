@@ -2,8 +2,10 @@ CC=			gcc
 #CC=			clang --analyze
 CFLAGS=		-g -Wall -Wno-unused-function -O2
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
+# set to 1 if you wish to have bam support, type 'make clean; make all'
+USE_HTSLIB=0
 AR=			ar
-DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
+DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC) 
 LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o bwamem_extra.o malloc_wrap.o
 AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			is.o bwtindex.o bwape.o kopen.o pemerge.o \
@@ -11,21 +13,33 @@ AOBJS=		QSufSort.o bwt_gen.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			bwtsw2_chain.o fastmap.o bwtsw2_pair.o
 PROG=		bwa
 INCLUDES=	
-LIBS=		-lm -lz -lpthread
+LIBS=		-lm -lz -lpthread 
 SUBDIRS=	.
 
 .SUFFIXES:.c .o .cc
 
 .c.o:
-		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+ifeq ($(USE_HTSLIB),1)
+	$(CC) -c $(CFLAGS) $(DFLAGS) -DUSE_HTSLIB $(INCLUDES) -I ../htslib $< -o $@
+else
+	$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+endif
 
 all:$(PROG)
 
 bwa:libbwa.a $(AOBJS) main.o
-		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
+ifeq ($(USE_HTSLIB),1)
+	$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ ../htslib/libhts.a -L. -L../htslib -lbwa $(LIBS)
+else
+	$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
+endif
 
 bwamem-lite:libbwa.a example.o
-		$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
+ifeq ($(USE_HTSLIB),1)
+	$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ ../htslib/libhts.a -L. -L../htslib -lbwa $(LIBS)
+else
+	$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
+endif
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)

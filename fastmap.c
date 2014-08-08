@@ -53,7 +53,11 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
+#ifdef USE_HTSLIB
+	while ((c = getopt(argc, argv, "epaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:o:")) >= 0) {
+#else
 	while ((c = getopt(argc, argv, "epaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:")) >= 0) {
+#endif
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -120,7 +124,13 @@ int main_mem(int argc, char *argv[])
 			if (bwa_verbose >= 3)
 				fprintf(stderr, "[M::%s] mean insert size: %.3f, stddev: %.3f, max: %d, min: %d\n",
 						__func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);
+#ifdef USE_HTSLIB
+		} else if (c == 'o') { 
+			opt->bam_output = atoi(optarg); 
 		}
+#else
+		}
+#endif
 		else return 1;
 	}
 	if (opt->n_threads < 1) opt->n_threads = 1;
@@ -165,6 +175,9 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
 		fprintf(stderr, "                     FR orientation only. [inferred]\n");
+#ifdef USE_HTSLIB
+		fprintf(stderr, "       -o INT        0 - BAM (compressed), 1 - BAM (uncompressed), 2 - SAM [%d]\n", opt->bam_output);
+#endif
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Note: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
@@ -226,8 +239,33 @@ int main_mem(int argc, char *argv[])
 			opt->flag |= MEM_F_PE;
 		}
 	}
-	if (!(opt->flag & MEM_F_ALN_REG))
+	bam_hdr_t *h = NULL; // TODO
+#ifdef USE_HTSLIB
+	samFile *out = NULL;
+	char *modes[] = {"wb", "wbu", "w"};
+	switch (opt->bam_output) {
+		case 0: // BAM compressed
+		case 1: // BAM uncompressed
+		case 2: // SAM
+			out = sam_open("-", modes[opt->bam_output]); 
+			break;
+		default:
+			fprintf(stderr, "Error: output format was out of range [%d]\n", opt->bam_output);
+			return 1;
+	}
+#endif
+	if (!(opt->flag & MEM_F_ALN_REG)) {
+#ifdef USE_HTSLIB
+		kstring_t str;
+		str.l = str.m = 0; str.s = 0;
+		bwa_format_sam_hdr(idx->bns, rg_line, &str);
+		h = sam_hdr_parse(str.l, str.s);
+		h->l_text = str.l; h->text = str.s;
+		sam_hdr_write(out, h);
+#else
 		bwa_print_sam_hdr(idx->bns, rg_line);
+#endif
+	} 
 	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
@@ -242,11 +280,22 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
+		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0, h);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
+#ifdef USE_HTSLIB
+			if (seqs[i].bams) {
+				int j;
+				for (j = 0; j < seqs[i].bams->l; j++) {
+					sam_write1(out, h, seqs[i].bams->bams[j]);
+				}
+			}
+			bams_destroy(seqs[i].bams); seqs[i].bams = NULL;
+#else
 			if (seqs[i].sam) err_fputs(seqs[i].sam, stdout);
-			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); free(seqs[i].sam);
+			free(seqs[i].sam);
+#endif
+			free(seqs[i].name); free(seqs[i].comment); free(seqs[i].seq); free(seqs[i].qual); 
 		}
 		free(seqs);
 	}
@@ -255,6 +304,10 @@ int main_mem(int argc, char *argv[])
 	bwa_idx_destroy(idx);
 	kseq_destroy(ks);
 	err_gzclose(fp); kclose(ko);
+#ifdef USE_HTSLIB
+	sam_close(out);
+	bam_hdr_destroy(h);
+#endif
 	if (ks2) {
 		kseq_destroy(ks2);
 		err_gzclose(fp2); kclose(ko2);

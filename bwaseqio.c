@@ -2,7 +2,11 @@
 #include <ctype.h>
 #include "bwtaln.h"
 #include "utils.h"
+#ifdef USE_HTSLIB
+#include <htslib/sam.h>
+#else
 #include "bamlite.h"
+#endif
 
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
@@ -17,7 +21,12 @@ static char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4
 struct __bwa_seqio_t {
 	// for BAM input
 	int is_bam, which; // 1st bit: read1, 2nd bit: read2, 3rd: SE
+#ifdef USE_HTSLIB
+	samFile *fp;
+	bam_hdr_t *h;
+#else
 	bamFile fp;
+#endif
 	// for fastq input
 	kseq_t *ks;
 };
@@ -25,14 +34,24 @@ struct __bwa_seqio_t {
 bwa_seqio_t *bwa_bam_open(const char *fn, int which)
 {
 	bwa_seqio_t *bs;
+#ifndef USE_HTSLIB
 	bam_header_t *h;
+#endif
 	bs = (bwa_seqio_t*)calloc(1, sizeof(bwa_seqio_t));
 	bs->is_bam = 1;
 	bs->which = which;
+#ifdef USE_HTSLIB
+	bs->fp = sam_open(fn, "rb");
+#else
 	bs->fp = bam_open(fn, "r");
+#endif
 	if (0 == bs->fp) err_fatal_simple("Couldn't open bam file");
+#ifdef USE_HTSLIB
+	bs->h = sam_hdr_read(bs->fp);
+#else
 	h = bam_header_read(bs->fp);
 	bam_header_destroy(h);
+#endif
 	return bs;
 }
 
@@ -50,7 +69,12 @@ void bwa_seq_close(bwa_seqio_t *bs)
 {
 	if (bs == 0) return;
 	if (bs->is_bam) {
+#ifdef USE_HTSLIB
+		if (0 != sam_close(bs->fp)) err_fatal_simple("Error closing sam/bam file");
+		bam_hdr_destroy(bs->h);
+#else
 		if (0 != bam_close(bs->fp)) err_fatal_simple("Error closing bam file");
+#endif
 	} else {
 		err_gzclose(bs->ks->f->f);
 		kseq_destroy(bs->ks);
@@ -101,7 +125,11 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 	b = bam_init1();
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
+#ifdef USE_HTSLIB
+	while ((res = sam_read1(bs->fp, bs->h, b)) >= 0) {
+#else
 	while ((res = bam_read1(bs->fp, b)) >= 0) {
+#endif
 		uint8_t *s, *q;
 		int go = 0;
 		if ((bs->which & 1) && (b->core.flag & BAM_FREAD1)) go = 1;
@@ -114,14 +142,26 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 		p->qual = 0;
 		p->full_len = p->clip_len = p->len = l;
 		n_tot += p->full_len;
+#ifdef USE_HTSLIB
+		s = bam_get_seq(b); q = bam_get_qual(b);
+#else
 		s = bam1_seq(b); q = bam1_qual(b);
+#endif
 		p->seq = (ubyte_t*)calloc(p->len + 1, 1);
 		p->qual = (ubyte_t*)calloc(p->len + 1, 1);
 		for (i = 0; i != p->full_len; ++i) {
+#ifdef USE_HTSLIB
+			p->seq[i] = bam_nt16_nt4_table[(int)bam_seqi(s, i)];
+#else
 			p->seq[i] = bam_nt16_nt4_table[(int)bam1_seqi(s, i)];
+#endif
 			p->qual[i] = q[i] + 33 < 126? q[i] + 33 : 126;
 		}
+#ifdef USE_HTSLIB
+		if (bam_is_rev(b)) { // then reverse 
+#else
 		if (bam1_strand(b)) { // then reverse 
+#endif
 			seq_reverse(p->len, p->seq, 1);
 			seq_reverse(p->len, p->qual, 0);
 		}
@@ -130,7 +170,11 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 		memcpy(p->rseq, p->seq, p->len);
 		seq_reverse(p->len, p->seq, 0); // *IMPORTANT*: will be reversed back in bwa_refine_gapped()
 		seq_reverse(p->len, p->rseq, is_comp);
+#ifdef USE_HTSLIB
+		p->name = strdup((const char*)bam_get_qname(b));
+#else
 		p->name = strdup((const char*)bam1_qname(b));
+#endif
 		if (n_seqs == n_needed) break;
 	}
 	if (res < 0 && res != -1) err_fatal_simple("Error reading bam file");
