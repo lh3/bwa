@@ -208,6 +208,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 			if (*str == 'G' || *str == 'g') block_size *= 1024 * 1024 * 1024;
 			else if (*str == 'M' || *str == 'm') block_size *= 1024 * 1024;
 			else if (*str == 'K' || *str == 'k') block_size *= 1024;
+			break;
 		default: return 1;
 		}
 	}
@@ -217,7 +218,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		fprintf(stderr, "Usage:   bwa index [options] <in.fasta>\n\n");
 		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [auto]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
-		fprintf(stderr, "         -b INT    block size for the bwtsw algorithm (force -a bwtsw) [%d]\n", block_size);
+		fprintf(stderr, "         -b INT    block size for the bwtsw algorithm (effective with -a bwtsw) [%d]\n", block_size);
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
