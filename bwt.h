@@ -92,6 +92,7 @@ extern "C" {
 	void bwt_destroy(bwt_t *bwt);
 
 	void bwt_bwtgen(const char *fn_pac, const char *fn_bwt); // from BWT-SW
+	void bwt_bwtgen2(const char *fn_pac, const char *fn_bwt, int block_size); // from BWT-SW
 	void bwt_cal_sa(bwt_t *bwt, int intv);
 
 	void bwt_bwtupdate_core(bwt_t *bwt);
