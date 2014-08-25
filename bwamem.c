@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
@@ -57,6 +58,9 @@ mem_opt_t *mem_opt_init()
 	o->zdrop = 100;
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
+
+	o->max_mem_intv = 0;
+
 	o->min_seed_len = 19;
 	o->split_width = 10;
 	o->max_occ = 500;
@@ -115,7 +119,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 	// first pass: find all SMEMs
 	while (x < len) {
 		if (seq[x] < 4) {
-			x = bwt_smem1(bwt, len, seq, x, start_width, &a->mem1, a->tmpv);
+			x = bwt_smem1a(bwt, len, seq, x, start_width, split_len, opt->max_mem_intv, &a->mem1, a->tmpv);
 			for (i = 0; i < a->mem1.n; ++i) {
 				bwtintv_t *p = &a->mem1.a[i];
 				int slen = (uint32_t)p->info - (p->info>>32); // seed length
@@ -125,6 +129,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 		} else ++x;
 	}
 	// second pass: find MEMs inside a long SMEM
+	if (opt->max_mem_intv > 0) goto sort_intv;
 	old_n = a->mem.n;
 	for (k = 0; k < old_n; ++k) {
 		bwtintv_t *p = &a->mem.a[k];
@@ -136,6 +141,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 				kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
 	}
 	// sort
+sort_intv:
 	ks_introsort(mem_intv, a->mem.n, a->mem.a);
 }
 

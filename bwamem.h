@@ -29,6 +29,8 @@ typedef struct {
 	int w;                  // band width
 	int zdrop;              // Z-dropoff
 
+	uint64_t max_mem_intv;
+
 	int T;                  // output score threshold; only affecting output
 	int flag;               // see MEM_F_* macros
 	int min_seed_len;       // minimum seed length
@@ -97,6 +99,7 @@ extern "C" {
 	smem_i *smem_itr_init(const bwt_t *bwt);
 	void smem_itr_destroy(smem_i *itr);
 	void smem_set_query(smem_i *itr, int len, const uint8_t *query);
+	void smem_config(smem_i *itr, int min_intv, int max_len, uint64_t max_intv);
 	const bwtintv_v *smem_next(smem_i *itr);
 
 	mem_opt_t *mem_opt_init(void);
