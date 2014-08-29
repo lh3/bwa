@@ -759,7 +759,7 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 	return l;
 }
 
-void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_, int softclip_all)
+void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
 {
 	int i, l_name;
 	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
@@ -788,7 +788,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
 				int c = p->cigar[i]&0xf;
-				if (!softclip_all && (c == 3 || c == 4))
+				if (!(opt->flag&MEM_F_SOFTCLIP) && (c == 3 || c == 4))
 					c = which? 4 : 3; // use hard clipping for supplementary alignments
 				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
 			}
@@ -816,7 +816,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		kputsn("*\t*", 3, str);
 	} else if (!p->is_rev) { // the forward strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar && which && !softclip_all) { // have cigar && not the primary alignment && not softclip all
+		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP)) { // have cigar && not the primary alignment && not softclip all
 			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qb += p->cigar[0]>>4;
 			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qe -= p->cigar[p->n_cigar-1]>>4;
 		}
@@ -830,7 +830,7 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 		} else kputc('*', str);
 	} else { // the reverse strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar && which && !softclip_all) {
+		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP)) {
 			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qe -= p->cigar[0]>>4;
 			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qb += p->cigar[p->n_cigar-1]>>4;
 		}
@@ -875,6 +875,14 @@ void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const m
 	}
 	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
+	if ((opt->flag&MEM_F_REF_HDR) && p->rid >= 0 && bns->anns[p->rid].anno != 0 && bns->anns[p->rid].anno[0] != 0) {
+		int tmp;
+		kputsn("\tXR:Z:", 6, str);
+		tmp = str->l;
+		kputs(bns->anns[p->rid].anno, str);
+		for (i = tmp; i < str->l; ++i) // replace TAB in the comment to SPACE
+			if (str->s[i] == '\t') str->s[i] = ' ';
+	}
 	kputc('\n', str);
 }
 
@@ -941,10 +949,10 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		mem_aln_t t;
 		t = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, 0);
 		t.flag |= extra_flag;
-		mem_aln2sam(bns, &str, s, 1, &t, 0, m, opt->flag&MEM_F_SOFTCLIP);
+		mem_aln2sam(opt, bns, &str, s, 1, &t, 0, m);
 	} else {
 		for (k = 0; k < aa.n; ++k)
-			mem_aln2sam(bns, &str, s, aa.n, aa.a, k, m, opt->flag&MEM_F_SOFTCLIP);
+			mem_aln2sam(opt, bns, &str, s, aa.n, aa.a, k, m);
 		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
 		free(aa.a);
 	}

@@ -94,7 +94,7 @@ void bns_dump(const bntseq_t *bns, const char *prefix)
 
 bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, const char* pac_filename)
 {
-	char str[1024];
+	char str[8192];
 	FILE *fp;
 	const char *fname;
 	bntseq_t *bns;
@@ -117,14 +117,14 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 			if (scanres != 2) goto badread;
 			p->name = strdup(str);
 			// read fasta comments 
-			while (str - q < sizeof(str) - 1 && (c = fgetc(fp)) != '\n' && c != EOF) *q++ = c;
+			while (q - str < sizeof(str) - 1 && (c = fgetc(fp)) != '\n' && c != EOF) *q++ = c;
 			while (c != '\n' && c != EOF) c = fgetc(fp);
 			if (c == EOF) {
 				scanres = EOF;
 				goto badread;
 			}
 			*q = 0;
-			if (q - str > 1) p->anno = strdup(str + 1); // skip leading space
+			if (q - str > 1 && strcmp(str, " (null)") != 0) p->anno = strdup(str + 1); // skip leading space
 			else p->anno = strdup("");
 			// read the rest
 			scanres = fscanf(fp, "%lld%d%d", &xx, &p->len, &p->n_ambs);
