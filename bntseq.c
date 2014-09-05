@@ -37,6 +37,9 @@
 #include "kseq.h"
 KSEQ_DECLARE(gzFile)
 
+#include "khash.h"
+KHASH_MAP_INIT_STR(str, int)
+
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
 #endif
@@ -165,11 +168,33 @@ bntseq_t *bns_restore_core(const char *ann_filename, const char* amb_filename, c
 
 bntseq_t *bns_restore(const char *prefix)
 {  
-	char ann_filename[1024], amb_filename[1024], pac_filename[1024];
+	char ann_filename[1024], amb_filename[1024], pac_filename[1024], alt_filename[1024];
+	FILE *fp;
+	bntseq_t *bns;
 	strcat(strcpy(ann_filename, prefix), ".ann");
 	strcat(strcpy(amb_filename, prefix), ".amb");
 	strcat(strcpy(pac_filename, prefix), ".pac");
-	return bns_restore_core(ann_filename, amb_filename, pac_filename);
+	bns = bns_restore_core(ann_filename, amb_filename, pac_filename);
+	if (bns == 0) return 0;
+	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
+		char str[1024];
+		khash_t(str) *h;
+		int i, absent;
+		khint_t k;
+		h = kh_init(str);
+		for (i = 0; i < bns->n_seqs; ++i) {
+			k = kh_put(str, h, bns->anns[i].name, &absent);
+			kh_val(h, k) = i;
+		}
+		while (fscanf(fp, "%s", str) == 1) {
+			k = kh_get(str, h, str);
+			if (k != kh_end(h))
+				bns->anns[kh_val(h, k)].is_alt = 1;
+		}
+		kh_destroy(str, h);
+		fclose(fp);
+	}
+	return bns;
 }
 
 void bns_destroy(bntseq_t *bns)

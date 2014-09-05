@@ -43,6 +43,7 @@ typedef struct {
 	int32_t len;
 	int32_t n_ambs;
 	uint32_t gi;
+	int32_t is_alt;
 	char *name, *anno;
 } bntann1_t;
 
