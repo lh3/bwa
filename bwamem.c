@@ -1077,7 +1077,7 @@ typedef struct {
 	const mem_pestat_t *pes;
 	smem_aux_t **aux;
 	bseq1_t *seqs;
-	mem_alnreg_v *regs;
+	mem_alnreg_v *regs, *regs_alt;
 	int64_t n_processed;
 } worker_t;
 
@@ -1120,16 +1120,17 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 {
 	extern void kt_for(int n_threads, void (*func)(void*,int,int), void *data, int n);
 	worker_t w;
-	mem_alnreg_v *regs;
 	mem_pestat_t pes[4];
 	double ctime, rtime;
-	int i;
+	int i, has_alt = 0;
 
+	for (i = 0; i < bns->n_seqs; ++i)
+		if (bns->anns[i].is_alt) has_alt = 1;
 	ctime = cputime(); rtime = realtime();
 	global_bns = bns;
-	regs = malloc(n * sizeof(mem_alnreg_v));
+	w.regs = malloc(n * sizeof(mem_alnreg_v));
 	w.opt = opt; w.bwt = bwt; w.bns = bns; w.pac = pac;
-	w.seqs = seqs; w.regs = regs; w.n_processed = n_processed;
+	w.seqs = seqs; w.n_processed = n_processed;
 	w.pes = &pes[0];
 	w.aux = malloc(opt->n_threads * sizeof(smem_aux_t));
 	for (i = 0; i < opt->n_threads; ++i)
@@ -1140,10 +1141,10 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	free(w.aux);
 	if (opt->flag&MEM_F_PE) { // infer insert sizes if not provided
 		if (pes0) memcpy(pes, pes0, 4 * sizeof(mem_pestat_t)); // if pes0 != NULL, set the insert-size distribution as pes0
-		else mem_pestat(opt, bns->l_pac, n, regs, pes); // otherwise, infer the insert size distribution from data
+		else mem_pestat(opt, bns->l_pac, n, w.regs, pes); // otherwise, infer the insert size distribution from data
 	}
 	kt_for(opt->n_threads, worker2, &w, (opt->flag&MEM_F_PE)? n>>1 : n); // generate alignment
-	free(regs);
+	free(w.regs);
 	if (bwa_verbose >= 3)
 		fprintf(stderr, "[M::%s] Processed %d reads in %.3f CPU sec, %.3f real sec\n", __func__, n, cputime() - ctime, realtime() - rtime);
 }
