@@ -137,7 +137,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 		if (end - start < split_len || p->x[2] > opt->split_width) continue;
 		bwt_smem1(bwt, len, seq, (start + end)>>1, p->x[2]+1, &a->mem1, a->tmpv);
 		for (i = 0; i < a->mem1.n; ++i)
-			if ((a->mem1.a[i].info>>32) - (uint32_t)a->mem1.a[i].info >= opt->min_seed_len)
+			if ((uint32_t)a->mem1.a[i].info - (a->mem1.a[i].info>>32) >= opt->min_seed_len)
 				kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
 	}
 	// sort
