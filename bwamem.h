@@ -68,7 +68,7 @@ typedef struct {
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
 	int seedlen0;   // length of the starting seed
-	int n_comp;     // number of sub-alignments chained together
+	int n_comp:30, is_alt:2; // number of sub-alignments chained together
 	float frac_rep;
 	uint64_t hash;
 } mem_alnreg_t;

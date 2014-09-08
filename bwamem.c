@@ -377,7 +377,7 @@ KSORT_INIT(mem_ars2, mem_alnreg_t, alnreg_slt2)
 #define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
 KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 
-#define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
+#define alnreg_hlt(a, b) ((a).is_alt < (b).is_alt || ((a).is_alt == (b).is_alt && ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
 
 #define PATCH_MAX_R_BW 0.05f
@@ -475,14 +475,17 @@ int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int 
 	return n - 1;
 }
 
-void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id)
+void mem_mark_primary_se(const mem_opt_t *opt, int _n, mem_alnreg_t *a, int64_t id)
 { // similar to the loop in mem_chain_flt()
-	int i, k, tmp;
+	int i, k, tmp, n;
 	kvec_t(int) z;
-	if (n == 0) return;
+	if (n_ == 0) return;
 	kv_init(z);
-	for (i = 0; i < n; ++i) a[i].sub = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
-	ks_introsort(mem_ars_hash, n, a);
+	for (i = 0; i < n_; ++i) a[i].sub = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
+	ks_introsort(mem_ars_hash, n_, a);
+	for (i = 0; i < n_; ++i)
+		if (a[i].is_alt) break;
+	if ((n = i) == 0) return;
 	tmp = opt->a + opt->b;
 	tmp = opt->o_del + opt->e_del > tmp? opt->o_del + opt->e_del : tmp;
 	tmp = opt->o_ins + opt->e_ins > tmp? opt->o_ins + opt->e_ins : tmp;
@@ -995,6 +998,11 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 			printf("** %d, [%d,%d) <=> [%ld,%ld)\n", p->score, p->qb, p->qe, (long)p->rb, (long)p->re);
 		}
 	}
+	for (i = 0; i < regs.n; ++i) {
+		mem_alnreg_t *p = &regs.a[i];
+		if (p->rid >= 0 && bns->anns[p->rid].is_alt)
+			p->is_alt = 1;
+	}
 	return regs;
 }
 
@@ -1077,7 +1085,7 @@ typedef struct {
 	const mem_pestat_t *pes;
 	smem_aux_t **aux;
 	bseq1_t *seqs;
-	mem_alnreg_v *regs, *regs_alt;
+	mem_alnreg_v *regs;
 	int64_t n_processed;
 } worker_t;
 
