@@ -630,12 +630,12 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			// qd: distance ahead of the seed on query; rd: on reference
 			qd = s->qbeg - p->qb; rd = s->rbeg - p->rb;
 			max_gap = cal_max_gap(opt, qd < rd? qd : rd); // the maximal gap allowed in regions ahead of the seed
-			w = max_gap < opt->w? max_gap : opt->w; // bounded by the band width
+			w = max_gap < p->w? max_gap : p->w; // bounded by the band width
 			if (qd - rd < w && rd - qd < w) break; // the seed is "around" a previous hit
 			// similar to the previous four lines, but this time we look at the region behind
 			qd = p->qe - (s->qbeg + s->len); rd = p->re - (s->rbeg + s->len);
 			max_gap = cal_max_gap(opt, qd < rd? qd : rd);
-			w = max_gap < opt->w? max_gap : opt->w;
+			w = max_gap < p->w? max_gap : p->w;
 			if (qd - rd < w && rd - qd < w) break;
 		}
 		if (i < av->n) { // the seed is (almost) contained in an existing alignment; further testing is needed to confirm it is not leading to a different aln
