@@ -377,8 +377,11 @@ KSORT_INIT(mem_ars2, mem_alnreg_t, alnreg_slt2)
 #define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
 KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 
-#define alnreg_hlt(a, b) ((a).is_alt < (b).is_alt || ((a).is_alt == (b).is_alt && ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))))
+#define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
+
+#define alnreg_hlt2(a, b) ((a).is_alt < (b).is_alt || ((a).is_alt == (b).is_alt && ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))))
+KSORT_INIT(mem_ars_hash2, mem_alnreg_t, alnreg_hlt2)
 
 #define PATCH_MAX_R_BW 0.05f
 #define PATCH_MIN_SC_RATIO 0.90f
@@ -475,24 +478,19 @@ int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int 
 	return n - 1;
 }
 
-void mem_mark_primary_se(const mem_opt_t *opt, int _n, mem_alnreg_t *a, int64_t id)
+typedef kvec_t(int) int_v;
+
+static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *a, int_v *z)
 { // similar to the loop in mem_chain_flt()
-	int i, k, tmp, n;
-	kvec_t(int) z;
-	if (n_ == 0) return;
-	kv_init(z);
-	for (i = 0; i < n_; ++i) a[i].sub = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
-	ks_introsort(mem_ars_hash, n_, a);
-	for (i = 0; i < n_; ++i)
-		if (a[i].is_alt) break;
-	if ((n = i) == 0) return;
+	int i, k, tmp;
 	tmp = opt->a + opt->b;
 	tmp = opt->o_del + opt->e_del > tmp? opt->o_del + opt->e_del : tmp;
 	tmp = opt->o_ins + opt->e_ins > tmp? opt->o_ins + opt->e_ins : tmp;
-	kv_push(int, z, 0);
+	z->n = 0;
+	kv_push(int, *z, 0);
 	for (i = 1; i < n; ++i) {
-		for (k = 0; k < z.n; ++k) {
-			int j = z.a[k];
+		for (k = 0; k < z->n; ++k) {
+			int j = z->a[k];
 			int b_max = a[j].qb > a[i].qb? a[j].qb : a[i].qb;
 			int e_min = a[j].qe < a[i].qe? a[j].qe : a[i].qe;
 			if (e_min > b_max) { // have overlap
@@ -504,10 +502,32 @@ void mem_mark_primary_se(const mem_opt_t *opt, int _n, mem_alnreg_t *a, int64_t 
 				}
 			}
 		}
-		if (k == z.n) kv_push(int, z, i);
-		else a[i].secondary = z.a[k];
+		if (k == z->n) kv_push(int, *z, i);
+		else a[i].secondary = z->a[k];
+	}
+}
+
+int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id)
+{
+	int i, n_pri;
+	int_v z = {0,0,0};
+	if (n == 0) return 0;
+	for (i = n_pri = 0; i < n; ++i) {
+		a[i].sub = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
+		if (!a[i].is_alt) ++n_pri;
+	}
+	ks_introsort(mem_ars_hash, n, a);
+	mem_mark_primary_se_core(opt, n, a, &z);
+	for (i = 0; i < n; ++i) // this block is used to trigger potential bugs; if no bugs, it has no effects
+		if (a[i].is_alt && a[i].secondary >= 0)
+			a[i].secondary = INT_MAX;
+	if (n_pri > 0 || n_pri != n) {
+		ks_introsort(mem_ars_hash2, n, a);
+		for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
+		mem_mark_primary_se_core(opt, n_pri, a, &z);
 	}
 	free(z.a);
+	return n_pri;
 }
 
 /*********************************
@@ -920,7 +940,7 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 }
 
 // TODO (future plan): group hits into a uint64_t[] array. This will be cleaner and more flexible
-void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
+void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
 {
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, mem_alnreg_v *a, int l_query, const char *query);
 	kstring_t str;
@@ -936,7 +956,7 @@ void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pa
 		mem_alnreg_t *p = &a->a[k];
 		mem_aln_t *q;
 		if (p->score < opt->T) continue;
-		if (p->secondary >= 0 && !(opt->flag&MEM_F_ALL)) continue;
+		if (p->secondary >= 0 && (p->is_alt || !(opt->flag&MEM_F_ALL))) continue;
 		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
@@ -1114,7 +1134,7 @@ static void worker2(void *data, int i, int tid)
 			mem_reg2ovlp(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i]);
 		} else {
 			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
-			mem_reg2sam_se(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+			mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 		}
 		free(w->regs[i].a);
 	} else {
