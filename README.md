@@ -87,7 +87,7 @@ settings:
 * Illumina paired-end reads no longer than ~70bp:
 
 		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
-		bwa samse ref.fa reads.sai reads.fq > aln-pe.sam
+		bwa sampe ref.fa reads1.sai reads2.sai reads1.fq reads2.fq > aln-pe.sam
 
 * PacBio subreads to a reference genome:
 
