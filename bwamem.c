@@ -157,7 +157,7 @@ typedef struct {
 
 typedef struct {
 	int n, m, first, rid;
-	uint32_t w:30, kept:2;
+	uint32_t w:29, kept:2, is_alt:1;
 	float frac_rep;
 	int64_t pos;
 	mem_seed_t *seeds;
@@ -278,6 +278,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 				tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
 				tmp.seeds[0] = s;
 				tmp.rid = rid;
+				tmp.is_alt = !!bns->anns[rid].is_alt;
 				kb_putp(chn, tree, &tmp);
 			}
 		}
@@ -331,7 +332,7 @@ int mem_chain_flt(const mem_opt_t *opt, int n_chn, mem_chain_t *a)
 			int j = chains.a[k];
 			int b_max = chn_beg(a[j]) > chn_beg(a[i])? chn_beg(a[j]) : chn_beg(a[i]);
 			int e_min = chn_end(a[j]) < chn_end(a[i])? chn_end(a[j]) : chn_end(a[i]);
-			if (e_min > b_max) { // have overlap
+			if (e_min > b_max && (!a[j].is_alt || a[i].is_alt)) { // have overlap; don't consider ovlp where the kept chain is ALT while the current chain is primary
 				int li = chn_end(a[i]) - chn_beg(a[i]);
 				int lj = chn_end(a[j]) - chn_beg(a[j]);
 				int min_l = li < lj? li : lj;
@@ -518,7 +519,7 @@ int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id
 	}
 	ks_introsort(mem_ars_hash, n, a);
 	mem_mark_primary_se_core(opt, n, a, &z);
-	for (i = 0; i < n; ++i) // this block is used to trigger potential bugs; if no bugs, it has no effects
+	for (i = 0; i < n; ++i) // don't track the "parent" hit of ALT secondary hits
 		if (a[i].is_alt && a[i].secondary >= 0)
 			a[i].secondary = INT_MAX;
 	if (n_pri > 0 || n_pri != n) {
@@ -957,7 +958,7 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		mem_aln_t *q;
 		if (p->score < opt->T) continue;
 		if (p->secondary >= 0 && (p->is_alt || !(opt->flag&MEM_F_ALL))) continue;
-		if (p->secondary >= 0 && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
+		if (p->secondary >= 0 && p->secondary < INT_MAX && p->score < a->a[p->secondary].score * opt->drop_ratio) continue;
 		q = kv_pushp(mem_aln_t, aa);
 		*q = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, p);
 		assert(q->rid >= 0); // this should not happen with the new code
