@@ -219,6 +219,17 @@ int err_fputs(const char *s, FILE *stream)
 	return ret;
 }
 
+int err_puts(const char *s)
+{
+	int ret = puts(s);
+	if (EOF == ret)
+	{
+		_err_fatal_simple("puts", strerror(errno));
+	}
+
+	return ret;
+}
+
 int err_fflush(FILE *stream) 
 {
     int ret = fflush(stream);

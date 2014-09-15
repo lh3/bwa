@@ -80,7 +80,7 @@ extern "C" {
 	int err_fputc(int c, FILE *stream);
 #define err_putchar(C) err_fputc((C), stdout)
 	int err_fputs(const char *s, FILE *stream);
-#define err_puts(S) err_fputs((S), stdout)
+	int err_puts(const char *s);
 	int err_fflush(FILE *stream);
 	int err_fclose(FILE *stream);
 	int err_gzclose(gzFile file);

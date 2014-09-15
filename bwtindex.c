@@ -189,11 +189,11 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 	extern void bwa_pac_rev_core(const char *fn, const char *fn_rev);
 
 	char *prefix = 0, *str, *str2, *str3;
-	int c, algo_type = 0, is_64 = 0;
+	int c, algo_type = 0, is_64 = 0, block_size = 10000000;
 	clock_t t;
 	int64_t l_pac;
 
-	while ((c = getopt(argc, argv, "6a:p:")) >= 0) {
+	while ((c = getopt(argc, argv, "6a:p:b:")) >= 0) {
 		switch (c) {
 		case 'a': // if -a is not set, algo_type will be determined later
 			if (strcmp(optarg, "div") == 0) algo_type = 1;
@@ -203,20 +203,26 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 			break;
 		case 'p': prefix = strdup(optarg); break;
 		case '6': is_64 = 1; break;
+		case 'b':
+			block_size = strtol(optarg, &str, 10);
+			if (*str == 'G' || *str == 'g') block_size *= 1024 * 1024 * 1024;
+			else if (*str == 'M' || *str == 'm') block_size *= 1024 * 1024;
+			else if (*str == 'K' || *str == 'k') block_size *= 1024;
+			break;
 		default: return 1;
 		}
 	}
 
 	if (optind + 1 > argc) {
 		fprintf(stderr, "\n");
-		fprintf(stderr, "Usage:   bwa index [-a bwtsw|is] [-c] <in.fasta>\n\n");
+		fprintf(stderr, "Usage:   bwa index [options] <in.fasta>\n\n");
 		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [auto]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
+		fprintf(stderr, "         -b INT    block size for the bwtsw algorithm (effective with -a bwtsw) [%d]\n", block_size);
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
-		fprintf(stderr, "         `-a div' do not work not for long genomes. Please choose `-a'\n");
-		fprintf(stderr, "         according to the length of the genome.\n\n");
+		fprintf(stderr, "         `-a div' do not work not for long genomes.\n\n");
 		return 1;
 	}
 	if (prefix == 0) {
@@ -242,7 +248,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(str2, prefix); strcat(str2, ".bwt");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Construct BWT for the packed sequence...\n");
-		if (algo_type == 2) bwt_bwtgen(str, str2);
+		if (algo_type == 2) bwt_bwtgen2(str, str2, block_size);
 		else if (algo_type == 1 || algo_type == 3) {
 			bwt_t *bwt;
 			bwt = bwt_pac2bwt(str, algo_type == 3);
