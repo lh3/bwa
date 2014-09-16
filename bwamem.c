@@ -1151,7 +1151,7 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	worker_t w;
 	mem_pestat_t pes[4];
 	double ctime, rtime;
-	int i, has_alt = 0;
+	int i;
 
 	for (i = 0; i < bns->n_seqs; ++i)
 		if (bns->anns[i].is_alt) has_alt = 1;
