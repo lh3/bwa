@@ -1598,13 +1598,18 @@ void BWTSaveBwtCodeAndOcc(const BWT *bwt, const char *bwtFileName, const char *o
 	}
 }
 
-void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
+void bwt_bwtgen2(const char *fn_pac, const char *fn_bwt, int block_size)
 {
 	BWTInc *bwtInc;
-	bwtInc = BWTIncConstructFromPacked(fn_pac, 10000000, 10000000);
+	bwtInc = BWTIncConstructFromPacked(fn_pac, block_size, block_size);
 	printf("[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
 	BWTSaveBwtCodeAndOcc(bwtInc->bwt, fn_bwt, 0);
 	BWTIncFree(bwtInc);
+}
+
+void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
+{
+	bwt_bwtgen2(fn_pac, fn_bwt, 10000000);
 }
 
 int bwt_bwtgen_main(int argc, char *argv[])

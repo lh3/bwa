@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <ctype.h>
 #include <math.h>
 #include "bwa.h"
@@ -38,6 +39,7 @@ int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt, opt0;
 	int fd, fd2, i, c, n, copy_comment = 0;
+	int fixed_chunk_size = -1, actual_chunk_size;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	bseq1_t *seqs;
@@ -54,10 +56,11 @@ int main_mem(int argc, char *argv[])
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
 #ifdef USE_HTSLIB
-	while ((c = getopt(argc, argv, "epaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:o:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:o:")) >= 0)
 #else
-	while ((c = getopt(argc, argv, "epaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:")) >= 0)
 #endif
+	{
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -74,6 +77,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'e') opt->flag |= MEM_F_SELF_OVLP;
 		else if (c == 'F') opt->flag |= MEM_F_ALN_REG;
 		else if (c == 'Y') opt->flag |= MEM_F_SOFTCLIP;
+		else if (c == 'V') opt->flag |= MEM_F_REF_HDR;
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -85,7 +89,9 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'G') opt->max_chain_gap = atoi(optarg), opt0.max_chain_gap = 1;
 		else if (c == 'N') opt->max_chain_extend = atoi(optarg), opt0.max_chain_extend = 1;
 		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
+		else if (c == 'y') opt->max_mem_intv = atol(optarg), opt0.max_mem_intv = 1;
 		else if (c == 'C') copy_comment = 1;
+		else if (c == 'K') fixed_chunk_size = atoi(optarg);
 		else if (c == 'Q') {
 			opt0.mapQ_coef_len = 1;
 			opt->mapQ_coef_len = atoi(optarg);
@@ -141,6 +147,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -w INT        band width for banded alignment [%d]\n", opt->w);
 		fprintf(stderr, "       -d INT        off-diagonal X-dropoff [%d]\n", opt->zdrop);
 		fprintf(stderr, "       -r FLOAT      look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
+		fprintf(stderr, "       -y INT        find MEMs longer than {-k} * {-r} with size less than INT [%ld]\n", (long)opt->max_mem_intv);
 //		fprintf(stderr, "       -s INT        look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT        skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->drop_ratio);
@@ -149,15 +156,16 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -S            skip mate rescue\n");
 		fprintf(stderr, "       -P            skip pairing; mate rescue performed unless -S also in use\n");
 		fprintf(stderr, "       -e            discard full-length exact matches\n");
+		fprintf(stderr, "\nScoring options:\n\n");
 		fprintf(stderr, "       -A INT        score for a sequence match, which scales options -TdBOELU unless overridden [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT        penalty for a mismatch [%d]\n", opt->b);
 		fprintf(stderr, "       -O INT[,INT]  gap open penalties for deletions and insertions [%d,%d]\n", opt->o_del, opt->o_ins);
 		fprintf(stderr, "       -E INT[,INT]  gap extension penalty; a gap of size k cost '{-O} + {-E}*k' [%d,%d]\n", opt->e_del, opt->e_ins);
 		fprintf(stderr, "       -L INT[,INT]  penalty for 5'- and 3'-end clipping [%d,%d]\n", opt->pen_clip5, opt->pen_clip3);
-		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n", opt->pen_unpaired);
+		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n\n", opt->pen_unpaired);
 		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
-		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A2 -B5 -O2 -E1 -L0\n");
-		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A2 -B5 -O2 -E1 -N25 -FeaD.001\n");
+		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0\n");
+//		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A1 -B1 -O1 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -167,6 +175,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -h INT        if there are <INT hits with score >80%% of the max score, output all in XA [%d]\n", opt->max_hits);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
+		fprintf(stderr, "       -V            output the reference FASTA header in the XR tag\n");
 		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
 		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
@@ -185,13 +194,13 @@ int main_mem(int argc, char *argv[])
 
 	if (mode) {
 		if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
-			if (!opt0.a) opt->a = 2, opt0.a = 1;
+			if (!opt0.a) opt->a = 1, opt0.a = 1;
 			update_a(opt, &opt0);
-			if (!opt0.o_del) opt->o_del = 2;
+			if (!opt0.o_del) opt->o_del = 1;
 			if (!opt0.e_del) opt->e_del = 1;
-			if (!opt0.o_ins) opt->o_ins = 2;
+			if (!opt0.o_ins) opt->o_ins = 1;
 			if (!opt0.e_ins) opt->e_ins = 1;
-			if (!opt0.b) opt->b = 5;
+			if (!opt0.b) opt->b = 1;
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
 			if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
 			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) {
@@ -210,7 +219,6 @@ int main_mem(int argc, char *argv[])
 			return 1; // FIXME memory leak
 		}
 	} else update_a(opt, &opt0);
-//	if (opt->T < opt->min_HSP_score) opt->T = opt->min_HSP_score; // TODO: tie ->T to MEM_HSP_COEF
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
@@ -264,7 +272,8 @@ int main_mem(int argc, char *argv[])
 		bwa_print_sam_hdr(idx->bns, rg_line);
 #endif
 	} 
-	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
+	actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
+	while ((seqs = bseq_read(actual_chunk_size, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
 			if (bwa_verbose >= 2)
@@ -315,7 +324,8 @@ int main_mem(int argc, char *argv[])
 
 int main_fastmap(int argc, char *argv[])
 {
-	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0;
+	int c, i, min_iwidth = 20, min_len = 17, print_seq = 0, min_intv = 1, max_len = INT_MAX;
+	uint64_t max_intv = 0;
 	kseq_t *seq;
 	bwtint_t k;
 	gzFile fp;
@@ -323,16 +333,26 @@ int main_fastmap(int argc, char *argv[])
 	const bwtintv_v *a;
 	bwaidx_t *idx;
 
-	while ((c = getopt(argc, argv, "w:l:p")) >= 0) {
+	while ((c = getopt(argc, argv, "w:l:pi:I:L:")) >= 0) {
 		switch (c) {
 			case 'p': print_seq = 1; break;
 			case 'w': min_iwidth = atoi(optarg); break;
 			case 'l': min_len = atoi(optarg); break;
+			case 'i': min_intv = atoi(optarg); break;
+			case 'I': max_intv = atol(optarg); break;
+			case 'L': max_len  = atoi(optarg); break;
 		    default: return 1;
 		}
 	}
 	if (optind + 1 >= argc) {
-		fprintf(stderr, "Usage: bwa fastmap [-p] [-l minLen=%d] [-w maxSaSize=%d] <idxbase> <in.fq>\n", min_len, min_iwidth);
+		fprintf(stderr, "\n");
+		fprintf(stderr, "Usage:   bwa fastmap [options] <idxbase> <in.fq>\n\n");
+		fprintf(stderr, "Options: -l INT    min SMEM length to output [%d]\n", min_len);
+		fprintf(stderr, "         -w INT    max interval size to find coordiantes [%d]\n", min_iwidth);
+		fprintf(stderr, "         -i INT    min SMEM interval size [%d]\n", min_intv);
+		fprintf(stderr, "         -l INT    max MEM length [%d]\n", max_len);
+		fprintf(stderr, "         -I INT    stop if MEM is longer than -l with a size less than INT [%ld]\n", (long)max_intv);
+		fprintf(stderr, "\n");
 		return 1;
 	}
 
@@ -340,6 +360,7 @@ int main_fastmap(int argc, char *argv[])
 	seq = kseq_init(fp);
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS)) == 0) return 1;
 	itr = smem_itr_init(idx->bwt);
+	smem_config(itr, min_intv, max_len, max_intv);
 	while (kseq_read(seq) >= 0) {
 		err_printf("SQ\t%s\t%ld", seq->name.s, seq->seq.l);
 		if (print_seq) {

@@ -1,3 +1,4 @@
+#include <limits.h>
 #include "bwa.h"
 #include "bwamem.h"
 #include "bntseq.h"
@@ -11,6 +12,8 @@ struct __smem_i {
 	const bwt_t *bwt;
 	const uint8_t *query;
 	int start, len;
+	int min_intv, max_len;
+	uint64_t max_intv;
 	bwtintv_v *matches; // matches; to be returned by smem_next()
 	bwtintv_v *sub;     // sub-matches inside the longest match; temporary
 	bwtintv_v *tmpvec[2]; // temporary arrays
@@ -25,6 +28,9 @@ smem_i *smem_itr_init(const bwt_t *bwt)
 	itr->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
 	itr->matches   = calloc(1, sizeof(bwtintv_v));
 	itr->sub       = calloc(1, sizeof(bwtintv_v));
+	itr->min_intv = 1;
+	itr->max_len  = INT_MAX;
+	itr->max_intv = 0;
 	return itr;
 }
 
@@ -44,6 +50,13 @@ void smem_set_query(smem_i *itr, int len, const uint8_t *query)
 	itr->len = len;
 }
 
+void smem_config(smem_i *itr, int min_intv, int max_len, uint64_t max_intv)
+{
+	itr->min_intv = min_intv;
+	itr->max_len  = max_len;
+	itr->max_intv = max_intv;
+}
+
 const bwtintv_v *smem_next(smem_i *itr)
 {
 	int i, max, max_i, ori_start;
@@ -52,7 +65,7 @@ const bwtintv_v *smem_next(smem_i *itr)
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return 0;
 	ori_start = itr->start;
-	itr->start = bwt_smem1(itr->bwt, itr->len, itr->query, ori_start, 1, itr->matches, itr->tmpvec); // search for SMEM
+	itr->start = bwt_smem1a(itr->bwt, itr->len, itr->query, ori_start, itr->min_intv, itr->max_len, itr->max_intv, itr->matches, itr->tmpvec); // search for SMEM
 	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
 	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
 		bwtintv_t *p = &itr->matches->a[i];
@@ -127,7 +140,7 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	cnt = calloc(a->n, sizeof(int));
 	for (i = 0, tot = 0; i < a->n; ++i) {
 		int j = a->a[i].secondary;
-		if (j >= 0 && a->a[i].score >= a->a[j].score * opt->XA_drop_ratio)
+		if (j >= 0 && j < INT_MAX && a->a[i].score >= a->a[j].score * opt->XA_drop_ratio)
 			++cnt[j], ++tot;
 	}
 	if (tot == 0) goto end_gen_alt;
@@ -135,7 +148,7 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	for (i = 0; i < a->n; ++i) {
 		mem_aln_t t;
 		int j = a->a[i].secondary;
-		if (j < 0 || a->a[i].score < a->a[j].score * opt->XA_drop_ratio) continue; // we don't process the primary alignments as they will be converted to SAM later
+		if (j < 0 || j == INT_MAX || a->a[i].score < a->a[j].score * opt->XA_drop_ratio) continue; // we don't process the primary alignments as they will be converted to SAM later
 		if (cnt[j] > opt->max_hits) continue;
 		t = mem_reg2aln(opt, bns, pac, l_query, query, &a->a[i]);
 		kputs(bns->anns[t.rid].name, &aln[j]);

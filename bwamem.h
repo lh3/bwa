@@ -18,6 +18,7 @@ typedef struct __smem_i smem_i;
 #define MEM_F_NO_RESCUE 0x20
 #define MEM_F_SELF_OVLP 0x40
 #define MEM_F_ALN_REG   0x80
+#define MEM_F_REF_HDR	0x100
 #define MEM_F_SOFTCLIP  0x200
 
 typedef struct {
@@ -28,6 +29,8 @@ typedef struct {
 	int pen_clip5,pen_clip3;// clipping penalty. This score is not deducted from the DP score.
 	int w;                  // band width
 	int zdrop;              // Z-dropoff
+
+	uint64_t max_mem_intv;
 
 	int T;                  // output score threshold; only affecting output
 	int flag;               // see MEM_F_* macros
@@ -68,7 +71,7 @@ typedef struct {
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
 	int seedlen0;   // length of the starting seed
-	int n_comp;     // number of sub-alignments chained together
+	int n_comp:30, is_alt:2; // number of sub-alignments chained together
 	float frac_rep;
 	uint64_t hash;
 } mem_alnreg_t;
@@ -100,6 +103,7 @@ extern "C" {
 	smem_i *smem_itr_init(const bwt_t *bwt);
 	void smem_itr_destroy(smem_i *itr);
 	void smem_set_query(smem_i *itr, int len, const uint8_t *query);
+	void smem_config(smem_i *itr, int min_intv, int max_len, uint64_t max_intv);
 	const bwtintv_v *smem_next(smem_i *itr);
 
 	mem_opt_t *mem_opt_init(void);

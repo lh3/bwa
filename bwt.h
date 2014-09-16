@@ -92,6 +92,7 @@ extern "C" {
 	void bwt_destroy(bwt_t *bwt);
 
 	void bwt_bwtgen(const char *fn_pac, const char *fn_bwt); // from BWT-SW
+	void bwt_bwtgen2(const char *fn_pac, const char *fn_bwt, int block_size); // from BWT-SW
 	void bwt_cal_sa(bwt_t *bwt, int intv);
 
 	void bwt_bwtupdate_core(bwt_t *bwt);
@@ -118,6 +119,7 @@ extern "C" {
 	 * Return the end of the longest exact match starting from _x_.
 	 */
 	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
+	int bwt_smem1a(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, int max_len, uint64_t max_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
 	// SMEM iterator interface
 

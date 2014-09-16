@@ -87,15 +87,11 @@ settings:
 * Illumina paired-end reads no longer than ~70bp:
 
 		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
-		bwa sampe ref.fa reads1.sai reads2.sai reads1.fq reads2.fq > aln-pe.sam
+		bwa sampe ref.fa read1.sai read2.sai read1.fq read2.fq > aln-pe.sam
 
 * PacBio subreads to a reference genome:
 
 		bwa mem -x pacbio ref.fa reads.fq > aln.sam
-
-* PacBio subreads to themselves (the output is not SAM):
-
-		bwa mem -x pbread reads.fq reads.fq > overlap.pas
 
 BWA-MEM is recommended for query sequences longer than ~70bp for a variety of
 error rates (or sequence divergence). Generally, BWA-MEM is more tolerant with
@@ -129,38 +125,6 @@ read may be mapped to the junction of two adjacent reference sequences. In this
 case, BWA-backtrack will flag the read as unmapped (0x4), but you will see
 position, CIGAR and all the tags. A similar issue may occur to BWA-SW alignment
 as well. BWA-MEM does not have this problem.
-
-####<a name="h38"></a>6. How to map sequences to GRCh38 with ALT contigs?
-
-BWA-backtrack and BWA-MEM partially support mapping to a reference containing
-ALT contigs that represent alternative alleles highly divergent from the
-reference genome.
-
-	# download the K8 executable required by bwa-helper.js
-	wget http://sourceforge.net/projects/lh3/files/k8/k8-0.2.1.tar.bz2/download
-	tar -jxf k8-0.2.1.tar.bz2
-
-	# download the ALT-to-GRCh38 alignment in the SAM format
-	wget http://sourceforge.net/projects/bio-bwa/files/hs38.alt.sam.gz/download
-
-	# download the GRCh38 sequences with ALT contigs
-	wget ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
-
-	# index and mapping
-	bwa index -p hs38a GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
-	bwa mem -h50 hs38a reads.fq | ./k8-linux bwa-helper.js genalt hs38.alt.sam.gz > out.sam
-
-Here, option `-h50` asks bwa-mem to output multiple hits in the XA tag if the
-read has 50 or fewer hits. For each SAM line containing the XA tag,
-`bwa-helper.js genalt` decodes the alignments in the XA tag, groups hits lifted
-to the same chromosomal region, adjusts mapping quality and outputs all the
-hits overlapping the reported hit. A read may be mapped to both the primary
-assembly and one or more ALT contigs all with high mapping quality.
-
-Note that this procedure assumes reads are single-end and may miss hits to
-highly repetitive regions as these hits will not be reported with option
-`-h50`. `bwa-helper.js` is a prototype implementation not recommended for
-production uses.
 
 
 

@@ -177,14 +177,14 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	return n;
 }
 
-int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2])
+int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2], int n_pri[2])
 {
 	pair64_v v, u;
 	int r, i, k, y[4], ret; // y[] keeps the last hit
 	int64_t l_pac = bns->l_pac;
 	kv_init(v); kv_init(u);
 	for (r = 0; r < 2; ++r) { // loop through read number
-		for (i = 0; i < a[r].n; ++i) {
+		for (i = 0; i < n_pri[r]; ++i) {
 			pair64_t key;
 			mem_alnreg_t *e = &a[r].a[i];
 			key.x = e->rb < l_pac? e->rb : (l_pac<<1) - 1 - e->rb; // forward position
@@ -244,13 +244,13 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2], bam_hdr_t *header)
 {
-	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id);
+	extern int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id);
 	extern int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a);
-	extern void mem_reg2sam_se(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m, bam_hdr_t *h);
-	extern void mem_aln2sam(const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m, int softclip_all, bam_hdr_t *h);
+	extern void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m, bam_hdr_t *h);
+	extern void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m, bam_hdr_t *h);
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query);
 
-	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1;
+	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1, n_pri[2];
 	kstring_t str;
 	mem_aln_t h[2];
 
@@ -267,18 +267,18 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				n += mem_matesw(opt, bns, pac, pes, &b[i].a[j], s[!i].l_seq, (uint8_t*)s[!i].seq, &a[!i]);
 		free(b[0].a); free(b[1].a);
 	}
-	mem_mark_primary_se(opt, a[0].n, a[0].a, id<<1|0);
-	mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1);
+	n_pri[0] = mem_mark_primary_se(opt, a[0].n, a[0].a, id<<1|0);
+	n_pri[1] = mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
-	if (a[0].n && a[1].n && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z)) > 0) {
+	if (n_pri[0] && n_pri[1] && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z, n_pri)) > 0) {
 		int is_multi[2], q_pe, score_un, q_se[2];
 		char **XA[2];
 		// check if an end has multiple hits even after mate-SW
 		for (i = 0; i < 2; ++i) {
-			for (j = 1; j < a[i].n; ++j)
+			for (j = 1; j < n_pri[i]; ++j)
 				if (a[i].a[j].secondary < 0 && a[i].a[j].score >= opt->T) break;
-			is_multi[i] = j < a[i].n? 1 : 0;
+			is_multi[i] = j < n_pri[i]? 1 : 0;
 		}
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
@@ -316,7 +316,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				int k = a[i].a[z[i]].secondary;
 				if (k >= 0) { // switch secondary and primary
 					assert(a[i].a[k].secondary < 0);
-					for (j = 0; j < a[i].n; ++j)
+					for (j = 0; j < n_pri[i]; ++j)
 						if (a[i].a[j].secondary == k || j == k)
 							a[i].a[j].secondary = z[i];
 					a[i].a[z[i]].secondary = -1;
@@ -327,13 +327,13 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// write SAM
 		h[0] = mem_reg2aln(opt, bns, pac, s[0].l_seq, s[0].seq, &a[0].a[z[0]]); h[0].mapq = q_se[0]; h[0].flag |= 0x40 | extra_flag; h[0].XA = XA[0]? XA[0][z[0]] : 0;
 		h[1] = mem_reg2aln(opt, bns, pac, s[1].l_seq, s[1].seq, &a[1].a[z[1]]); h[1].mapq = q_se[1]; h[1].flag |= 0x80 | extra_flag; h[1].XA = XA[1]? XA[1][z[1]] : 0;
-		mem_aln2sam(bns, &str, &s[0], 1, &h[0], 0, &h[1], opt->flag&MEM_F_SOFTCLIP, header); 
+		mem_aln2sam(opt, bns, &str, &s[0], 1, &h[0], 0, &h[1], header);
 #ifndef USE_HTSLIB
-		s[0].sam = strdup(str.s); str.l = 0; /// not using HTSLIB
+		s[0].sam = strdup(str.s); str.l = 0;
 #endif
-		mem_aln2sam(bns, &str, &s[1], 1, &h[1], 0, &h[0], opt->flag&MEM_F_SOFTCLIP, header); 
+		mem_aln2sam(opt, bns, &str, &s[1], 1, &h[1], 0, &h[0], header);
 #ifndef USE_HTSLIB
-		s[1].sam = str.s; // not using HTSLIB
+		s[1].sam = str.s;
 #endif
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 		free(h[0].cigar); // h[0].XA will be freed in the following block
@@ -360,8 +360,8 @@ no_pairing:
 		d = mem_infer_dir(bns->l_pac, a[0].a[0].rb, a[1].a[0].rb, &dist);
 		if (!pes[d].failed && dist >= pes[d].low && dist <= pes[d].high) extra_flag |= 2;
 	}
-	mem_reg2sam_se(opt, bns, pac, &s[0], &a[0], 0x41|extra_flag, &h[1], header);
-	mem_reg2sam_se(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0], header);
+	mem_reg2sam(opt, bns, pac, &s[0], &a[0], 0x41|extra_flag, &h[1], header);
+	mem_reg2sam(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0], header);
 	if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 	free(h[0].cigar); free(h[1].cigar);
 	return n;
