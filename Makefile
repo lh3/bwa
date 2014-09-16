@@ -2,7 +2,6 @@ CC=			gcc
 #CC=			clang --analyze
 CFLAGS=		-g -Wall -Wno-unused-function -O2
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
-HTSLIB_PATH=
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
 LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o bwamem_extra.o malloc_wrap.o
@@ -18,27 +17,15 @@ SUBDIRS=	.
 .SUFFIXES:.c .o .cc
 
 .c.o:
-ifneq ($(HTSLIB_PATH),)
-	$(CC) -c $(CFLAGS) $(DFLAGS) -DUSE_HTSLIB $(INCLUDES) -I$(HTSLIB_PATH) $< -o $@
-else
-	$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
-endif
+		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
 
 all:$(PROG)
 
 bwa:libbwa.a $(AOBJS) main.o
-ifneq ($(HTSLIB_PATH),)
-	$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ $(HTSLIB_PATH)/libhts.a -L. -lbwa $(LIBS)
-else
-	$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
-endif
+		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
 
 bwamem-lite:libbwa.a example.o
-ifneq ($(HTSLIB_PATH),)
-	$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ $(HTSLIB_PATH)/libhts.a -L. -lbwa $(LIBS)
-else
-	$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
-endif
+		$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)

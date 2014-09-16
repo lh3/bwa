@@ -93,11 +93,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	return ar;
 }
 
-#ifdef USE_HTSLIB
-void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, bam_hdr_t *h)
-#else
 void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
-#endif
 {
 	int i;
 	kstring_t str = {0,0,0};
@@ -119,15 +115,7 @@ void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 		ksprintf(&str, "%.3f", (double)p->truesc / opt->a / (qe - qb > re - rb? qe - qb : re - rb));
 		kputc('\n', &str);
 	}
-#ifdef USE_HTSLIB
-	bam1_t *b = bam_init1();
-	if (sam_parse1(&str, h, b) < 0) {
-		// TODO: error!
-	}
-	bams_add(s->bams, b);
-#else
 	s->sam = str.s;
-#endif
 }
 
 // Okay, returning strings is bad, but this has happened a lot elsewhere. If I have time, I need serious code cleanup.

@@ -7,9 +7,6 @@
 #include "ksw.h"
 #include "utils.h"
 #include "kstring.h"
-#ifdef USE_HTSLIB
-#include <htslib/sam.h>
-#endif
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -271,26 +268,11 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
 {
 	int i;
 	extern char *bwa_pg;
-	err_printf("@HD\tVN:1.4\tSO:unknown\n");
 	for (i = 0; i < bns->n_seqs; ++i)
 		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
 	if (rg_line) err_printf("%s\n", rg_line);
 	err_printf("%s\n", bwa_pg);
 }
-
-#ifdef USE_HTSLIB
-void bwa_format_sam_hdr(const bntseq_t *bns, const char *rg_line, kstring_t *str)
-{
-	int i;
-	extern char *bwa_pg;
-	str->l = 0; str->s = 0;
-	ksprintf(str, "@HD\tVN:1.4\tSO:unknown\n");
-	for (i = 0; i < bns->n_seqs; ++i) 
-		ksprintf(str, "@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
-	if (rg_line) ksprintf(str, "%s\n", rg_line);
-	ksprintf(str, "%s\n", bwa_pg);
-}
-#endif
 
 static char *bwa_escape(char *s)
 {
@@ -337,26 +319,3 @@ err_set_rg:
 	return 0;
 }
 
-#ifdef USE_HTSLIB
-bams_t *bams_init() {
-	return calloc(1, sizeof(bams_t));
-}
-
-void bams_add(bams_t *bams, bam1_t *b) {
-	if (bams->m == bams->l) {
-		bams->m = bams->m << 2;
-		bams->bams = realloc(bams->bams, sizeof(bam1_t) * bams->m);
-	}
-	bams->bams[bams->l] = b;
-	bams->l++;
-}
-
-void bams_destroy(bams_t *bams) {
-	int i;
-	for (i = 0; i < bams->l; i++) {
-		bam_destroy1(bams->bams[i]);
-	}
-	free(bams->bams);
-	free(bams);
-}
-#endif

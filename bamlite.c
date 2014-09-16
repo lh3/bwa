@@ -1,4 +1,3 @@
-#ifndef USE_HTSLIB
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -209,4 +208,3 @@ int bamlite_gzclose(gzFile file) {
 	return ret;
 }
 #endif /* USE_VERBOSE_ZLIB_WRAPPERS */
-#endif
