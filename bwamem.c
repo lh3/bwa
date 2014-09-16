@@ -378,7 +378,7 @@ KSORT_INIT(mem_ars2, mem_alnreg_t, alnreg_slt2)
 #define alnreg_slt(a, b) ((a).score > (b).score || ((a).score == (b).score && ((a).rb < (b).rb || ((a).rb == (b).rb && (a).qb < (b).qb))))
 KSORT_INIT(mem_ars, mem_alnreg_t, alnreg_slt)
 
-#define alnreg_hlt(a, b) ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))
+#define alnreg_hlt(a, b)  ((a).score > (b).score || ((a).score == (b).score && ((a).is_alt < (b).is_alt || ((a).is_alt == (b).is_alt && (a).hash < (b).hash))))
 KSORT_INIT(mem_ars_hash, mem_alnreg_t, alnreg_hlt)
 
 #define alnreg_hlt2(a, b) ((a).is_alt < (b).is_alt || ((a).is_alt == (b).is_alt && ((a).score > (b).score || ((a).score == (b).score && (a).hash < (b).hash))))
@@ -1151,10 +1151,8 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	worker_t w;
 	mem_pestat_t pes[4];
 	double ctime, rtime;
-	int i, has_alt = 0;
+	int i;
 
-	for (i = 0; i < bns->n_seqs; ++i)
-		if (bns->anns[i].is_alt) has_alt = 1;
 	ctime = cputime(); rtime = realtime();
 	global_bns = bns;
 	w.regs = malloc(n * sizeof(mem_alnreg_v));
