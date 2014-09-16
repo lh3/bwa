@@ -87,15 +87,11 @@ settings:
 * Illumina paired-end reads no longer than ~70bp:
 
 		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
-		bwa samse ref.fa reads.sai reads.fq > aln-pe.sam
+		bwa samsp ref.fa read1.sai read2.sai read1.fq read2.fq > aln-pe.sam
 
 * PacBio subreads to a reference genome:
 
 		bwa mem -x pacbio ref.fa reads.fq > aln.sam
-
-* PacBio subreads to themselves (the output is not SAM):
-
-		bwa mem -x pbread reads.fq reads.fq > overlap.pas
 
 BWA-MEM is recommended for query sequences longer than ~70bp for a variety of
 error rates (or sequence divergence). Generally, BWA-MEM is more tolerant with
