@@ -20,6 +20,8 @@ typedef struct __smem_i smem_i;
 #define MEM_F_ALN_REG   0x80
 #define MEM_F_SOFTCLIP  0x200
 
+#define MEM_CHUNK_SIZE 10000000
+
 typedef struct {
 	int a, b;               // match score and mismatch penalty
 	int o_del, e_del;
