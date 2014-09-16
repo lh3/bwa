@@ -1,3 +1,44 @@
+Release 0.7.11 (16 September, 2014)
+-----------------------------------
+
+A major change to BWA-MEM is the support of mapping to ALT contigs. To use this
+feature, users need to manually create a file "<index>.alt" with each line
+giving the name of an ALT contig. In mapping, BWA-MEM considers all chromosomes
+and contigs equally when it finds seeds, constructs chains, extends seeds and
+derives the final alignments. It also uses all hits for the estimation of
+mapping quality of ALT hits. However, BWA-MEM ignores ALT hits when it
+estimates the mapping quality of hits to the primary assembly. As a result,
+having ALT contigs almost has not effect on alignments to the primary assembly
+(seeding may be affected in rare corner cases). At the same time, users may
+get a primary alignment to ALT contigs (no 0x800 flag) if there are no good
+hits to the primary assembly, or get a supplementary alignment to ALT contigs
+if it is better than hits to the primary assembly. Since this release, it is
+recommended to include ALT contigs.
+
+Users may consider to use ALT contigs from GRCh38. I am also constructing a
+non-redundant and more complete set of sequences missing from GRCh38.
+
+Other notable changes to BWA-MEM:
+
+ * Added option `-b` to `bwa index`. This option tunes the batch size used in
+   the construction of BWT. It is advised to use large `-b` for huge reference
+   sequences such as the *nt* database.
+
+ * Optimized for PacBio data. This includes a change to the scoring based on a
+   mini-study done by Aaron Quinlan and a heuristic speedup. Further speedup is
+   possible, but needs more careful investigation.
+
+ * Dropped PacBio read-to-read alignment for now. BWA-MEM is only good at
+   finding the best hit, not all hits. Option `-x pbread` is still available,
+   but not shown on the command line.
+
+ * Added new pre-setting for Oxford Nanopore 2D reads. For small genomes,
+   though, LAST is still more sensitive.
+
+(0.7.11: 16 September 2014, r845)
+
+
+
 Release 0.7.10 (13 July, 2014)
 ------------------------------
 
