@@ -1153,8 +1153,6 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	double ctime, rtime;
 	int i;
 
-	for (i = 0; i < bns->n_seqs; ++i)
-		if (bns->anns[i].is_alt) has_alt = 1;
 	ctime = cputime(); rtime = realtime();
 	global_bns = bns;
 	w.regs = malloc(n * sizeof(mem_alnreg_v));

@@ -39,6 +39,7 @@ int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt, opt0;
 	int fd, fd2, i, c, n, copy_comment = 0;
+	int fixed_chunk_size = -1, actual_chunk_size;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
 	bseq1_t *seqs;
@@ -54,7 +55,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -85,6 +86,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
 		else if (c == 'y') opt->max_mem_intv = atol(optarg), opt0.max_mem_intv = 1;
 		else if (c == 'C') copy_comment = 1;
+		else if (c == 'K') fixed_chunk_size = atoi(optarg);
 		else if (c == 'Q') {
 			opt0.mapQ_coef_len = 1;
 			opt->mapQ_coef_len = atoi(optarg);
@@ -205,7 +207,6 @@ int main_mem(int argc, char *argv[])
 			return 1; // FIXME memory leak
 		}
 	} else update_a(opt, &opt0);
-//	if (opt->T < opt->min_HSP_score) opt->T = opt->min_HSP_score; // TODO: tie ->T to MEM_HSP_COEF
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
@@ -234,7 +235,8 @@ int main_mem(int argc, char *argv[])
 	}
 	if (!(opt->flag & MEM_F_ALN_REG))
 		bwa_print_sam_hdr(idx->bns, rg_line);
-	while ((seqs = bseq_read(opt->chunk_size * opt->n_threads, &n, ks, ks2)) != 0) {
+	actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
+	while ((seqs = bseq_read(actual_chunk_size, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
 		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
 			if (bwa_verbose >= 2)
