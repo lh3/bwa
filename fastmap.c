@@ -155,8 +155,9 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -L INT[,INT]  penalty for 5'- and 3'-end clipping [%d,%d]\n", opt->pen_clip5, opt->pen_clip3);
 		fprintf(stderr, "       -U INT        penalty for an unpaired read pair [%d]\n\n", opt->pen_unpaired);
 		fprintf(stderr, "       -x STR        read type. Setting -x changes multiple parameters unless overriden [null]\n");
-		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0\n");
-		fprintf(stderr, "                     ont2d: -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0\n");
+		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0  (PacBio reads to ref)\n");
+		fprintf(stderr, "                     ont2d: -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0  (Oxford Nanopore 2D-reads to ref)\n");
+		fprintf(stderr, "                     intractg: -B9 -O16 -L5  (intra-species contigs to ref)\n");
 //		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A1 -B1 -O1 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
@@ -182,16 +183,20 @@ int main_mem(int argc, char *argv[])
 	}
 
 	if (mode) {
-		if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0 || strcmp(mode, "ont2d") == 0) {
-			if (!opt0.a) opt->a = 1, opt0.a = 1;
-			update_a(opt, &opt0);
+		if (strcmp(mode, "intractg") == 0) {
+			if (!opt0.o_del) opt->o_del = 16;
+			if (!opt0.o_ins) opt->o_ins = 16;
+			if (!opt0.b) opt->b = 9;
+			if (!opt0.pen_clip5) opt->pen_clip5 = 5;
+			if (!opt0.pen_clip3) opt->pen_clip3 = 5;
+		} else if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread") == 0 || strcmp(mode, "ont2d") == 0) {
 			if (!opt0.o_del) opt->o_del = 1;
 			if (!opt0.e_del) opt->e_del = 1;
 			if (!opt0.o_ins) opt->o_ins = 1;
 			if (!opt0.e_ins) opt->e_ins = 1;
 			if (!opt0.b) opt->b = 1;
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
-			if (strcmp(mode, "pbread1") == 0 || strcmp(mode, "pbread") == 0) { // pacbio read-to-read setting; NOT working well!
+			if (strcmp(mode, "pbread") == 0) { // pacbio read-to-read setting; NOT working well!
 				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
 				if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
 				if (!opt0.max_occ) opt->max_occ = 1000;
