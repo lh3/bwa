@@ -12,8 +12,10 @@ having ALT contigs almost has not effect on alignments to the primary assembly
 (seeding may be affected in rare corner cases). At the same time, users may
 get a primary alignment to ALT contigs (no 0x800 flag) if there are no good
 hits to the primary assembly, or get a supplementary alignment to ALT contigs
-if it is better than hits to the primary assembly. Since this release, it is
-recommended to include ALT contigs.
+if it is better than hits to the primary assembly. In the latter case, the
+`pa:f` tag shows the ratio of the primary hit score to the best ALT hit score,
+which is no greater than 1. Since this release, it is recommended to include
+ALT contigs.
 
 Users may consider to use ALT contigs from GRCh38. I am also constructing a
 non-redundant and more complete set of sequences missing from GRCh38.
