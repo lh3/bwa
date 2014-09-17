@@ -880,13 +880,13 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		for (i = 0; i < n; ++i)
 			if (i != which && !(list[i].flag&0x100)) break;
 		if (i < n) { // there are other primary hits; output them
-			int has_pri_alt = 0;
+			int pri_alt_sc = -1;
 			kputsn("\tSA:Z:", 6, str);
 			for (i = 0; i < n; ++i) {
 				const mem_aln_t *r = &list[i];
 				int k;
 				if (i == which || (list[i].flag&0x100)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
-				if (list[i].is_alt) has_pri_alt = 1;
+				if (list[i].is_alt) pri_alt_sc = pri_alt_sc > r->score? pri_alt_sc : r->score;
 				kputs(bns->anns[r->rid].name, str); kputc(',', str);
 				kputl(r->pos+1, str); kputc(',', str);
 				kputc("+-"[r->is_rev], str); kputc(',', str);
@@ -897,7 +897,8 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 				kputc(',', str); kputw(r->NM, str);
 				kputc(';', str);
 			}
-			if (has_pri_alt) kputsn("\tpa:A:Y", 7, str);
+			if (pri_alt_sc > 0)
+				ksprintf(str, "\tpa:f:%.3f", (double)p->score / pri_alt_sc);
 		}
 	}
 	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }

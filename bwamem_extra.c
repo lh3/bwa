@@ -59,19 +59,13 @@ void smem_config(smem_i *itr, int min_intv, int max_len, uint64_t max_intv)
 
 const bwtintv_v *smem_next(smem_i *itr)
 {
-	int i, max, max_i, ori_start;
+	int ori_start;
 	itr->tmpvec[0]->n = itr->tmpvec[1]->n = itr->matches->n = itr->sub->n = 0;
 	if (itr->start >= itr->len || itr->start < 0) return 0;
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return 0;
 	ori_start = itr->start;
 	itr->start = bwt_smem1a(itr->bwt, itr->len, itr->query, ori_start, itr->min_intv, itr->max_len, itr->max_intv, itr->matches, itr->tmpvec); // search for SMEM
-	if (itr->matches->n == 0) return itr->matches; // well, in theory, we should never come here
-	for (i = max = 0, max_i = 0; i < itr->matches->n; ++i) { // look for the longest match
-		bwtintv_t *p = &itr->matches->a[i];
-		int len = (uint32_t)p->info - (p->info>>32);
-		if (max < len) max = len, max_i = i;
-	}
 	return itr->matches;
 }
 
