@@ -48,6 +48,7 @@ typedef struct {
 	float XA_drop_ratio;    // when counting hits for the XA tag, ignore alignments with score < XA_drop_ratio * max_score; only effective for the XA tag
 	float mask_level_redun;
 	float mapQ_coef_len;
+	float min_pa_ratio;
 	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
@@ -62,6 +63,7 @@ typedef struct {
 	int score;      // best local SW score
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
+	int alt_sc;
 	int csub;       // SW score of a tandem hit
 	int sub_n;      // approximate number of suboptimal hits
 	int w;          // actual band width used in extension
@@ -90,7 +92,7 @@ typedef struct { // This struct is only used for the convenience of API.
 	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
 	char *XA;        // alternative mappings
 
-	int score, sub;
+	int score, sub, alt_sc;
 } mem_aln_t;
 
 #ifdef __cplusplus
