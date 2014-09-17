@@ -103,6 +103,8 @@ Bytes.prototype.revcomp = function()
 		this[this.length>>1] = Bytes.rctab[this[this.length>>1]];
 }
 
+var re_cigar = /(\d+)([MIDSHN])/g;
+
 /************************
  *** command markovlp ***
  ************************/
@@ -432,80 +434,65 @@ function intv_ovlp(intv, bits) // interval index
 	}
 }
 
-function bwa_genalt(args)
+function cigar2pos(cigar, pos) // given a pos on ALT and the ALT-to-REF CIGAR, find the pos on REF
 {
-	var re_cigar = /(\d+)([MIDSHN])/g;
-
-	function cigar2pos(cigar, pos) // given a pos on ALT and the ALT-to-REF CIGAR, find the pos on REF
-	{
-		var x = 0, y = 0;
-		for (var i = 0; i < cigar.length; ++i) {
-			var op = cigar[i][0], len = cigar[i][1];
-			if (op == 'M') {
-				if (y <= pos && pos < y + len)
-					return x + (pos - y);
-				x += len, y += len;
-			} else if (op == 'D') {
-				x += len;
-			} else if (op == 'I') {
-				if (y <= pos && pos < y + len)
-					return x;
-				y += len;
-			} else if (op == 'S' || op == 'H') {
-				if (y <= pos && pos < y + len)
-					return -1;
-				y += len;
-			}
+	var x = 0, y = 0;
+	for (var i = 0; i < cigar.length; ++i) {
+		var op = cigar[i][0], len = cigar[i][1];
+		if (op == 'M') {
+			if (y <= pos && pos < y + len)
+				return x + (pos - y);
+			x += len, y += len;
+		} else if (op == 'D') {
+			x += len;
+		} else if (op == 'I') {
+			if (y <= pos && pos < y + len)
+				return x;
+			y += len;
+		} else if (op == 'S' || op == 'H') {
+			if (y <= pos && pos < y + len)
+				return -1;
+			y += len;
 		}
-		return -1;
 	}
+	return -1;
+}
 
-	function parse_hit(s, opt) // parse a hit. s looks something like ["chr1", "+12345", "100M", 5]
-	{
-		var h = {};
-		h.ctg = s[0];
-		h.start = parseInt(s[1].substr(1)) - 1;
-		h.rev = (s[1].charAt(0) == '-');
-		h.cigar = s[2];
-		h.NM = parseInt(s[3]);
-		h.hard = false;
-		var m, l_ins, n_ins, l_del, n_del, l_match, l_skip, l_clip;
-		l_ins = l_del = n_ins = n_del = l_match = l_skip = l_clip = 0;
-		while ((m = re_cigar.exec(h.cigar)) != null) {
-			var l = parseInt(m[1]);
-			if (m[2] == 'M') l_match += l;
-			else if (m[2] == 'D') ++n_del, l_del += l;
-			else if (m[2] == 'I') ++n_ins, l_ins += l;
-			else if (m[2] == 'N') l_skip += l;
-			else if (m[2] == 'H' || m[2] == 'S') {
-				l_clip += l;
-				if (m[2] == 'H') h.hard = true;
-			}
+function parse_hit(s, opt) // parse a hit. s looks something like ["chr1", "+12345", "100M", 5]
+{
+	var h = {};
+	h.ctg = s[0];
+	h.start = parseInt(s[1].substr(1)) - 1;
+	h.rev = (s[1].charAt(0) == '-');
+	h.cigar = s[2];
+	h.NM = parseInt(s[3]);
+	h.hard = false;
+	var m, l_ins, n_ins, l_del, n_del, l_match, l_skip, l_clip;
+	l_ins = l_del = n_ins = n_del = l_match = l_skip = l_clip = 0;
+	while ((m = re_cigar.exec(h.cigar)) != null) {
+		var l = parseInt(m[1]);
+		if (m[2] == 'M') l_match += l;
+		else if (m[2] == 'D') ++n_del, l_del += l;
+		else if (m[2] == 'I') ++n_ins, l_ins += l;
+		else if (m[2] == 'N') l_skip += l;
+		else if (m[2] == 'H' || m[2] == 'S') {
+			l_clip += l;
+			if (m[2] == 'H') h.hard = true;
 		}
-		h.end = h.start + l_match + l_del + l_skip;
-		h.NM = h.NM > l_del + l_ins? h.NM : l_del + l_ins;
-		h.score = Math.floor((opt.a * l_match - (opt.a + opt.b) * (h.NM - l_del - l_ins) - opt.o * (n_del + n_ins) - opt.e * (l_del + l_ins)) / opt.a + .499);
-		h.l_query = l_match + l_ins + l_clip;
-		return h;
 	}
+	h.end = h.start + l_match + l_del + l_skip;
+	h.NM = h.NM > l_del + l_ins? h.NM : l_del + l_ins;
+	h.score = Math.floor((opt.a * l_match - (opt.a + opt.b) * (h.NM - l_del - l_ins) - opt.o * (n_del + n_ins) - opt.e * (l_del + l_ins)) / opt.a + .499);
+	h.l_query = l_match + l_ins + l_clip;
+	return h;
+}
 
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3 };
-
-	while ((c = getopt(args, 'v:')) != null) {
-		if (c == 'v') opt.verbose = parseInt(getopt.arg);
-	}
-
-	if (args.length == getopt.ind) {
-		print("Usage: k8 bwa-helper.js genalt <alt.sam> [aln.sam]");
-		exit(1);
-	}
-
-	var file, buf = new Bytes();
-	var aux = new Bytes(); // used for reverse and reverse complement
-
-	// read the ALT-to-REF alignment and generate the index
+// read the ALT-to-REF alignment and generate the index
+function read_ALT_sam(fn)
+{
 	var intv = {};
-	file = new File(args[getopt.ind]);
+	var file = new File(fn);
+	var buf = new Bytes();
 	while (file.readline(buf) >= 0) {
 		var line = buf.toString();
 		var t = line.split("\t");
@@ -524,11 +511,31 @@ function bwa_genalt(args)
 		intv[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
 		//print(start, start + l_qaln, t[2], flag&16? true : false, parseInt(t[3]), cigar);
 	}
+	buf.destroy();
 	file.close();
 	// create the interval index
 	var idx = {};
 	for (var ctg in intv)
 		idx[ctg] = intv_ovlp(intv[ctg]);
+	return idx;
+}
+
+function bwa_genalt(args)
+{
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3 };
+
+	while ((c = getopt(args, 'v:')) != null) {
+		if (c == 'v') opt.verbose = parseInt(getopt.arg);
+	}
+
+	if (args.length == getopt.ind) {
+		print("Usage: k8 bwa-helper.js genalt <alt.sam> [aln.sam]");
+		exit(1);
+	}
+
+	var file, buf = new Bytes();
+	var aux = new Bytes(); // used for reverse and reverse complement
+	var idx = read_ALT_sam(args[getopt.ind]);
 
 	// process SAM
 	file = args.length - getopt.ind >= 2? new File(args[getopt.ind+1]) : new File();
@@ -682,6 +689,86 @@ function bwa_genalt(args)
 	buf.destroy();
 }
 
+// This is in effect a simplified version of bwa_genalt().
+function bwa_postalt(args)
+{
+	var c, idx = {}, opt = { verbose:3, min_pa:0.8 };
+	while ((c = getopt(args, 'v:r:a:')) != null) {
+		if (c == 'v') opt.verbose = parseInt(getopt.arg);
+		else if (c == 'r') opt.min_pa = parseFloat(getopt.arg);
+		else if (c == 'a') idx = read_ALT_sam(getopt.arg);
+	}
+
+	if (args.length == getopt.ind) {
+		print("Usage: k8 bwa-helper.js postalt [-r "+opt.min_pa+"] [-a alt.sam] [aln.sam]");
+		exit(1);
+	}
+
+	// process SAM
+	var file = args.length - getopt.ind >= 1? new File(args[getopt.ind]) : new File();
+	var buf = new Bytes();
+	while (file.readline(buf) >= 0) {
+		var m, line = buf.toString();
+		if (line.charAt(0) == '@') {
+			print(line);
+			continue;
+		}
+
+		var t = line.split("\t");
+		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
+		var flag = parseInt(t[1]);
+		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
+
+		// lift mapping positions to coordinates on the primary assembly
+		{
+			var a = null;
+			if (idx[h.ctg] != null)
+				a = idx[h.ctg](h.start, h.end);
+			if (a == null) a = [];
+
+			// find the approximate position on the primary assembly
+			var lifted = [];
+			for (var j = 0; j < a.length; ++j) {
+				var s, e;
+				if (!a[j][4]) { // ALT is mapped to the forward strand of the primary assembly
+					s = cigar2pos(a[j][6], h.start);
+					e = cigar2pos(a[j][6], h.end - 1) + 1;
+				} else {
+					s = cigar2pos(a[j][6], a[j][2] - h.end);
+					e = cigar2pos(a[j][6], a[j][2] - h.start - 1) + 1;
+				}
+				if (s < 0 || e < 0) continue; // read is mapped to clippings in the ALT-to-chr alignment
+				s += a[j][5]; e += a[j][5];
+				lifted.push([a[j][3], (h.rev!=a[j][4]), s, e]);
+			}
+			h.lifted = lifted;
+		}
+
+		// update mapQ if necessary
+		var ori_mapQ = null;
+		if ((m = /\tpa:f:(\d+\.\d+)/.exec(line)) != null) {
+			if (parseFloat(m[1]) < opt.min_pa)
+				ori_mapQ = t[4], t[4] = 0;
+		}
+
+		// generate lifted_str
+		if (h.lifted && h.lifted.length) {
+			var lifted = h.lifted;
+			var u = '';
+			for (var j = 0; j < lifted.length; ++j)
+				u += lifted[j][0] + "," + lifted[j][2] + "," + lifted[j][3] + "," + (lifted[j][1]?'-':'+') + ";";
+			h.lifted_str = u;
+		} else h.lifted_str = null;
+
+		// print
+		if (ori_mapQ != null) t.push("om:i:"+ori_mapQ);
+		if (h.lifted_str) t.push("lt:Z:" + h.lifted_str);
+		print(t.join("\t"));
+	}
+	buf.destroy();
+	file.close();
+}
+
 /*********************
  *** Main function ***
  *********************/
@@ -690,7 +777,8 @@ function main(args)
 {
 	if (args.length == 0) {
 		print("\nUsage:    k8 bwa-helper.js <command> [arguments]\n");
-		print("Commands: genalt       generate ALT alignments");
+		print("Commands: postalt      post process ALT-aware alignments");
+		print("          genalt       generate ALT alignments for ALT-unaware alignments");
 		print("          sam2pas      convert SAM to pairwise alignment summary format (PAS)");
 		print("          pas2reg      extract covered regions");
 		print("          reg2cut      regions to extract for the 2nd round bwa-mem");
@@ -708,6 +796,7 @@ function main(args)
 	else if (cmd == 'pas2reg') bwa_pas2reg(args);
 	else if (cmd == 'reg2cut') bwa_reg2cut(args);
 	else if (cmd == 'genalt') bwa_genalt(args);
+	else if (cmd == 'postalt') bwa_postalt(args);
 	else if (cmd == 'shortname') bwa_shortname(args);
 	else warn("Unrecognized command");
 }
