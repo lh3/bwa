@@ -55,7 +55,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:g:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -85,6 +85,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'N') opt->max_chain_extend = atoi(optarg), opt0.max_chain_extend = 1;
 		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
 		else if (c == 'y') opt->max_mem_intv = atol(optarg), opt0.max_mem_intv = 1;
+		else if (c == 'g') opt->min_pa_ratio = atof(optarg), opt0.min_pa_ratio = 1;
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'K') fixed_chunk_size = atoi(optarg);
 		else if (c == 'Q') {
@@ -138,7 +139,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -w INT        band width for banded alignment [%d]\n", opt->w);
 		fprintf(stderr, "       -d INT        off-diagonal X-dropoff [%d]\n", opt->zdrop);
 		fprintf(stderr, "       -r FLOAT      look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
-		fprintf(stderr, "       -y INT        find MEMs longer than {-k} * {-r} with size less than INT [%ld]\n", (long)opt->max_mem_intv);
+		fprintf(stderr, "       -y INT        find MEMs longer than {-k} * {-r} with size less than INT (EXPERIMENTAL) [%ld]\n", (long)opt->max_mem_intv);
 //		fprintf(stderr, "       -s INT        look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT        skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->drop_ratio);
@@ -164,6 +165,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
+		fprintf(stderr, "       -g FLOAT      set mapQ to zero if the ratio of the primary-to-alt scores below FLOAT [%.3f]\n", opt->min_pa_ratio);
 		fprintf(stderr, "       -T INT        minimum score to output [%d]\n", opt->T);
 		fprintf(stderr, "       -h INT        if there are <INT hits with score >80%% of the max score, output all in XA [%d]\n", opt->max_hits);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
