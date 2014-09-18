@@ -2,7 +2,7 @@ Release 0.7.11 (XX September, 2014)
 -----------------------------------
 
 A major change to BWA-MEM is the support of mapping to ALT contigs. To use this
-feature, users need to manually create a file "<indexbase>.alt" with each line
+feature, users need to manually create a file `indexbase.alt` with each line
 giving the name of an ALT contig. During alignment, BWA-MEM will be able to
 classify potential hits to ALT and non-ALT hits. It reports alignments and
 assigns mapping quality (mapQ) loosely following these rules:
