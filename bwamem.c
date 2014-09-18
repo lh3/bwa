@@ -78,6 +78,7 @@ mem_opt_t *mem_opt_init()
 	o->min_chain_weight = 0;
 	o->max_chain_extend = 1<<30;
 	o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
+	o->min_pa_ratio = 0.8;
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -514,14 +515,18 @@ int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id
 	int_v z = {0,0,0};
 	if (n == 0) return 0;
 	for (i = n_pri = 0; i < n; ++i) {
-		a[i].sub = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
+		a[i].sub = 0, a[i].alt_sc = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
 		if (!a[i].is_alt) ++n_pri;
 	}
 	ks_introsort(mem_ars_hash, n, a);
 	mem_mark_primary_se_core(opt, n, a, &z);
-	for (i = 0; i < n; ++i) // don't track the "parent" hit of ALT secondary hits
-		if (a[i].is_alt && a[i].secondary >= 0)
-			a[i].secondary = INT_MAX;
+	for (i = 0; i < n; ++i) {
+		mem_alnreg_t *p = &a[i];
+		if (p->is_alt && p->secondary >= 0) // don't track the "parent" hit of ALT secondary hits
+			p->secondary = INT_MAX;
+		if (!p->is_alt && p->secondary >= 0 && a[p->secondary].is_alt)
+			p->alt_sc = a[p->secondary].score;
+	}
 	if (n_pri > 0 || n_pri != n) {
 		ks_introsort(mem_ars_hash2, n, a);
 		for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
@@ -808,7 +813,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 	if (p->rid >= 0) { // with coordinate
 		kputs(bns->anns[p->rid].name, str); kputc('\t', str); // RNAME
 		kputl(p->pos + 1, str); kputc('\t', str); // POS
-		kputw(p->mapq, str); kputc('\t', str); // MAPQ
+		kputw(p->score < opt->min_pa_ratio * p->alt_sc? 0 : p->mapq, str); kputc('\t', str); // MAPQ
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
 				int c = p->cigar[i]&0xf;
@@ -880,13 +885,11 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		for (i = 0; i < n; ++i)
 			if (i != which && !(list[i].flag&0x100)) break;
 		if (i < n) { // there are other primary hits; output them
-			int pri_alt_sc = -1;
 			kputsn("\tSA:Z:", 6, str);
 			for (i = 0; i < n; ++i) {
 				const mem_aln_t *r = &list[i];
 				int k;
-				if (i == which || (list[i].flag&0x100)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
-				if (list[i].is_alt) pri_alt_sc = pri_alt_sc > r->score? pri_alt_sc : r->score;
+				if (i == which || (r->flag&0x100)) continue; // proceed if: 1) different from the current; 2) not shadowed multi hit
 				kputs(bns->anns[r->rid].name, str); kputc(',', str);
 				kputl(r->pos+1, str); kputc(',', str);
 				kputc("+-"[r->is_rev], str); kputc(',', str);
@@ -897,9 +900,11 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 				kputc(',', str); kputw(r->NM, str);
 				kputc(';', str);
 			}
-			if (pri_alt_sc > 0)
-				ksprintf(str, "\tpa:f:%.3f", (double)p->score / pri_alt_sc);
 		}
+		if (p->alt_sc > 0)
+			ksprintf(str, "\tpa:f:%.3f", (double)p->score / p->alt_sc);
+		if (p->score < opt->min_pa_ratio * p->alt_sc)
+			ksprintf(str, "\tom:i:%d", p->mapq);
 	}
 	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
@@ -1098,7 +1103,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	assert(a.rid == ar->rid);
 	a.pos = pos - bns->anns[a.rid].offset;
 	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
-	a.is_alt = ar->is_alt;
+	a.is_alt = ar->is_alt; a.alt_sc = ar->alt_sc;
 	free(query);
 	return a;
 }
