@@ -527,7 +527,7 @@ int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id
 		if (!p->is_alt && p->secondary >= 0 && a[p->secondary].is_alt)
 			p->alt_sc = a[p->secondary].score;
 	}
-	if (n_pri > 0 || n_pri != n) {
+	if (n_pri > 0 && n_pri < n) {
 		ks_introsort(mem_ars_hash2, n, a);
 		for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
 		mem_mark_primary_se_core(opt, n_pri, a, &z);
