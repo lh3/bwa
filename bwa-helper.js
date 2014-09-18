@@ -520,7 +520,7 @@ function read_ALT_sam(fn)
 	return idx;
 }
 
-function bwa_genalt(args)
+function bwa_altgen(args)
 {
 	var c, opt = { a:1, b:4, o:6, e:1, verbose:3 };
 
@@ -529,7 +529,7 @@ function bwa_genalt(args)
 	}
 
 	if (args.length == getopt.ind) {
-		print("Usage: k8 bwa-helper.js genalt <alt.sam> [aln.sam]");
+		print("Usage: k8 bwa-helper.js altgen <alt.sam> [aln.sam]");
 		exit(1);
 	}
 
@@ -690,22 +690,16 @@ function bwa_genalt(args)
 }
 
 // This is in effect a simplified version of bwa_genalt().
-function bwa_postalt(args)
+function bwa_altlift(args)
 {
-	var c, idx = {}, opt = { verbose:3, min_pa:0.8 };
-	while ((c = getopt(args, 'v:r:a:')) != null) {
-		if (c == 'v') opt.verbose = parseInt(getopt.arg);
-		else if (c == 'r') opt.min_pa = parseFloat(getopt.arg);
-		else if (c == 'a') idx = read_ALT_sam(getopt.arg);
-	}
-
-	if (args.length == getopt.ind) {
-		print("Usage: k8 bwa-helper.js postalt [-r "+opt.min_pa+"] [-a alt.sam] [aln.sam]");
+	if (args.length == 0) {
+		print("Usage: k8 bwa-helper.js altlift <alt-to-ref.sam> [aln.sam]");
 		exit(1);
 	}
+	var idx = read_ALT_sam(args[0]);
 
 	// process SAM
-	var file = args.length - getopt.ind >= 1? new File(args[getopt.ind]) : new File();
+	var file = args.length >= 2? new File(args[1]) : new File();
 	var buf = new Bytes();
 	while (file.readline(buf) >= 0) {
 		var m, line = buf.toString();
@@ -720,36 +714,27 @@ function bwa_postalt(args)
 		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
 
 		// lift mapping positions to coordinates on the primary assembly
-		{
-			var a = null;
-			if (idx[h.ctg] != null)
-				a = idx[h.ctg](h.start, h.end);
-			if (a == null) a = [];
+		var a = null;
+		if (idx[h.ctg] != null)
+			a = idx[h.ctg](h.start, h.end);
+		if (a == null) a = [];
 
-			// find the approximate position on the primary assembly
-			var lifted = [];
-			for (var j = 0; j < a.length; ++j) {
-				var s, e;
-				if (!a[j][4]) { // ALT is mapped to the forward strand of the primary assembly
-					s = cigar2pos(a[j][6], h.start);
-					e = cigar2pos(a[j][6], h.end - 1) + 1;
-				} else {
-					s = cigar2pos(a[j][6], a[j][2] - h.end);
-					e = cigar2pos(a[j][6], a[j][2] - h.start - 1) + 1;
-				}
-				if (s < 0 || e < 0) continue; // read is mapped to clippings in the ALT-to-chr alignment
-				s += a[j][5]; e += a[j][5];
-				lifted.push([a[j][3], (h.rev!=a[j][4]), s, e]);
+		// find the approximate position on the primary assembly
+		var lifted = [];
+		for (var j = 0; j < a.length; ++j) {
+			var s, e;
+			if (!a[j][4]) { // ALT is mapped to the forward strand of the primary assembly
+				s = cigar2pos(a[j][6], h.start);
+				e = cigar2pos(a[j][6], h.end - 1) + 1;
+			} else {
+				s = cigar2pos(a[j][6], a[j][2] - h.end);
+				e = cigar2pos(a[j][6], a[j][2] - h.start - 1) + 1;
 			}
-			h.lifted = lifted;
+			if (s < 0 || e < 0) continue; // read is mapped to clippings in the ALT-to-chr alignment
+			s += a[j][5]; e += a[j][5];
+			lifted.push([a[j][3], (h.rev!=a[j][4]), s, e]);
 		}
-
-		// update mapQ if necessary
-		var ori_mapQ = null;
-		if ((m = /\tpa:f:(\d+\.\d+)/.exec(line)) != null) {
-			if (parseFloat(m[1]) < opt.min_pa)
-				ori_mapQ = t[4], t[4] = 0;
-		}
+		h.lifted = lifted;
 
 		// generate lifted_str
 		if (h.lifted && h.lifted.length) {
@@ -761,7 +746,6 @@ function bwa_postalt(args)
 		} else h.lifted_str = null;
 
 		// print
-		if (ori_mapQ != null) t.push("om:i:"+ori_mapQ);
 		if (h.lifted_str) t.push("lt:Z:" + h.lifted_str);
 		print(t.join("\t"));
 	}
@@ -777,8 +761,8 @@ function main(args)
 {
 	if (args.length == 0) {
 		print("\nUsage:    k8 bwa-helper.js <command> [arguments]\n");
-		print("Commands: postalt      post process ALT-aware alignments");
-		print("          genalt       generate ALT alignments for ALT-unaware alignments");
+		print("Commands: altlift      add lt tag to show lifted position on the primary assembly");
+		print("          altgen       generate ALT alignments for ALT-unaware alignments\n");
 		print("          sam2pas      convert SAM to pairwise alignment summary format (PAS)");
 		print("          pas2reg      extract covered regions");
 		print("          reg2cut      regions to extract for the 2nd round bwa-mem");
@@ -795,8 +779,8 @@ function main(args)
 	else if (cmd == 'markovlp') bwa_markOvlp(args);
 	else if (cmd == 'pas2reg') bwa_pas2reg(args);
 	else if (cmd == 'reg2cut') bwa_reg2cut(args);
-	else if (cmd == 'genalt') bwa_genalt(args);
-	else if (cmd == 'postalt') bwa_postalt(args);
+	else if (cmd == 'altgen' || cmd == 'genalt') bwa_alt(args);
+	else if (cmd == 'altlift') bwa_altlift(args);
 	else if (cmd == 'shortname') bwa_shortname(args);
 	else warn("Unrecognized command");
 }
