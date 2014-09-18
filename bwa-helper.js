@@ -692,6 +692,7 @@ function bwa_altgen(args)
 // This is in effect a simplified version of bwa_genalt().
 function bwa_altlift(args)
 {
+	var opt = { a:1, b:4, o:6, e:1 };
 	if (args.length == 0) {
 		print("Usage: k8 bwa-helper.js altlift <alt-to-ref.sam> [aln.sam]");
 		exit(1);
