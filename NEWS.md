@@ -1,21 +1,26 @@
-Release 0.7.11 (16 September, 2014)
+Release 0.7.11 (XX September, 2014)
 -----------------------------------
 
 A major change to BWA-MEM is the support of mapping to ALT contigs. To use this
-feature, users need to manually create a file "<index>.alt" with each line
-giving the name of an ALT contig. In mapping, BWA-MEM considers all chromosomes
-and contigs equally when it finds seeds, constructs chains, extends seeds and
-derives the final alignments. It also uses all hits for the estimation of
-mapping quality of ALT hits. However, BWA-MEM ignores ALT hits when it
-estimates the mapping quality of hits to the primary assembly. As a result,
-having ALT contigs almost has not effect on alignments to the primary assembly
-(seeding may be affected in rare corner cases). At the same time, users may
-get a primary alignment to ALT contigs (no 0x800 flag) if there are no good
-hits to the primary assembly, or get a supplementary alignment to ALT contigs
-if it is better than hits to the primary assembly. In the latter case, the
-`pa:f` tag shows the ratio of the primary hit score to the best ALT hit score,
-which is no greater than 1. Since this release, it is recommended to include
-ALT contigs.
+feature, users need to manually create a file "<indexbase>.alt" with each line
+giving the name of an ALT contig. During alignment, BWA-MEM will be able to
+classify potential hits to ALT and non-ALT hits. It reports alignments and
+assigns mapping quality (mapQ) loosely following these rules:
+
+ 1. The original mapQ of a non-ALT hit is computed across non-ALT hits only.
+    The reported mapQ of an ALT hit is always computed across all hits.
+
+ 2. An ALT hit is only reported if its score is strictly better than all
+    overlapping non-ALT hits. A reported ALT hit is flagged with 0x800
+    (supplementary) unless there are no non-ALT hits.
+
+ 3. The mapQ of a non-ALT hit is reduced to zero if its score is less than 80%
+    (controlled by option `-g`) of the score of an overlapping ALT hit. In this
+    case, the original mapQ is moved to the `om` tag.
+
+This way, non-ALT alignments are only affected by ALT contigs if there are
+significantly better ALT alignments. BWA-MEM is carefully engineered such that
+ALT contigs do not interfere with the alignments to the primary assembly.
 
 Users may consider to use ALT contigs from GRCh38. I am also constructing a
 non-redundant and more complete set of sequences missing from GRCh38.
@@ -32,12 +37,12 @@ Other notable changes to BWA-MEM:
 
  * Dropped PacBio read-to-read alignment for now. BWA-MEM is only good at
    finding the best hit, not all hits. Option `-x pbread` is still available,
-   but not shown on the command line.
+   but hidden on the command line.
 
  * Added new pre-setting for Oxford Nanopore 2D reads. For small genomes,
    though, LAST is still more sensitive.
 
-(0.7.11: 16 September 2014, r845)
+(0.7.11: XX September 2014, rXXX)
 
 
 
