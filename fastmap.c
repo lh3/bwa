@@ -79,7 +79,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'r') opt->split_factor = atof(optarg), opt0.split_factor = 1.;
 		else if (c == 'D') opt->drop_ratio = atof(optarg), opt0.drop_ratio = 1.;
 		else if (c == 'm') opt->max_matesw = atoi(optarg), opt0.max_matesw = 1;
-		else if (c == 'h') opt->max_hits = atoi(optarg), opt0.max_hits = 1;
 		else if (c == 's') opt->split_width = atoi(optarg), opt0.split_width = 1;
 		else if (c == 'G') opt->max_chain_gap = atoi(optarg), opt0.max_chain_gap = 1;
 		else if (c == 'N') opt->max_chain_extend = atoi(optarg), opt0.max_chain_extend = 1;
@@ -88,6 +87,12 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'g') opt->min_pa_ratio = atof(optarg), opt0.min_pa_ratio = 1;
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'K') fixed_chunk_size = atoi(optarg);
+		else if (c == 'h') {
+			opt0.max_XA_hits = opt0.max_XA_hits_alt = 1;
+			opt->max_XA_hits = opt->max_XA_hits_alt = strtol(optarg, &p, 10);
+			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
+				opt->max_XA_hits_alt = strtol(p+1, &p, 10);
+		}
 		else if (c == 'Q') {
 			opt0.mapQ_coef_len = 1;
 			opt->mapQ_coef_len = atoi(optarg);
@@ -167,7 +172,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
 		fprintf(stderr, "       -g FLOAT      set mapQ to zero if the ratio of the primary-to-alt scores below FLOAT [%.3f]\n", opt->min_pa_ratio);
 		fprintf(stderr, "       -T INT        minimum score to output [%d]\n", opt->T);
-		fprintf(stderr, "       -h INT        if there are <INT hits with score >80%% of the max score, output all in XA [%d]\n", opt->max_hits);
+		fprintf(stderr, "       -h INT[,INT]  if there are <INT hits with score >80%% of the max score, output all in XA [%d,%d]\n", opt->max_XA_hits, opt->max_XA_hits_alt);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -V            output the reference FASTA header in the XR tag\n");

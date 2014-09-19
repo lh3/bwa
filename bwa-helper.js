@@ -780,7 +780,7 @@ function main(args)
 	else if (cmd == 'markovlp') bwa_markOvlp(args);
 	else if (cmd == 'pas2reg') bwa_pas2reg(args);
 	else if (cmd == 'reg2cut') bwa_reg2cut(args);
-	else if (cmd == 'altgen' || cmd == 'genalt') bwa_alt(args);
+	else if (cmd == 'altgen' || cmd == 'genalt') bwa_altgen(args);
 	else if (cmd == 'altlift') bwa_altlift(args);
 	else if (cmd == 'shortname') bwa_shortname(args);
 	else warn("Unrecognized command");
