@@ -52,7 +52,7 @@ typedef struct {
 	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
-	int max_hits;           // if there are max_hits or fewer, output them all
+	int max_XA_hits, max_XA_hits_alt; // if there are max_hits or fewer, output them all
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
 } mem_opt_t;
 
@@ -69,6 +69,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
+	int secondary_alt;
 	int seedlen0;   // length of the starting seed
 	int n_comp:30, is_alt:2; // number of sub-alignments chained together
 	float frac_rep;

@@ -522,14 +522,15 @@ function read_ALT_sam(fn)
 
 function bwa_altgen(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3 };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false };
 
-	while ((c = getopt(args, 'v:')) != null) {
+	while ((c = getopt(args, 'pv:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
+		else if (c == 'p') opt.show_pri = true;
 	}
 
 	if (args.length == getopt.ind) {
-		print("Usage: k8 bwa-helper.js altgen <alt.sam> [aln.sam]");
+		print("Usage: k8 bwa-helper.js altgen [-p] <alt.sam> [aln.sam]");
 		exit(1);
 	}
 
@@ -671,6 +672,7 @@ function bwa_altgen(args)
 		for (var i = 0; i < hits.length; ++i) {
 			if (opt.verbose >= 5) print(obj2str(hits[i]));
 			if (hits[i].g != reported_g || i == reported_i) continue;
+			if (!opt.show_pri && idx[hits[i].ctg] == null) continue;
 			var s = [t[0], flag&0xf10, hits[i].ctg, hits[i].start+1, mapQ, hits[i].cigar, '*', 0, 0];
 			// update name
 			if (flag&0x40) s[0] += "/1";
@@ -689,71 +691,6 @@ function bwa_altgen(args)
 	buf.destroy();
 }
 
-// This is in effect a simplified version of bwa_genalt().
-function bwa_altlift(args)
-{
-	var opt = { a:1, b:4, o:6, e:1 };
-	if (args.length == 0) {
-		print("Usage: k8 bwa-helper.js altlift <alt-to-ref.sam> [aln.sam]");
-		exit(1);
-	}
-	var idx = read_ALT_sam(args[0]);
-
-	// process SAM
-	var file = args.length >= 2? new File(args[1]) : new File();
-	var buf = new Bytes();
-	while (file.readline(buf) >= 0) {
-		var m, line = buf.toString();
-		if (line.charAt(0) == '@') {
-			print(line);
-			continue;
-		}
-
-		var t = line.split("\t");
-		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
-		var flag = parseInt(t[1]);
-		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
-
-		// lift mapping positions to coordinates on the primary assembly
-		var a = null;
-		if (idx[h.ctg] != null)
-			a = idx[h.ctg](h.start, h.end);
-		if (a == null) a = [];
-
-		// find the approximate position on the primary assembly
-		var lifted = [];
-		for (var j = 0; j < a.length; ++j) {
-			var s, e;
-			if (!a[j][4]) { // ALT is mapped to the forward strand of the primary assembly
-				s = cigar2pos(a[j][6], h.start);
-				e = cigar2pos(a[j][6], h.end - 1) + 1;
-			} else {
-				s = cigar2pos(a[j][6], a[j][2] - h.end);
-				e = cigar2pos(a[j][6], a[j][2] - h.start - 1) + 1;
-			}
-			if (s < 0 || e < 0) continue; // read is mapped to clippings in the ALT-to-chr alignment
-			s += a[j][5]; e += a[j][5];
-			lifted.push([a[j][3], (h.rev!=a[j][4]), s, e]);
-		}
-		h.lifted = lifted;
-
-		// generate lifted_str
-		if (h.lifted && h.lifted.length) {
-			var lifted = h.lifted;
-			var u = '';
-			for (var j = 0; j < lifted.length; ++j)
-				u += lifted[j][0] + "," + lifted[j][2] + "," + lifted[j][3] + "," + (lifted[j][1]?'-':'+') + ";";
-			h.lifted_str = u;
-		} else h.lifted_str = null;
-
-		// print
-		if (h.lifted_str) t.push("lt:Z:" + h.lifted_str);
-		print(t.join("\t"));
-	}
-	buf.destroy();
-	file.close();
-}
-
 /*********************
  *** Main function ***
  *********************/
@@ -762,8 +699,7 @@ function main(args)
 {
 	if (args.length == 0) {
 		print("\nUsage:    k8 bwa-helper.js <command> [arguments]\n");
-		print("Commands: altlift      add lt tag to show lifted position on the primary assembly");
-		print("          altgen       generate ALT alignments for ALT-unaware alignments\n");
+		print("Commands: altgen       generate ALT alignments for ALT-unaware alignments");
 		print("          sam2pas      convert SAM to pairwise alignment summary format (PAS)");
 		print("          pas2reg      extract covered regions");
 		print("          reg2cut      regions to extract for the 2nd round bwa-mem");
@@ -780,8 +716,7 @@ function main(args)
 	else if (cmd == 'markovlp') bwa_markOvlp(args);
 	else if (cmd == 'pas2reg') bwa_pas2reg(args);
 	else if (cmd == 'reg2cut') bwa_reg2cut(args);
-	else if (cmd == 'altgen' || cmd == 'genalt') bwa_alt(args);
-	else if (cmd == 'altlift') bwa_altlift(args);
+	else if (cmd == 'altgen' || cmd == 'genalt') bwa_altgen(args);
 	else if (cmd == 'shortname') bwa_shortname(args);
 	else warn("Unrecognized command");
 }
