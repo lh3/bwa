@@ -351,27 +351,23 @@ function bwa_postalt(args)
 		for (var i = 0; i < hits.length; ++i)
 			if (hits[i].g == reported_g)
 				++n_group0;
-		if (n_group0 == 1) { // then keep the reported alignment and mapQ
-			buf2.push(t);
-			continue;
-		}
 
-		// re-estimate mapQ
-		var group_max = [];
-		for (var i = 0; i < hits.length; ++i) {
-			var g = hits[i].g;
-			if (group_max[g] == null || group_max[g][0] < hits[i].score)
-				group_max[g] = [hits[i].score, g];
-		}
-		if (group_max.length > 1)
-			group_max.sort(function(x,y) {return y[0]-x[0]});
-		var mapQ;
-		if (group_max[0][1] == reported_g) { // the best hit is the hit reported in SAM
-			mapQ = group_max.length == 1? 60 : 6 * (group_max[0][0] - group_max[1][0]);
-		} else mapQ = 0;
-		mapQ = mapQ < 60? mapQ : 60;
-		var ori_mapQ = t[4];
-		mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
+		var mapQ, ori_mapQ = t[4];
+		if (n_group0 > 1) { // then re-estimate mapQ
+			var group_max = [];
+			for (var i = 0; i < hits.length; ++i) {
+				var g = hits[i].g;
+				if (group_max[g] == null || group_max[g][0] < hits[i].score)
+					group_max[g] = [hits[i].score, g];
+			}
+			if (group_max.length > 1)
+				group_max.sort(function(x,y) {return y[0]-x[0]});
+			if (group_max[0][1] == reported_g) { // the best hit is the hit reported in SAM
+				mapQ = group_max.length == 1? 60 : 6 * (group_max[0][0] - group_max[1][0]);
+			} else mapQ = 0;
+			mapQ = mapQ < 60? mapQ : 60;
+			mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
+		} else mapQ = t[4];
 
 		// check if the reported hit overlaps a hit to the primary assembly; if so, don't reduce mapping quality
 		if (opt.recover_mapq && n_rpt_lifted == 1 && mapQ > 0) {
@@ -420,7 +416,7 @@ function bwa_postalt(args)
 
 		// print
 		t[4] = mapQ;
-		t.push("om:i:"+ori_mapQ);
+		if (n_group0 > 1) t.push("om:i:"+ori_mapQ);
 		if (hits[reported_i].lifted_str) t.push("lt:Z:" + hits[reported_i].lifted_str);
 		buf2.push(t);
 		var cnt = 0;
