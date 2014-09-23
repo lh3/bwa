@@ -13,6 +13,7 @@
  *** From k8.js ***
  ******************/
 
+// Parse command-line options. A BSD getopt() clone in javascript.
 var getopt = function(args, ostr) {
 	var oli; // option letter list index
 	if (typeof(getopt.place) == 'undefined')
@@ -51,6 +52,7 @@ var getopt = function(args, ostr) {
 	return optopt;
 }
 
+// print an object in a format similar to JSON. For debugging.
 function obj2str(o)
 {
 	if (typeof(o) != 'object') {
@@ -75,6 +77,7 @@ function obj2str(o)
 	}
 }
 
+// reverse a string
 Bytes.prototype.reverse = function()
 {
 	for (var i = 0; i < this.length>>1; ++i) {
@@ -84,6 +87,7 @@ Bytes.prototype.reverse = function()
 	}
 }
 
+// reverse complement a DNA string
 Bytes.prototype.revcomp = function()
 {
 	if (Bytes.rctab == null) {
@@ -103,13 +107,8 @@ Bytes.prototype.revcomp = function()
 		this[this.length>>1] = Bytes.rctab[this[this.length>>1]];
 }
 
-var re_cigar = /(\d+)([MIDSHN])/g;
-
-/******************************
- *** Generate ALT alignment ***
- ******************************/
-
-function intv_ovlp(intv, bits) // interval index
+// create index for a list of intervals for fast interval queries; ported from bedidx.c in samtools
+function intv_ovlp(intv, bits)
 {
 	if (typeof bits == "undefined") bits = 13;
 	intv.sort(function(a,b) {return a[0]-b[0];});
@@ -142,7 +141,14 @@ function intv_ovlp(intv, bits) // interval index
 	}
 }
 
-function cigar2pos(cigar, pos) // given a pos on ALT and the ALT-to-REF CIGAR, find the pos on REF
+var re_cigar = /(\d+)([MIDSHN])/g;
+
+/******************************
+ *** Generate ALT alignment ***
+ ******************************/
+
+// given a pos on ALT and the ALT-to-REF CIGAR, find the pos on REF
+function cigar2pos(cigar, pos)
 {
 	var x = 0, y = 0;
 	for (var i = 0; i < cigar.length; ++i) {
@@ -166,7 +172,9 @@ function cigar2pos(cigar, pos) // given a pos on ALT and the ALT-to-REF CIGAR, f
 	return -1;
 }
 
-function parse_hit(s, opt) // parse a hit. s looks something like ["chr1", "+12345", "100M", 5]
+// Parse a hit. $s is an array that looks something like ["chr1", "+12345", "100M", 5]
+// Return an object keeping various information about the alignment.
+function parse_hit(s, opt)
 {
 	var h = {};
 	h.ctg = s[0];
@@ -221,7 +229,7 @@ function read_ALT_sam(fn)
 	}
 	buf.destroy();
 	file.close();
-	// create the interval index
+	// create index for intervals on ALT contigs
 	var idx = {};
 	for (var ctg in intv)
 		idx[ctg] = intv_ovlp(intv[ctg]);
@@ -270,20 +278,22 @@ function bwa_postalt(args)
 
 		var t = line.split("\t");
 		t[1] = parseInt(t[1]); t[3] = parseInt(t[3]); t[4] = parseInt(t[4]);
-		if (buf2.length && buf2[0][0] != t[0]) {
+
+		// print bufferred reads
+		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
 			for (var i = 0; i < buf2.length; ++i)
 				print(buf2[i].join("\t"));
 			buf2 = [];
 		}
 
-		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) { // TODO: this does not work with PE file
+		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
 			buf2.push(t);
 			continue;
 		}
-
-		// parse hits
-		var hits = [];
 		var XA_strs = m[1].split(";");
+
+		// parse the reported hit
+		var hits = [];
 		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
 		var flag = t[1];
 		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
@@ -292,11 +302,13 @@ function bwa_postalt(args)
 			continue;
 		}
 		hits.push(h);
-		for (var i = 0; i < XA_strs.length; ++i) // hits in the XA tag
+
+		// parse hits in the XA tag
+		for (var i = 0; i < XA_strs.length; ++i)
 			if (XA_strs[i] != '') // as the last symbol in an XA tag is ";", the last split is an empty string
 				hits.push(parse_hit(XA_strs[i].split(","), opt));
 
-		// lift mapping positions to coordinates on the primary assembly
+		// lift mapping positions to the primary assembly
 		var n_lifted = 0, n_rpt_lifted = 0;
 		for (var i = 0; i < hits.length; ++i) {
 			var h = hits[i];
@@ -328,7 +340,7 @@ function bwa_postalt(args)
 			continue;
 		}
 
-		// group hits
+		// group hits based on the lifted positions on the primary assembly
 		for (var i = 0; i < hits.length; ++i) { // set keys for sorting
 			if (hits[i].lifted && hits[i].lifted.length) // TODO: only the first element in lifted[] is used
 				hits[i].pctg = hits[i].lifted[0][0], hits[i].pstart = hits[i].lifted[0][2], hits[i].pend = hits[i].lifted[0][3];
@@ -352,8 +364,9 @@ function bwa_postalt(args)
 			if (hits[i].g == reported_g)
 				++n_group0;
 
+		// re-estimate mapping quality if necessary
 		var mapQ, ori_mapQ = t[4];
-		if (n_group0 > 1) { // then re-estimate mapQ
+		if (n_group0 > 1) {
 			var group_max = [];
 			for (var i = 0; i < hits.length; ++i) {
 				var g = hits[i].g;
@@ -414,11 +427,13 @@ function bwa_postalt(args)
 			aux.set(t[10],0); aux.reverse(); rq = aux.toString();
 		}
 
-		// print
+		// stage the reported hit
 		t[4] = mapQ;
 		if (n_group0 > 1) t.push("om:i:"+ori_mapQ);
 		if (hits[reported_i].lifted_str) t.push("lt:Z:" + hits[reported_i].lifted_str);
 		buf2.push(t);
+
+		// stage the hits generated from the XA tag
 		var cnt = 0;
 		for (var i = 0; i < hits.length; ++i) {
 			if (opt.verbose >= 5) print(obj2str(hits[i]));
