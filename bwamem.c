@@ -858,7 +858,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputsn("*\t*", 3, str);
 	} else if (!p->is_rev) { // the forward strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP)) { // have cigar && not the primary alignment && not softclip all
+		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt) { // have cigar && not the primary alignment && not softclip all
 			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qb += p->cigar[0]>>4;
 			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qe -= p->cigar[p->n_cigar-1]>>4;
 		}
@@ -872,7 +872,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		} else kputc('*', str);
 	} else { // the reverse strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP)) {
+		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt) {
 			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qe -= p->cigar[0]>>4;
 			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qb += p->cigar[p->n_cigar-1]>>4;
 		}
