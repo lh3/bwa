@@ -10,8 +10,8 @@
 #include "bwamem.h"
 #include "kvec.h"
 #include "utils.h"
+#include "bntseq.h"
 #include "kseq.h"
-#include "utils.h"
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
@@ -38,7 +38,7 @@ static void update_a(mem_opt_t *opt, const mem_opt_t *opt0)
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt, opt0;
-	int fd, fd2, i, c, n, copy_comment = 0;
+	int fd, fd2, i, c, n, copy_comment = 0, ignore_alt = 0;
 	int fixed_chunk_size = -1, actual_chunk_size;
 	gzFile fp, fp2 = 0;
 	kseq_t *ks, *ks2 = 0;
@@ -55,7 +55,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:g:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:g:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -76,6 +76,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
+		else if (c == 'j') ignore_alt = 1;
 		else if (c == 'r') opt->split_factor = atof(optarg), opt0.split_factor = 1.;
 		else if (c == 'D') opt->drop_ratio = atof(optarg), opt0.drop_ratio = 1.;
 		else if (c == 'm') opt->max_matesw = atoi(optarg), opt0.max_matesw = 1;
@@ -168,6 +169,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
+		fprintf(stderr, "       -j            ignore ALT contigs\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
 		fprintf(stderr, "       -g FLOAT      set mapQ to zero if the ratio of the primary-to-alt scores below FLOAT [%.3f]\n", opt->min_pa_ratio);
@@ -229,6 +231,9 @@ int main_mem(int argc, char *argv[])
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 
 	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
+	if (ignore_alt)
+		for (i = 0; i < idx->bns->n_seqs; ++i)
+			idx->bns->anns[i].is_alt = 0;
 
 	ko = kopen(argv[optind + 1], &fd);
 	if (ko == 0) {
