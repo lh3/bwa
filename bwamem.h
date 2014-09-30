@@ -69,7 +69,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
-	int secondary_alt;
+	int secondary_all;
 	int seedlen0;   // length of the starting seed
 	int n_comp:30, is_alt:2; // number of sub-alignments chained together
 	float frac_rep;

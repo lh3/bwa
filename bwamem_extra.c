@@ -112,34 +112,35 @@ void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	s->sam = str.s;
 }
 
-static inline void get_pri_idx(double XA_drop_ratio, const mem_alnreg_t *a, int i, int r[2])
+static inline int get_pri_idx(double XA_drop_ratio, const mem_alnreg_t *a, int i)
 {
-	int j = a[i].secondary, k = a[i].secondary_alt;
-	r[0] = r[1] = -1;
-	if (j >= 0 && j < INT_MAX && !a[j].is_alt && !a[i].is_alt && a[i].score >= a[j].score * XA_drop_ratio) r[0] = j;
-	if (k >= 0 && a[k].is_alt && a[i].score >= a[k].score * XA_drop_ratio) r[1] = k;
+	int k = a[i].secondary_all;
+	if (k >= 0 && a[i].score >= a[k].score * XA_drop_ratio) return k;
+	return -1;
 }
 
 // Okay, returning strings is bad, but this has happened a lot elsewhere. If I have time, I need serious code cleanup.
 char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query) // ONLY work after mem_mark_primary_se()
 {
-	int i, k, *cnt, tot, r[2];
+	int i, k, r, *cnt, tot;
 	kstring_t *aln = 0, str = {0,0,0};
-	char **XA = 0;
+	char **XA = 0, *has_alt;
 
 	cnt = calloc(a->n, sizeof(int));
+	has_alt = calloc(a->n, 1);
 	for (i = 0, tot = 0; i < a->n; ++i) {
-		get_pri_idx(opt->XA_drop_ratio, a->a, i, r);
-		if (r[0] >= 0) ++cnt[r[0]], ++tot;
-		if (r[1] >= 0) ++cnt[r[1]], ++tot;
+		r = get_pri_idx(opt->XA_drop_ratio, a->a, i);
+		if (r >= 0) {
+			++cnt[r], ++tot;
+			if (a->a[i].is_alt) has_alt[r] = 1;
+		}
 	}
 	if (tot == 0) goto end_gen_alt;
 	aln = calloc(a->n, sizeof(kstring_t));
 	for (i = 0; i < a->n; ++i) {
 		mem_aln_t t;
-		get_pri_idx(opt->XA_drop_ratio, a->a, i, r);
-		if (r[0] < 0 && r[1] < 0) continue;
-		if ((r[0] >= 0 && cnt[r[0]] > opt->max_XA_hits) || (r[1] >= 0 && cnt[r[1]] > opt->max_XA_hits_alt)) continue;
+		if ((r = get_pri_idx(opt->XA_drop_ratio, a->a, i)) < 0) continue;
+		if (cnt[r] > opt->max_XA_hits_alt || (!has_alt[r] && cnt[r] > opt->max_XA_hits)) continue;
 		t = mem_reg2aln(opt, bns, pac, l_query, query, &a->a[i]);
 		str.l = 0;
 		kputs(bns->anns[t.rid].name, &str);
@@ -152,14 +153,13 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		kputc(',', &str); kputw(t.NM, &str);
 		kputc(';', &str);
 		free(t.cigar);
-		if (r[0] >= 0 && cnt[r[0]] <= opt->max_XA_hits) kputsn(str.s, str.l, &aln[r[0]]);
-		if (r[1] >= 0 && cnt[r[1]] <= opt->max_XA_hits_alt) kputsn(str.s, str.l, &aln[r[1]]);
+		kputsn(str.s, str.l, &aln[r]);
 	}
 	XA = calloc(a->n, sizeof(char*));
 	for (k = 0; k < a->n; ++k)
 		XA[k] = aln[k].s;
 
 end_gen_alt:
-	free(cnt); free(aln); free(str.s);
+	free(has_alt); free(cnt); free(aln); free(str.s);
 	return XA;
 }

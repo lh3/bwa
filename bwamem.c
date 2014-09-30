@@ -512,38 +512,38 @@ static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *
 
 int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id)
 {
-	int i, j, n_pri;
+	int i, n_pri;
 	int_v z = {0,0,0};
 	if (n == 0) return 0;
 	for (i = n_pri = 0; i < n; ++i) {
-		a[i].sub = a[i].alt_sc = 0, a[i].secondary = a[i].secondary_alt = -1, a[i].hash = hash_64(id+i);
+		a[i].sub = a[i].alt_sc = 0, a[i].secondary = a[i].secondary_all = -1, a[i].hash = hash_64(id+i);
 		if (!a[i].is_alt) ++n_pri;
 	}
 	ks_introsort(mem_ars_hash, n, a);
 	mem_mark_primary_se_core(opt, n, a, &z);
 	for (i = 0; i < n; ++i) {
 		mem_alnreg_t *p = &a[i];
-		p->secondary_alt = i; // keep the rank in the first round
+		p->secondary_all = i; // keep the rank in the first round
 		if (!p->is_alt && p->secondary >= 0 && a[p->secondary].is_alt)
 			p->alt_sc = a[p->secondary].score;
 	}
 	if (n_pri >= 0 && n_pri < n) {
 		kv_resize(int, z, n);
 		if (n_pri > 0) ks_introsort(mem_ars_hash2, n, a);
-		for (i = 0; i < n; ++i) z.a[a[i].secondary_alt] = i;
+		for (i = 0; i < n; ++i) z.a[a[i].secondary_all] = i;
 		for (i = 0; i < n; ++i) {
-			if (a[i].secondary < 0) {
-				a[i].secondary_alt = -1;
-				continue;
-			}
-			j = z.a[a[i].secondary];
-			a[i].secondary_alt = a[j].is_alt? j : -1;
-			if (a[i].is_alt) a[i].secondary = INT_MAX;
+			if (a[i].secondary >= 0) {
+				a[i].secondary_all = z.a[a[i].secondary];
+				if (a[i].is_alt) a[i].secondary = INT_MAX;
+			} else a[i].secondary_all = -1;
 		}
 		if (n_pri > 0) { // mark primary for hits to the primary assembly only
 			for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
 			mem_mark_primary_se_core(opt, n_pri, a, &z);
 		}
+	} else {
+		for (i = 0; i < n; ++i)
+			a[i].secondary_all = a[i].secondary;
 	}
 	free(z.a);
 	return n_pri;
