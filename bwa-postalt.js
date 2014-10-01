@@ -52,7 +52,7 @@ var getopt = function(args, ostr) {
 	return optopt;
 }
 
-// print an object in a format similar to JSON. For debugging.
+// print an object in a format similar to JSON. For debugging only.
 function obj2str(o)
 {
 	if (typeof(o) != 'object') {
@@ -206,34 +206,39 @@ function parse_hit(s, opt)
 // read the ALT-to-REF alignment and generate the index
 function read_ALT_sam(fn)
 {
-	var intv = {};
+	var intv_alt = {}, intv_pri = {};
 	var file = new File(fn);
 	var buf = new Bytes();
 	while (file.readline(buf) >= 0) {
 		var line = buf.toString();
 		var t = line.split("\t");
 		if (line.charAt(0) == '@') continue;
+		var pos = parseInt(t[3]) - 1;
 		var flag = parseInt(t[1]);
-		var m, cigar = [], l_qaln = 0, l_qclip = 0;
+		var m, cigar = [], l_qaln = 0, l_tlen = 0, l_qclip = 0;
 		while ((m = re_cigar.exec(t[5])) != null) {
 			var l = parseInt(m[1]);
 			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
-			if (m[2] == 'M' || m[2] == 'I') l_qaln += l;
+			if (m[2] == 'M' || m[2] == 'I') l_qaln += l, l_tlen += l;
 			else if (m[2] == 'S' || m[2] == 'H') l_qclip += l;
+			else if (m[2] == 'D' || m[2] == 'N') l_tlen += l;
 		}
 		var j = flag&16? cigar.length-1 : 0;
 		var start = cigar[j][0] == 'S'? cigar[j][1] : 0;
-		if (intv[t[0]] == null) intv[t[0]] = [];
-		intv[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
-		//print(start, start + l_qaln, t[2], flag&16? true : false, parseInt(t[3]), cigar);
+		if (intv_alt[t[0]] == null) intv_alt[t[0]] = [];
+		intv_alt[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
+		if (intv_pri[t[2]] == null) intv_pri[t[2]] = [];
+		intv_pri[t[2]].push([pos, pos + l_tlen, t[0]]);
 	}
 	buf.destroy();
 	file.close();
 	// create index for intervals on ALT contigs
-	var idx = {};
-	for (var ctg in intv)
-		idx[ctg] = intv_ovlp(intv[ctg]);
-	return idx;
+	var idx_alt = {}, idx_pri = {};
+	for (var ctg in intv_alt)
+		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
+	for (var ctg in intv_pri)
+		idx_pri[ctg] = intv_ovlp(intv_pri[ctg]);
+	return [idx_alt, idx_pri];
 }
 
 function bwa_postalt(args)
@@ -264,8 +269,9 @@ function bwa_postalt(args)
 
 	var file, buf = new Bytes();
 	var aux = new Bytes(); // used for reverse and reverse complement
-	var idx = read_ALT_sam(args[getopt.ind]);
-	var buf2 = [];
+	var idx_pair = read_ALT_sam(args[getopt.ind]);
+	var idx_alt = idx_pair[0], idx_pri = idx_pair[1];
+	var buf2 = [], buf3 = [];
 
 	// process SAM
 	file = args.length - getopt.ind >= 2? new File(args[getopt.ind+1]) : new File();
@@ -286,6 +292,21 @@ function bwa_postalt(args)
 			buf2 = [];
 		}
 
+		// test primary and if so whether it overlaps with ALT regions
+		if (idx_pri[t[2]] != null) {
+			var start = t[3], end = start;
+			while ((m = re_cigar.exec(t[5])) != null)
+				if (m[2] == 'M' || m[2] == 'D' || m[2] == 'N')
+					end += parseInt(m[1]);
+			var ovlp = idx_pri[t[2]](start, end);
+			if (ovlp.length > 0) {
+				var score = (m = /\tAS:i:(\d+)/.exec(line)) != null? parseInt(m[1]) : 1;
+				for (var i = 0; i < ovlp.length; ++i)
+					buf3.push([t[2], start, end, ovlp[i][2]]);
+			}
+		}
+
+		// parse the XA tag
 		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
 			buf2.push(t);
 			continue;
@@ -309,12 +330,12 @@ function bwa_postalt(args)
 				hits.push(parse_hit(XA_strs[i].split(","), opt));
 
 		// lift mapping positions to the primary assembly
-		var n_lifted = 0, n_rpt_lifted = 0;
+		var n_lifted = 0, n_rpt_lifted = 0, rpt_lifted = null;
 		for (var i = 0; i < hits.length; ++i) {
 			var h = hits[i];
 
-			if (idx[h.ctg] == null) continue;
-			var a = idx[h.ctg](h.start, h.end);
+			if (idx_alt[h.ctg] == null) continue;
+			var a = idx_alt[h.ctg](h.start, h.end);
 			if (a == null || a.length == 0) continue;
 
 			// find the approximate position on the primary assembly
@@ -333,6 +354,7 @@ function bwa_postalt(args)
 				lifted.push([a[j][3], (h.rev!=a[j][4]), s, e]);
 				if (i == 0) ++n_rpt_lifted;
 			}
+			if (i == 0 && n_rpt_lifted == 1) rpt_lifted = lifted[0].slice(0);
 			if (lifted.length) ++n_lifted, hits[i].lifted = lifted;
 		}
 		if (n_lifted == 0) {
@@ -384,7 +406,7 @@ function bwa_postalt(args)
 
 		// check if the reported hit overlaps a hit to the primary assembly; if so, don't reduce mapping quality
 		if (opt.recover_mapq && n_rpt_lifted == 1 && mapQ > 0) {
-			var l = lifted[0];
+			var l = rpt_lifted;
 			for (var i = 0; i < buf2.length; ++i) {
 				var s = buf2[i];
 				if (l[0] != s[2]) continue; // different chr
@@ -423,6 +445,7 @@ function bwa_postalt(args)
 				need_rev = true;
 		}
 		if (need_rev) { // reverse and reverse complement
+			aux.length = 0;
 			aux.set(t[9], 0); aux.revcomp(); rs = aux.toString();
 			aux.set(t[10],0); aux.reverse(); rq = aux.toString();
 		}
@@ -438,14 +461,16 @@ function bwa_postalt(args)
 		for (var i = 0; i < hits.length; ++i) {
 			if (opt.verbose >= 5) print(obj2str(hits[i]));
 			if (hits[i].g != reported_g || i == reported_i) continue;
-			if (!opt.show_pri && idx[hits[i].ctg] == null) continue;
-			var s = [t[0], flag&0xf10, hits[i].ctg, hits[i].start+1, mapQ, hits[i].cigar, '*', 0, 0];
-			// update name
-			if (flag&0x40) s[0] += "/1";
-			if (flag&0x80) s[0] += "/2";
-			s[0] += "_" + (++cnt);
-			if (hits[i].rev == hits[reported_i].rev) s.push(t[9], t[10]);
-			else s.push(rs, rq);
+			if (!opt.show_pri && idx_alt[hits[i].ctg] == null) continue;
+			var s = [t[0], 0, hits[i].ctg, hits[i].start+1, mapQ, hits[i].cigar, '*', 0, 0];
+			// print sequence/quality and set the rev flag
+			if (hits[i].rev == hits[reported_i].rev) {
+				s.push(t[9], t[10]);
+				s[1] = flag & 0x10;
+			} else {
+				s.push(rs, rq);
+				s[1] = (flag & 0x10) ^ 0x10;
+			}
 			s.push("NM:i:" + hits[i].NM);
 			if (hits[i].lifted_str) s.push("lt:Z:" + hits[i].lifted_str);
 			buf2.push(s);
