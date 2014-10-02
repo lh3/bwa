@@ -289,29 +289,8 @@ function bwa_postalt(args)
 		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
 			for (var i = 0; i < buf2.length; ++i)
 				print(buf2[i].join("\t"));
-			buf2 = [];
+			buf2 = []; buf3 = [];
 		}
-
-		// test primary and if so whether it overlaps with ALT regions
-		if (idx_pri[t[2]] != null) {
-			var start = t[3], end = start;
-			while ((m = re_cigar.exec(t[5])) != null)
-				if (m[2] == 'M' || m[2] == 'D' || m[2] == 'N')
-					end += parseInt(m[1]);
-			var ovlp = idx_pri[t[2]](start, end);
-			if (ovlp.length > 0) {
-				var score = (m = /\tAS:i:(\d+)/.exec(line)) != null? parseInt(m[1]) : 1;
-				for (var i = 0; i < ovlp.length; ++i)
-					buf3.push([t[2], start, end, ovlp[i][2]]);
-			}
-		}
-
-		// parse the XA tag
-		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
-			buf2.push(t);
-			continue;
-		}
-		var XA_strs = m[1].split(";");
 
 		// parse the reported hit
 		var hits = [];
@@ -322,6 +301,13 @@ function bwa_postalt(args)
 			buf2.push(t);
 			continue;
 		}
+
+		// parse the XA tag
+		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
+			buf2.push(t);
+			continue;
+		}
+		var XA_strs = m[1].split(";");
 		hits.push(h);
 
 		// parse hits in the XA tag
@@ -356,6 +342,7 @@ function bwa_postalt(args)
 			}
 			if (i == 0 && n_rpt_lifted == 1) rpt_lifted = lifted[0].slice(0);
 			if (lifted.length) ++n_lifted, hits[i].lifted = lifted;
+			buf3.push(hits[i]);
 		}
 		if (n_lifted == 0) {
 			buf2.push(t);

@@ -226,7 +226,7 @@ static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_
 	}
 	p = bns->anns + bns->n_seqs;
 	p->name = strdup((char*)seq->name.s);
-	p->anno = seq->comment.s? strdup((char*)seq->comment.s) : strdup("(null)");
+	p->anno = seq->comment.l > 0? strdup((char*)seq->comment.s) : strdup("(null)");
 	p->gi = 0; p->len = seq->seq.l;
 	p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
 	p->n_ambs = 0;
