@@ -271,7 +271,7 @@ function bwa_postalt(args)
 	var aux = new Bytes(); // used for reverse and reverse complement
 	var idx_pair = read_ALT_sam(args[getopt.ind]);
 	var idx_alt = idx_pair[0], idx_un = idx_pair[1];
-	var buf2 = [], buf3 = [];
+	var buf2 = [];
 
 	// process SAM
 	file = args.length - getopt.ind >= 2? new File(args[getopt.ind+1]) : new File();
@@ -287,44 +287,51 @@ function bwa_postalt(args)
 
 		// print bufferred reads
 		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
-			for (var i = 0; i < buf3.length; ++i) print(obj2str(buf3[i]));
 			for (var i = 0; i < buf2.length; ++i)
 				print(buf2[i].join("\t"));
-			buf2 = []; buf3 = [];
+			buf2 = [];
 		}
 
-		// parse the XA tag
-		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null && idx_un[t[2]] == null) {
+		// skip unmapped lines
+		if (t[1]&4) {
 			buf2.push(t);
 			continue;
 		}
-		var XA_strs = m != null? m[1].split(";") : [];
 
 		// parse the reported hit
-		var hits = [];
 		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
 		var flag = t[1];
 		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
-		if (h.hard) { // don't process lines with hard clips
+		if (h.hard) { // the following does not work with hard clipped alignments
 			buf2.push(t);
 			continue;
 		}
-		hits.push(h);
+		var hits = [h];
 
 		// parse hits in the XA tag
-		for (var i = 0; i < XA_strs.length; ++i)
-			if (XA_strs[i] != '') // as the last symbol in an XA tag is ";", the last split is an empty string
-				hits.push(parse_hit(XA_strs[i].split(","), opt));
+		if ((m = /\tXA:Z:(\S+)/.exec(line)) != null) {
+			var XA_strs = m[1].split(";");
+			for (var i = 0; i < XA_strs.length; ++i)
+				if (XA_strs[i] != '') // as the last symbol in an XA tag is ";", the last split is an empty string
+					hits.push(parse_hit(XA_strs[i].split(","), opt));
+		}
+
+		// check if there are ALT hits
+		var has_alt = false;
+		for (var i = 0; i < hits.length; ++i)
+			if (idx_alt[hits[i].ctg] != null || idx_un[hits[i].ctg]) {
+				has_alt = true;
+				break;
+			}
+		if (!has_alt) continue;
 
 		// lift mapping positions to the primary assembly
 		var n_rpt_lifted = 0, rpt_lifted = null;
 		for (var i = 0; i < hits.length; ++i) {
 			var a, h = hits[i];
 
-			if (idx_alt[h.ctg] == null || (a = idx_alt[h.ctg](h.start, h.end)) == null || a.length == 0) {
-				if (idx_un[h.ctg] != null || idx_alt[h.ctg] != null) buf3.push(hits[i]);
+			if (idx_alt[h.ctg] == null || (a = idx_alt[h.ctg](h.start, h.end)) == null || a.length == 0)
 				continue;
-			}
 
 			// find the approximate position on the primary assembly
 			var lifted = [];
@@ -344,32 +351,38 @@ function bwa_postalt(args)
 			}
 			if (i == 0 && n_rpt_lifted == 1) rpt_lifted = lifted[0].slice(0);
 			if (lifted.length) hits[i].lifted = lifted;
-			buf3.push(hits[i]);
 		}
 
-		// group hits based on the lifted positions on the primary assembly
+		// prepare for hits grouping
 		for (var i = 0; i < hits.length; ++i) { // set keys for sorting
-			if (hits[i].lifted && hits[i].lifted.length) // TODO: only the first element in lifted[] is used
+			if (hits[i].lifted != null) // TODO: only the first element in lifted[] is used
 				hits[i].pctg = hits[i].lifted[0][0], hits[i].pstart = hits[i].lifted[0][2], hits[i].pend = hits[i].lifted[0][3];
 			else hits[i].pctg = hits[i].ctg, hits[i].pstart = hits[i].start, hits[i].pend = hits[i].end;
 			hits[i].i = i; // keep the original index
 		}
-		hits.sort(function(a,b) { return a.pctg != b.pctg? (a.pctg < b.pctg? -1 : 1) : a.pstart - b.pstart });
-		var last_chr = null, end = 0, g = -1;
-		for (var i = 0; i < hits.length; ++i) {
-			if (last_chr != hits[i].pctg) ++g, last_chr = hits[i].pctg, end = 0;
-			else if (hits[i].pstart >= end) ++g;
-			hits[i].g = g;
-			end = end > hits[i].pend? end : hits[i].pend;
-		}
-		var reported_g = null, reported_i = null;
-		for (var i = 0; i < hits.length; ++i)
-			if (hits[i].i == 0)
-				reported_g = hits[i].g, reported_i = i;
-		var n_group0 = 0; // #hits overlapping the reported hit
-		for (var i = 0; i < hits.length; ++i)
-			if (hits[i].g == reported_g)
-				++n_group0;
+
+		// group hits based on the lifted positions on non-ALT sequences
+		if (hits.length > 1) {
+			hits.sort(function(a,b) { return a.pctg != b.pctg? (a.pctg < b.pctg? -1 : 1) : a.pstart - b.pstart });
+			var last_chr = null, end = 0, g = -1;
+			for (var i = 0; i < hits.length; ++i) {
+				if (last_chr != hits[i].pctg) ++g, last_chr = hits[i].pctg, end = 0;
+				else if (hits[i].pstart >= end) ++g;
+				hits[i].g = g;
+				end = end > hits[i].pend? end : hits[i].pend;
+			}
+		} else hits[0].g = 0;
+
+		// find the index and group id of the reported hit; find the size of the reported group
+		var reported_g = null, reported_i = null, n_group0 = 0;
+		if (hits.length > 1) {
+			for (var i = 0; i < hits.length; ++i)
+				if (hits[i].i == 0)
+					reported_g = hits[i].g, reported_i = i;
+			for (var i = 0; i < hits.length; ++i)
+				if (hits[i].g == reported_g)
+					++n_group0;
+		} else reported_g = reported_i = 0, n_group0 = 1;
 
 		// re-estimate mapping quality if necessary
 		var mapQ, ori_mapQ = t[4];
@@ -462,7 +475,6 @@ function bwa_postalt(args)
 			buf2.push(s);
 		}
 	}
-	for (var i = 0; i < buf3.length; ++i) print(obj2str(buf3[i]));
 	for (var i = 0; i < buf2.length; ++i)
 		print(buf2[i].join("\t"));
 	file.close();
