@@ -206,7 +206,7 @@ function parse_hit(s, opt)
 // read the ALT-to-REF alignment and generate the index
 function read_ALT_sam(fn)
 {
-	var intv_alt = {}, intv_pri = {};
+	var intv_alt = {};
 	var file = new File(fn);
 	var buf = new Bytes();
 	while (file.readline(buf) >= 0) {
@@ -227,18 +227,14 @@ function read_ALT_sam(fn)
 		var start = cigar[j][0] == 'S'? cigar[j][1] : 0;
 		if (intv_alt[t[0]] == null) intv_alt[t[0]] = [];
 		intv_alt[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
-		if (intv_pri[t[2]] == null) intv_pri[t[2]] = [];
-		intv_pri[t[2]].push([pos, pos + l_tlen, t[0]]);
 	}
 	buf.destroy();
 	file.close();
 	// create index for intervals on ALT contigs
-	var idx_alt = {}, idx_pri = {};
+	var idx_alt = {}
 	for (var ctg in intv_alt)
 		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
-	for (var ctg in intv_pri)
-		idx_pri[ctg] = intv_ovlp(intv_pri[ctg]);
-	return [idx_alt, idx_pri];
+	return idx_alt;
 }
 
 function bwa_postalt(args)
@@ -269,8 +265,7 @@ function bwa_postalt(args)
 
 	var file, buf = new Bytes();
 	var aux = new Bytes(); // used for reverse and reverse complement
-	var idx_pair = read_ALT_sam(args[getopt.ind]);
-	var idx_alt = idx_pair[0], idx_pri = idx_pair[1];
+	var idx_alt = read_ALT_sam(args[getopt.ind]);
 	var buf2 = [], buf3 = [];
 
 	// process SAM
@@ -292,6 +287,13 @@ function bwa_postalt(args)
 			buf2 = []; buf3 = [];
 		}
 
+		// parse the XA tag
+		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
+			buf2.push(t);
+			continue;
+		}
+		var XA_strs = m[1].split(";");
+
 		// parse the reported hit
 		var hits = [];
 		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
@@ -301,13 +303,6 @@ function bwa_postalt(args)
 			buf2.push(t);
 			continue;
 		}
-
-		// parse the XA tag
-		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
-			buf2.push(t);
-			continue;
-		}
-		var XA_strs = m[1].split(";");
 		hits.push(h);
 
 		// parse hits in the XA tag
@@ -388,7 +383,8 @@ function bwa_postalt(args)
 				mapQ = group_max.length == 1? 60 : 6 * (group_max[0][0] - group_max[1][0]);
 			} else mapQ = 0;
 			mapQ = mapQ < 60? mapQ : 60;
-			mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
+			if (idx_alt[t[2]] == null) mapQ = mapQ < ori_mapQ? mapQ : ori_mapQ;
+			else mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
 		} else mapQ = t[4];
 
 		// check if the reported hit overlaps a hit to the primary assembly; if so, don't reduce mapping quality
@@ -453,10 +449,10 @@ function bwa_postalt(args)
 			// print sequence/quality and set the rev flag
 			if (hits[i].rev == hits[reported_i].rev) {
 				s.push(t[9], t[10]);
-				s[1] = flag & 0x10;
+				s[1] = (flag & 0x10) | 0x800;
 			} else {
 				s.push(rs, rq);
-				s[1] = (flag & 0x10) ^ 0x10;
+				s[1] = ((flag & 0x10) ^ 0x10) | 0x800;
 			}
 			s.push("NM:i:" + hits[i].NM);
 			if (hits[i].lifted_str) s.push("lt:Z:" + hits[i].lifted_str);
