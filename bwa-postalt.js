@@ -206,7 +206,7 @@ function parse_hit(s, opt)
 // read the ALT-to-REF alignment and generate the index
 function read_ALT_sam(fn)
 {
-	var intv_alt = {};
+	var intv_alt = {}, idx_un = {};
 	var file = new File(fn);
 	var buf = new Bytes();
 	while (file.readline(buf) >= 0) {
@@ -215,6 +215,10 @@ function read_ALT_sam(fn)
 		if (line.charAt(0) == '@') continue;
 		var pos = parseInt(t[3]) - 1;
 		var flag = parseInt(t[1]);
+		if ((flag&4) || t[2] == '*') {
+			idx_un[t[0]] = true;
+			continue;
+		}
 		var m, cigar = [], l_qaln = 0, l_tlen = 0, l_qclip = 0;
 		while ((m = re_cigar.exec(t[5])) != null) {
 			var l = parseInt(m[1]);
@@ -231,10 +235,10 @@ function read_ALT_sam(fn)
 	buf.destroy();
 	file.close();
 	// create index for intervals on ALT contigs
-	var idx_alt = {}
+	var idx_alt = {};
 	for (var ctg in intv_alt)
 		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
-	return idx_alt;
+	return [idx_alt, idx_un];
 }
 
 function bwa_postalt(args)
@@ -265,7 +269,8 @@ function bwa_postalt(args)
 
 	var file, buf = new Bytes();
 	var aux = new Bytes(); // used for reverse and reverse complement
-	var idx_alt = read_ALT_sam(args[getopt.ind]);
+	var idx_pair = read_ALT_sam(args[getopt.ind]);
+	var idx_alt = idx_pair[0], idx_un = idx_pair[1];
 	var buf2 = [], buf3 = [];
 
 	// process SAM
@@ -282,17 +287,18 @@ function bwa_postalt(args)
 
 		// print bufferred reads
 		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
+			for (var i = 0; i < buf3.length; ++i) print(obj2str(buf3[i]));
 			for (var i = 0; i < buf2.length; ++i)
 				print(buf2[i].join("\t"));
 			buf2 = []; buf3 = [];
 		}
 
 		// parse the XA tag
-		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null) {
+		if ((m = /\tXA:Z:(\S+)/.exec(line)) == null && idx_un[t[2]] == null) {
 			buf2.push(t);
 			continue;
 		}
-		var XA_strs = m[1].split(";");
+		var XA_strs = m != null? m[1].split(";") : [];
 
 		// parse the reported hit
 		var hits = [];
@@ -311,13 +317,14 @@ function bwa_postalt(args)
 				hits.push(parse_hit(XA_strs[i].split(","), opt));
 
 		// lift mapping positions to the primary assembly
-		var n_lifted = 0, n_rpt_lifted = 0, rpt_lifted = null;
+		var n_rpt_lifted = 0, rpt_lifted = null;
 		for (var i = 0; i < hits.length; ++i) {
-			var h = hits[i];
+			var a, h = hits[i];
 
-			if (idx_alt[h.ctg] == null) continue;
-			var a = idx_alt[h.ctg](h.start, h.end);
-			if (a == null || a.length == 0) continue;
+			if (idx_alt[h.ctg] == null || (a = idx_alt[h.ctg](h.start, h.end)) == null || a.length == 0) {
+				if (idx_un[h.ctg] != null || idx_alt[h.ctg] != null) buf3.push(hits[i]);
+				continue;
+			}
 
 			// find the approximate position on the primary assembly
 			var lifted = [];
@@ -336,12 +343,8 @@ function bwa_postalt(args)
 				if (i == 0) ++n_rpt_lifted;
 			}
 			if (i == 0 && n_rpt_lifted == 1) rpt_lifted = lifted[0].slice(0);
-			if (lifted.length) ++n_lifted, hits[i].lifted = lifted;
+			if (lifted.length) hits[i].lifted = lifted;
 			buf3.push(hits[i]);
-		}
-		if (n_lifted == 0) {
-			buf2.push(t);
-			continue;
 		}
 
 		// group hits based on the lifted positions on the primary assembly
@@ -459,6 +462,7 @@ function bwa_postalt(args)
 			buf2.push(s);
 		}
 	}
+	for (var i = 0; i < buf3.length; ++i) print(obj2str(buf3[i]));
 	for (var i = 0; i < buf2.length; ++i)
 		print(buf2[i].join("\t"));
 	file.close();
