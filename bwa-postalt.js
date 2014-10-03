@@ -203,44 +203,6 @@ function parse_hit(s, opt)
 	return h;
 }
 
-// read the ALT-to-REF alignment and generate the index
-function read_ALT_sam(fn)
-{
-	var intv_alt = {}, idx_un = {};
-	var file = new File(fn);
-	var buf = new Bytes();
-	while (file.readline(buf) >= 0) {
-		var line = buf.toString();
-		var t = line.split("\t");
-		if (line.charAt(0) == '@') continue;
-		var pos = parseInt(t[3]) - 1;
-		var flag = parseInt(t[1]);
-		if ((flag&4) || t[2] == '*') {
-			idx_un[t[0]] = true;
-			continue;
-		}
-		var m, cigar = [], l_qaln = 0, l_tlen = 0, l_qclip = 0;
-		while ((m = re_cigar.exec(t[5])) != null) {
-			var l = parseInt(m[1]);
-			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
-			if (m[2] == 'M' || m[2] == 'I') l_qaln += l, l_tlen += l;
-			else if (m[2] == 'S' || m[2] == 'H') l_qclip += l;
-			else if (m[2] == 'D' || m[2] == 'N') l_tlen += l;
-		}
-		var j = flag&16? cigar.length-1 : 0;
-		var start = cigar[j][0] == 'S'? cigar[j][1] : 0;
-		if (intv_alt[t[0]] == null) intv_alt[t[0]] = [];
-		intv_alt[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
-	}
-	buf.destroy();
-	file.close();
-	// create index for intervals on ALT contigs
-	var idx_alt = {};
-	for (var ctg in intv_alt)
-		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
-	return [idx_alt, idx_un];
-}
-
 function bwa_postalt(args)
 {
 	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true };
@@ -267,13 +229,46 @@ function bwa_postalt(args)
 		exit(1);
 	}
 
-	var file, buf = new Bytes();
 	var aux = new Bytes(); // used for reverse and reverse complement
-	var idx_pair = read_ALT_sam(args[getopt.ind]);
-	var idx_alt = idx_pair[0], idx_un = idx_pair[1];
-	var buf2 = [];
+	var buf = new Bytes();
+
+	// read ALT-to-REF alignment
+	var intv_alt = {}, intv_pri = {}, idx_un = {};
+	var file = new File(args[getopt.ind]);
+	while (file.readline(buf) >= 0) {
+		var line = buf.toString();
+		var t = line.split("\t");
+		if (line.charAt(0) == '@') continue;
+		var pos = parseInt(t[3]) - 1;
+		var flag = parseInt(t[1]);
+		if ((flag&4) || t[2] == '*') {
+			idx_un[t[0]] = true;
+			continue;
+		}
+		var m, cigar = [], l_qaln = 0, l_tlen = 0, l_qclip = 0;
+		while ((m = re_cigar.exec(t[5])) != null) {
+			var l = parseInt(m[1]);
+			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
+			if (m[2] == 'M' || m[2] == 'I') l_qaln += l, l_tlen += l;
+			else if (m[2] == 'S' || m[2] == 'H') l_qclip += l;
+			else if (m[2] == 'D' || m[2] == 'N') l_tlen += l;
+		}
+		var j = flag&16? cigar.length-1 : 0;
+		var start = cigar[j][0] == 'S'? cigar[j][1] : 0;
+		if (intv_alt[t[0]] == null) intv_alt[t[0]] = [];
+		intv_alt[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
+		if (intv_pri[t[2]] == null) intv_pri[t[2]] = [];
+		intv_pri[t[2]].push([pos, pos + l_tlen, t[0]]);
+	}
+	file.close();
+	var idx_alt = {}, idx_pri = {};
+	for (var ctg in intv_alt)
+		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
+	for (var ctg in intv_pri)
+		idx_pri[ctg] = intv_ovlp(intv_pri[ctg]);
 
 	// process SAM
+	var buf2 = [];
 	file = args.length - getopt.ind >= 2? new File(args[getopt.ind+1]) : new File();
 	while (file.readline(buf) >= 0) {
 		var m, line = buf.toString();
@@ -323,7 +318,10 @@ function bwa_postalt(args)
 				has_alt = true;
 				break;
 			}
-		if (!has_alt) continue;
+		if (!has_alt) {
+			buf2.push(t);
+			continue;
+		}
 
 		// lift mapping positions to the primary assembly
 		var n_rpt_lifted = 0, rpt_lifted = null;
@@ -479,8 +477,8 @@ function bwa_postalt(args)
 		print(buf2[i].join("\t"));
 	file.close();
 
-	aux.destroy();
 	buf.destroy();
+	aux.destroy();
 }
 
 bwa_postalt(arguments);
