@@ -401,6 +401,29 @@ function bwa_postalt(args)
 			else mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
 		} else mapQ = t[4];
 
+		// ALT genotyping
+		{
+			var hits2 = [];
+			for (var i = 0; i < hits.length; ++i) {
+				var h = hits[i];
+				if (h.g == reported_g)
+					hits2.push([h.pctg, h.pstart, h.pend, h.ctg, h.score]);
+			}
+			var start = hits2[0][1], end = hits2[0][2];
+			for (var i = 1; i < hits2.length; ++i)
+				end = end > hits2[i][2]? end : hits2[i][2];
+			var alts = {};
+			for (var i = 0; i < hits2.length; ++i)
+				if (idx_alt[hits2[i][3]] != null || idx_un[hits2[i][3]] != null)
+					alts[hits2[i][3]] = hits2[i][4];
+			if (idx_pri[hits2[0][0]] != null) {
+				var ovlp = idx_pri[hits2[0][0]](start, end);
+				for (var i = 0; i < ovlp.length; ++i)
+					if (alts[ovlp[i][2]] == null) alts[ovlp[i][2]] = 0;
+			}
+			print(obj2str(alts));
+		}
+
 		// check if the reported hit overlaps a hit to the primary assembly; if so, don't reduce mapping quality
 		if (opt.recover_mapq && n_rpt_lifted == 1 && mapQ > 0) {
 			var l = rpt_lifted;
