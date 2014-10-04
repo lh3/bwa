@@ -1,6 +1,7 @@
 #ifndef BWT_LITE_H_
 #define BWT_LITE_H_
 
+#include <sys/types.h>
 #include <stdint.h>
 
 typedef struct {

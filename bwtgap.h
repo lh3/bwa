@@ -1,6 +1,7 @@
 #ifndef BWTGAP_H_
 #define BWTGAP_H_
 
+#include <sys/types.h>
 #include "bwt.h"
 #include "bwtaln.h"
 
