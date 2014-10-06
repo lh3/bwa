@@ -205,7 +205,7 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90 };
 
 	while ((c = getopt(args, 'pqv:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
@@ -237,8 +237,9 @@ function bwa_postalt(args)
 	var file = new File(args[getopt.ind]);
 	while (file.readline(buf) >= 0) {
 		var line = buf.toString();
-		var t = line.split("\t");
 		if (line.charAt(0) == '@') continue;
+		var t = line.split("\t");
+		if (t.length < 11) continue; // incomplete lines
 		var pos = parseInt(t[3]) - 1;
 		var flag = parseInt(t[1]);
 		if ((flag&4) || t[2] == '*') {
@@ -249,14 +250,15 @@ function bwa_postalt(args)
 		while ((m = re_cigar.exec(t[5])) != null) {
 			var l = parseInt(m[1]);
 			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
-			if (m[2] == 'M' || m[2] == 'I') l_qaln += l, l_tlen += l;
+			if (m[2] == 'M') l_qaln += l, l_tlen += l;
+			else if (m[2] == 'I') l_qaln += l;
 			else if (m[2] == 'S' || m[2] == 'H') l_qclip += l;
 			else if (m[2] == 'D' || m[2] == 'N') l_tlen += l;
 		}
 		var j = flag&16? cigar.length-1 : 0;
 		var start = cigar[j][0] == 'S'? cigar[j][1] : 0;
 		if (intv_alt[t[0]] == null) intv_alt[t[0]] = [];
-		intv_alt[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, parseInt(t[3]) - 1, cigar]);
+		intv_alt[t[0]].push([start, start + l_qaln, l_qaln + l_qclip, t[2], flag&16? true : false, pos - 1, cigar, pos + l_tlen]);
 		if (intv_pri[t[2]] == null) intv_pri[t[2]] = [];
 		intv_pri[t[2]].push([pos, pos + l_tlen, t[0]]);
 	}
@@ -266,6 +268,13 @@ function bwa_postalt(args)
 		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
 	for (var ctg in intv_pri)
 		idx_pri[ctg] = intv_ovlp(intv_pri[ctg]);
+
+	// initialize the list of ALT contigs
+	var weight_alt = [];
+	for (var ctg in idx_alt)
+		weight_alt[ctg] = [0, 0, 0, intv_alt[ctg][0][3], intv_alt[ctg][0][5], intv_alt[ctg][0][7]];
+	for (var ctg in idx_un)
+		weight_alt[ctg] = [0, 0, 0, '~', 0, 0];
 
 	// process SAM
 	var buf2 = [];
@@ -314,7 +323,7 @@ function bwa_postalt(args)
 		// check if there are ALT hits
 		var has_alt = false;
 		for (var i = 0; i < hits.length; ++i)
-			if (idx_alt[hits[i].ctg] != null || idx_un[hits[i].ctg]) {
+			if (weight_alt[hits[i].ctg] != null) {
 				has_alt = true;
 				break;
 			}
@@ -380,7 +389,13 @@ function bwa_postalt(args)
 			for (var i = 0; i < hits.length; ++i)
 				if (hits[i].g == reported_g)
 					++n_group0;
-		} else reported_g = reported_i = 0, n_group0 = 1;
+		} else {
+			if (weight_alt[hits[0].ctg] == null) { // no need to go through the following if the single hit is non-ALT
+				buf2.push(t);
+				continue;
+			}
+			reported_g = reported_i = 0, n_group0 = 1;
+		}
 
 		// re-estimate mapping quality if necessary
 		var mapQ, ori_mapQ = t[4];
@@ -402,7 +417,8 @@ function bwa_postalt(args)
 		} else mapQ = t[4];
 
 		// ALT genotyping
-		{
+		if (mapQ >= opt.min_mapq && hits[reported_i].score >= opt.min_sc) {
+			// collect all overlapping ALT contigs
 			var hits2 = [];
 			for (var i = 0; i < hits.length; ++i) {
 				var h = hits[i];
@@ -414,14 +430,36 @@ function bwa_postalt(args)
 				end = end > hits2[i][2]? end : hits2[i][2];
 			var alts = {};
 			for (var i = 0; i < hits2.length; ++i)
-				if (idx_alt[hits2[i][3]] != null || idx_un[hits2[i][3]] != null)
+				if (weight_alt[hits2[i][3]] != null)
 					alts[hits2[i][3]] = hits2[i][4];
 			if (idx_pri[hits2[0][0]] != null) {
 				var ovlp = idx_pri[hits2[0][0]](start, end);
-				for (var i = 0; i < ovlp.length; ++i)
+				for (var i = 0; i < ovlp.length; ++i) // TODO: requiring reasonable overlap
 					if (alts[ovlp[i][2]] == null) alts[ovlp[i][2]] = 0;
 			}
-			print(obj2str(alts));
+
+			// add weight to each ALT contig
+			var alt_arr = [], max_sc = -1, max_i = -1, sum = 0, min_sc = 1<<30;
+			for (var ctg in alts)
+				alt_arr.push([ctg, alts[ctg], 0]);
+			for (var i = 0; i < alt_arr.length; ++i) {
+				if (max_sc < alt_arr[i][1])
+					max_sc = alt_arr[i][1], max_i = i;
+				min_sc = min_sc < alt_arr[i][1]? min_sc : alt_arr[i][1];
+			}
+			if (max_sc > 0 && (alt_arr.length == 1 || min_sc < max_sc)) {
+				for (var i = 0; i < alt_arr.length; ++i) {
+					alt_arr[i][2] = Math.exp(.1 * (alt_arr[i][1] - max_sc));
+					//print('YYYYY', alt_arr[i][1], max_sc);
+					sum += alt_arr[i][2];
+				}
+				for (var i = 0; i < alt_arr.length; ++i) alt_arr[i][2] /= sum;
+				for (var i = 0; i < alt_arr.length; ++i) {
+					var w = weight_alt[alt_arr[i][0]];
+					w[0] += max_sc, w[1] += max_sc * alt_arr[max_i][2], w[2] += max_sc * alt_arr[i][2];
+					//print('XXXXX', alt_arr[i][0], max_sc, max_sc * alt_arr[max_i][2], max_sc * alt_arr[i][2]);
+				}
+			}
 		}
 
 		// check if the reported hit overlaps a hit to the primary assembly; if so, don't reduce mapping quality
@@ -502,6 +540,19 @@ function bwa_postalt(args)
 
 	buf.destroy();
 	aux.destroy();
+
+	// print weight of each contig
+	var weight_arr = [];
+	for (var ctg in weight_alt) {
+		var w = weight_alt[ctg];
+		w[0] = w[0].toFixed(0), w[1] = w[1].toFixed(0), w[2] = w[2].toFixed(0);
+		weight_arr.push([ctg, w[0], w[1], w[2], w[1] > 0? (w[2]/w[1]).toFixed(3) : '0.000', w[3], w[4], w[5]]);
+	}
+	weight_arr.sort(function(a,b) {return a[5] < b[5]? -1 : a[5] > b[5]? 1 : a[6] - b[6]});
+	for (var i = 0; i < weight_arr.length; ++i) {
+		if (weight_arr[i][5] == '~') weight_arr[i][5] = '*';
+		warn(weight_arr[i].join("\t"));
+	}
 }
 
 bwa_postalt(arguments);
