@@ -205,7 +205,7 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90 };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:100 };
 
 	while ((c = getopt(args, 'pqv:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
@@ -423,7 +423,7 @@ function bwa_postalt(args)
 			for (var i = 0; i < hits.length; ++i) {
 				var h = hits[i];
 				if (h.g == reported_g)
-					hits2.push([h.pctg, h.pstart, h.pend, h.ctg, h.score]);
+					hits2.push([h.pctg, h.pstart, h.pend, h.ctg, h.score, h.NM]);
 			}
 			var start = hits2[0][1], end = hits2[0][2];
 			for (var i = 1; i < hits2.length; ++i)
@@ -431,33 +431,32 @@ function bwa_postalt(args)
 			var alts = {};
 			for (var i = 0; i < hits2.length; ++i)
 				if (weight_alt[hits2[i][3]] != null)
-					alts[hits2[i][3]] = hits2[i][4];
+					alts[hits2[i][3]] = [hits2[i][4], hits2[i][5]];
 			if (idx_pri[hits2[0][0]] != null) {
 				var ovlp = idx_pri[hits2[0][0]](start, end);
 				for (var i = 0; i < ovlp.length; ++i) // TODO: requiring reasonable overlap
-					if (alts[ovlp[i][2]] == null) alts[ovlp[i][2]] = 0;
+					if (alts[ovlp[i][2]] == null) alts[ovlp[i][2]] = [0, 0];
 			}
 
 			// add weight to each ALT contig
-			var alt_arr = [], max_sc = -1, max_i = -1, sum = 0, min_sc = 1<<30;
+			var alt_arr = [], max_sc = -1, max_i = -1, sum = 0, min_sc = 1<<30, max_nm = -1;
 			for (var ctg in alts)
-				alt_arr.push([ctg, alts[ctg], 0]);
+				alt_arr.push([ctg, alts[ctg][0], 0, alts[ctg][1]]);
 			for (var i = 0; i < alt_arr.length; ++i) {
 				if (max_sc < alt_arr[i][1])
 					max_sc = alt_arr[i][1], max_i = i;
 				min_sc = min_sc < alt_arr[i][1]? min_sc : alt_arr[i][1];
+				var nm = alt_arr[i][1] > 0? alt_arr[i][3] : opt.max_nm_sc;
+				max_nm = max_nm > nm? max_nm : nm;
 			}
+			if (max_nm > opt.max_nm_sc) max_nm = opt.max_nm_sc;
 			if (max_sc > 0 && (alt_arr.length == 1 || min_sc < max_sc)) {
-				for (var i = 0; i < alt_arr.length; ++i) {
-					alt_arr[i][2] = Math.exp(.1 * (alt_arr[i][1] - max_sc));
-					//print('YYYYY', alt_arr[i][1], max_sc);
-					sum += alt_arr[i][2];
-				}
+				for (var i = 0; i < alt_arr.length; ++i)
+					sum += (alt_arr[i][2] = Math.pow(10, .6 * (alt_arr[i][1] - max_sc)));
 				for (var i = 0; i < alt_arr.length; ++i) alt_arr[i][2] /= sum;
 				for (var i = 0; i < alt_arr.length; ++i) {
 					var w = weight_alt[alt_arr[i][0]];
-					w[0] += max_sc, w[1] += max_sc * alt_arr[max_i][2], w[2] += max_sc * alt_arr[i][2];
-					//print('XXXXX', alt_arr[i][0], max_sc, max_sc * alt_arr[max_i][2], max_sc * alt_arr[i][2]);
+					w[0] += max_nm, w[1] += max_nm * alt_arr[max_i][2], w[2] += max_nm * alt_arr[i][2];
 				}
 			}
 		}
@@ -548,7 +547,9 @@ function bwa_postalt(args)
 		w[0] = w[0].toFixed(0), w[1] = w[1].toFixed(0), w[2] = w[2].toFixed(0);
 		weight_arr.push([ctg, w[0], w[1], w[2], w[1] > 0? (w[2]/w[1]).toFixed(3) : '0.000', w[3], w[4], w[5]]);
 	}
-	weight_arr.sort(function(a,b) {return a[5] < b[5]? -1 : a[5] > b[5]? 1 : a[6] - b[6]});
+	weight_arr.sort(function(a,b) {
+		return a[5] < b[5]? -1 : a[5] > b[5]? 1 : a[6] != b[6]? a[6] - b[6] : a[0] < b[0]? -1 : a[0] > b[0]? 1 : 0;
+	});
 	for (var i = 0; i < weight_arr.length; ++i) {
 		if (weight_arr[i][5] == '~') weight_arr[i][5] = '*';
 		warn(weight_arr[i].join("\t"));
