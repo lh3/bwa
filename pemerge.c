@@ -146,15 +146,20 @@ pem_ret:
 
 static inline void print_bseq(const bseq1_t *s, int rn)
 {
-	err_putchar(s->qual? '@' : '>');
-	err_fputs(s->name, stdout);
-	if (rn == 1 || rn == 2) {
-		err_putchar('/'); err_putchar('0' + rn); err_putchar('\n');
-	} else err_puts(" merged");
-	err_puts(s->seq);
-	if (s->qual) {
-		err_puts("+"); err_puts(s->qual);
-	}
+        err_putchar(s->qual? '@' : '>');
+        err_fputs(s->name, stdout);
+        err_putchar('\n');
+        if (rn == 1 || rn == 2) {
+                err_putchar('/'); err_putchar('0' + rn); err_putchar('\n');
+        }
+        err_puts(s->seq);
+        err_putchar('\n');
+        if (s->qual) {
+                err_puts("+");
+                err_putchar('\n');
+                err_puts(s->qual);
+        }
+        err_putchar('\n');
 }
 
 typedef struct {
