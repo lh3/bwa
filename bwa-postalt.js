@@ -205,12 +205,14 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:100 };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:100, show_ev:false, wei1:false };
 
-	while ((c = getopt(args, 'pqv:')) != null) {
+	while ((c = getopt(args, '1pqev:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
 		else if (c == 'p') opt.show_pri = true;
 		else if (c == 'q') opt.recover_maq = false;
+		else if (c == 'e') opt.show_ev = true;
+		else if (c == '1') opt.wei1 = true;
 	}
 
 	if (args.length == getopt.ind) {
@@ -435,7 +437,8 @@ function bwa_postalt(args)
 			if (idx_pri[hits2[0][0]] != null) {
 				var ovlp = idx_pri[hits2[0][0]](start, end);
 				for (var i = 0; i < ovlp.length; ++i) // TODO: requiring reasonable overlap
-					if (alts[ovlp[i][2]] == null) alts[ovlp[i][2]] = [0, 0];
+					if (start <= ovlp[i][0] && ovlp[i][1] <= end && alts[ovlp[i][2]] == null)
+						alts[ovlp[i][2]] = [0, 0];
 			}
 
 			// add weight to each ALT contig
@@ -455,8 +458,11 @@ function bwa_postalt(args)
 					sum += (alt_arr[i][2] = Math.pow(10, .6 * (alt_arr[i][1] - max_sc)));
 				for (var i = 0; i < alt_arr.length; ++i) alt_arr[i][2] /= sum;
 				for (var i = 0; i < alt_arr.length; ++i) {
-					var w = weight_alt[alt_arr[i][0]];
-					w[0] += max_nm, w[1] += max_nm * alt_arr[max_i][2], w[2] += max_nm * alt_arr[i][2];
+					if (opt.wei1) max_nm = 1;
+					var e = [alt_arr[i][0], max_nm, max_nm * alt_arr[max_i][2], max_nm * alt_arr[i][2]];
+					var w = weight_alt[e[0]];
+					w[0] += e[1], w[1] += e[2], w[2] += e[3];
+					if (opt.show_ev) warn(t[0] + '/' + (t[1]>>6&3), e.join("\t"));
 				}
 			}
 		}
@@ -544,7 +550,7 @@ function bwa_postalt(args)
 	var weight_arr = [];
 	for (var ctg in weight_alt) {
 		var w = weight_alt[ctg];
-		w[0] = w[0].toFixed(0), w[1] = w[1].toFixed(0), w[2] = w[2].toFixed(0);
+		w[0] = w[0].toFixed(4), w[1] = w[1].toFixed(4), w[2] = w[2].toFixed(4);
 		weight_arr.push([ctg, w[0], w[1], w[2], w[1] > 0? (w[2]/w[1]).toFixed(3) : '0.000', w[3], w[4], w[5]]);
 	}
 	weight_arr.sort(function(a,b) {
