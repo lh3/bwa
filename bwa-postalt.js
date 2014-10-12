@@ -437,7 +437,7 @@ function bwa_postalt(args)
 			if (idx_pri[hits2[0][0]] != null) {
 				var ovlp = idx_pri[hits2[0][0]](start, end);
 				for (var i = 0; i < ovlp.length; ++i) // TODO: requiring reasonable overlap
-					if (start <= ovlp[i][0] && ovlp[i][1] <= end && alts[ovlp[i][2]] == null)
+					if (ovlp[i][0] <= start && end <= ovlp[i][1] && alts[ovlp[i][2]] == null)
 						alts[ovlp[i][2]] = [0, 0];
 			}
 
