@@ -41,7 +41,7 @@ extern "C" {
 int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *_qle, int *_tle, int *_gtle, int *_gscore, int *_max_off) ;
 }
 
-int run_ksw_extend(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
+int run_ksw_extend(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen,
 		   int bandW, int initScore, int endBonus, int zdrop, int costMatrixRowCnt,
 		   const int8_t* costMatrix, int gapo, int gape,
 		   int& alignedQLen, int& alignedRLen) {
@@ -255,7 +255,7 @@ class ScoreProbe {
 } ;
 */
 
-int computeHammingDistance(const uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen, int upperBound, int& lastConsecutiveMatching) {
+int computeHammingDistance(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen, int upperBound, int& lastConsecutiveMatching) {
   
   int cnt = min(refLen, queryLen) ;
   int dist = 0 ;
@@ -276,7 +276,7 @@ int computeHammingDistance(const uint8_t* refSeq, int refLen, uint8_t* querySeq,
 
 
 template<class BitVec, class EDVec>
-DIST_TYPE edit_dist(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
+DIST_TYPE edit_dist(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen,
 		    int initScore, int endBonus, 
 		    int& alignedQLenLow, int& alignedQLenHigh,
 		    int& alignedRLenLow, int& alignedRLenHigh,
@@ -1095,7 +1095,7 @@ bool unit_test3() {
 }
 
 
-DIST_TYPE edit_dist_u32(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen, 
+DIST_TYPE edit_dist_u32(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen, 
 			int initScore, int endBonus, 
 			int& alignedQLenLow, int& alignedQLenHigh, 
 			int& alignedRLenLow, int& alignedRLenHigh, 
@@ -1112,7 +1112,7 @@ DIST_TYPE edit_dist_u32(uint8_t* refSeq, int refLen, uint8_t* querySeq, int quer
 }
 
 
-DIST_TYPE edit_dist_u64(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen, 
+DIST_TYPE edit_dist_u64(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen, 
 			int initScore, int endBonus, 
 			int& alignedQLenLow, int& alignedQLenHigh, 
 			int& alignedRLenLow, int& alignedRLenHigh, 
@@ -1129,7 +1129,7 @@ DIST_TYPE edit_dist_u64(uint8_t* refSeq, int refLen, uint8_t* querySeq, int quer
 }
 
 
-DIST_TYPE edit_dist_u64x2(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
+DIST_TYPE edit_dist_u64x2(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen,
 			  int initScore, int endBonus, 
 			  int& alignedQLenLow, int& alignedQLenHigh, 
 			  int& alignedRLenLow, int& alignedRLenHigh, 
@@ -1145,7 +1145,7 @@ DIST_TYPE edit_dist_u64x2(uint8_t* refSeq, int refLen, uint8_t* querySeq, int qu
 						swFeedback, printDebug) ;
 }
 
-void edit_dist(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
+void edit_dist(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen,
 		  int initScore, int endBonus, 
 		  int& alignedQLenLow, int& alignedQLenHigh, 
 		  int& alignedRLenLow, int& alignedRLenHigh, 
@@ -1200,7 +1200,7 @@ void extend_with_edit_dist(uint8_t* refSeq, int refLen, uint8_t* querySeq, int q
 
 }
 
-void filter_and_extend(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
+void filter_and_extend(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen,
 		       int initScore, int endBonus, int zdrop,
 		       int& alignedQLen, int& alignedRLen, int& score) {
 

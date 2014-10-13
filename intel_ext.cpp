@@ -1,6 +1,26 @@
 #include <stdio.h>
 #include "intel_ext.h"
 
+//Check if it is __x86_64 HW and supports SSE 4.2
+#ifdef __x86_64
+inline bool is_cpuid_ecx_bit_set(int eax, int bitidx) 
+{ 
+  int ecx = 0, edx = 0, ebx = 0; 
+  __asm__ ("cpuid" 
+	   :"=b" (ebx), 
+	    "=c" (ecx), 
+	    "=d" (edx) 
+	   :"a" (eax) 
+	   ); 
+  return (((ecx >> bitidx)&1) == 1); 
+}
+
+inline bool is_sse42_supported() 
+{ 
+  return is_cpuid_ecx_bit_set(1, 20); 
+}
+#endif
+
 extern "C" {
 int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
 }
@@ -48,14 +68,24 @@ void extend_with_edit_dist(uint8_t* refSeq, int refLen, uint8_t* querySeq, int q
 //        For now, the costMatrix and gap penalties are hardcoded. 
 //        It is assumed that ksw_extend(...) function is linked. In this version,
 //        it is defined in bwa_extend.cpp file.
-void filter_and_extend(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
+void filter_and_extend(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int queryLen,
 		       int initScore, int endBonus, int zdrop,
 		       int& alignedQLen, int& alignedRLen, int& score) ;
 
 
 void intel_init()
-{	
+{
+#ifdef __x86_64
+    if (is_sse42_supported()) {
+	fprintf(stderr,"Using Intel's filter_and_extend\n");
+	intel_extend = intel_filter_and_extend;
 	init_ed_dist();
+    } else
+	intel_extend = ksw_extend;
+#else	
+    intel_extend = ksw_extend;
+#endif
+
 }
 
 void intel_filter(uint8_t *refSeq, int refLen, uint8_t *querySeq, int queryLen, int initScore, int endBonus,
@@ -68,7 +98,7 @@ void intel_filter(uint8_t *refSeq, int refLen, uint8_t *querySeq, int queryLen, 
 	extend_with_edit_dist(refSeq, refLen, querySeq, queryLen, initScore, endBonus, *alignedQLen, *alignedRLen, *score, *confidence);
 }
 
-int intel_extend(int qlen, uint8_t *query, int tlen, uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off)
+int intel_filter_and_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off)
 {
 	if (qlen >= INTEL_MIN_LEN && qlen <= INTEL_MAX_LEN) {
 		int score, a = mat[0];
