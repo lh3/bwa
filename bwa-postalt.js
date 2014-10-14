@@ -205,21 +205,29 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:100, show_ev:false, wei1:true };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false };
 
-	while ((c = getopt(args, 'wpqev:')) != null) {
+	while ((c = getopt(args, 'Pqev:p:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
-		else if (c == 'p') opt.show_pri = true;
+		else if (c == 'p') opt.pre = getopt.arg;
+		else if (c == 'P') opt.show_pri = true;
 		else if (c == 'q') opt.recover_maq = false;
 		else if (c == 'e') opt.show_ev = true;
-		else if (c == 'w') opt.wei1 = false;
+	}
+
+	if (opt.show_ev && opt.pre == null) {
+		warn("ERROR: option '-p' must be specified if '-e' is applied.");
+		exit(1);
 	}
 
 	if (args.length == getopt.ind) {
 		print("");
-		print("Usage:   k8 bwa-postalt.js [-p] <alt.sam> [aln.sam]\n");
-		print("Options: -p    output lifted non-ALT hit in a SAM line (for ALT-unware alignments)");
-		print("         -q    don't recover mapQ for non-ALTs hit overlapping lifted ALT");
+		print("Usage:   k8 bwa-postalt.js [options] <alt.sam> [aln.sam]\n");
+		print("Options: -p STR   prefix of file(s) for additional information [null]");
+		print("                  PREFIX.ctw - weight of each ALT contig");
+		print("                  PREFIX.evi - reads supporting ALT contigs (effective with -e)");
+		print("         -q       don't modify mapQ for non-ALTs hit overlapping lifted ALT");
+		print("         -e       show reads supporting ALT contigs into file PREFIX.evi");
 		print("");
 		print("Note: This script inspects the XA tag, lifts the mapping positions of ALT hits to");
 		print("      the primary assembly, groups them and then estimates mapQ across groups. If");
@@ -231,6 +239,7 @@ function bwa_postalt(args)
 		exit(1);
 	}
 
+	var fp_evi = opt.show_ev && opt.pre? new File(opt.pre + '.evi', "w") : null;
 	var aux = new Bytes(); // used for reverse and reverse complement
 	var buf = new Bytes();
 
@@ -274,9 +283,9 @@ function bwa_postalt(args)
 	// initialize the list of ALT contigs
 	var weight_alt = [];
 	for (var ctg in idx_alt)
-		weight_alt[ctg] = [0, 0, 0, intv_alt[ctg][0][3], intv_alt[ctg][0][5], intv_alt[ctg][0][7]];
+		weight_alt[ctg] = [0, 0, 0, 0, 0, 0, intv_alt[ctg][0][3], intv_alt[ctg][0][5], intv_alt[ctg][0][7]];
 	for (var ctg in idx_un)
-		weight_alt[ctg] = [0, 0, 0, '~', 0, 0];
+		weight_alt[ctg] = [0, 0, 0, 0, 0, 0, '~', 0, 0];
 
 	// process SAM
 	var buf2 = [];
@@ -458,11 +467,14 @@ function bwa_postalt(args)
 					sum += (alt_arr[i][2] = Math.pow(10, .6 * (alt_arr[i][1] - max_sc)));
 				for (var i = 0; i < alt_arr.length; ++i) alt_arr[i][2] /= sum;
 				for (var i = 0; i < alt_arr.length; ++i) {
-					if (opt.wei1) max_nm = 1;
-					var e = [alt_arr[i][0], max_nm, max_nm * alt_arr[max_i][2], max_nm * alt_arr[i][2]];
+					var e = [alt_arr[i][0], 1, alt_arr[max_i][2], alt_arr[i][2], max_nm, max_nm * alt_arr[max_i][2], max_nm * alt_arr[i][2]];
 					var w = weight_alt[e[0]];
-					w[0] += e[1], w[1] += e[2], w[2] += e[3];
-					if (opt.show_ev) warn(t[0] + '/' + (t[1]>>6&3), e.join("\t"));
+					for (var j = 0; j < 6; ++j) w[j] += e[j+1];
+					if (fp_evi) {
+						e[2] = e[2].toFixed(3); e[3] = e[3].toFixed(3);
+						e[5] = e[5].toFixed(3); e[6] = e[6].toFixed(3);
+						fp_evi.write(t[0] + '/' + (t[1]>>6&3) + '\t' + e.join("\t") + '\n');
+					}
 				}
 			}
 		}
@@ -542,23 +554,29 @@ function bwa_postalt(args)
 	for (var i = 0; i < buf2.length; ++i)
 		print(buf2[i].join("\t"));
 	file.close();
+	if (fp_evi != null) fp_evi.close();
 
 	buf.destroy();
 	aux.destroy();
 
 	// print weight of each contig
-	var weight_arr = [];
-	for (var ctg in weight_alt) {
-		var w = weight_alt[ctg];
-		w[0] = w[0].toFixed(4), w[1] = w[1].toFixed(4), w[2] = w[2].toFixed(4);
-		weight_arr.push([ctg, w[0], w[1], w[2], w[1] > 0? (w[2]/w[1]).toFixed(3) : '0.000', w[3], w[4], w[5]]);
-	}
-	weight_arr.sort(function(a,b) {
-		return a[5] < b[5]? -1 : a[5] > b[5]? 1 : a[6] != b[6]? a[6] - b[6] : a[0] < b[0]? -1 : a[0] > b[0]? 1 : 0;
-	});
-	for (var i = 0; i < weight_arr.length; ++i) {
-		if (weight_arr[i][5] == '~') weight_arr[i][5] = '*';
-		warn(weight_arr[i].join("\t"));
+	if (opt.pre != null) {
+		var fpout = new File(opt.pre + '.ctw', "w");
+		var weight_arr = [];
+		for (var ctg in weight_alt) {
+			var w = weight_alt[ctg];
+			weight_arr.push([ctg, w[6], w[7], w[8],
+					w[0], w[1].toFixed(3), w[2].toFixed(3), w[1] > 0? (w[2]/w[1]).toFixed(3) : '0.000',
+					w[3], w[4].toFixed(3), w[5].toFixed(3), w[4] > 0? (w[5]/w[4]).toFixed(3) : '0.000']);
+		}
+		weight_arr.sort(function(a,b) {
+				return a[1] < b[1]? -1 : a[1] > b[1]? 1 : a[2] != b[2]? a[2] - b[2] : a[0] < b[0]? -1 : a[0] > b[0]? 1 : 0;
+				});
+		for (var i = 0; i < weight_arr.length; ++i) {
+			if (weight_arr[i][1] == '~') weight_arr[i][1] = '*';
+			fpout.write(weight_arr[i].join("\t") + '\n');
+		}
+		fpout.close();
 	}
 }
 
