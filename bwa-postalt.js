@@ -541,10 +541,10 @@ function bwa_postalt(args)
 			// print sequence/quality and set the rev flag
 			if (hits[i].rev == hits[reported_i].rev) {
 				s.push(t[9], t[10]);
-				s[1] = (flag & 0x10) | 0x800;
+				s[1] = flag | 0x800;
 			} else {
 				s.push(rs, rq);
-				s[1] = ((flag & 0x10) ^ 0x10) | 0x800;
+				s[1] = (flag ^ 0x10) | 0x800;
 			}
 			s.push("NM:i:" + hits[i].NM);
 			if (hits[i].lifted_str) s.push("lt:Z:" + hits[i].lifted_str);
