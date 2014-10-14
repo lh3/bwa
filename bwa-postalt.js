@@ -205,14 +205,14 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:100, show_ev:false, wei1:false };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:100, show_ev:false, wei1:true };
 
-	while ((c = getopt(args, '1pqev:')) != null) {
+	while ((c = getopt(args, 'wpqev:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
 		else if (c == 'p') opt.show_pri = true;
 		else if (c == 'q') opt.recover_maq = false;
 		else if (c == 'e') opt.show_ev = true;
-		else if (c == '1') opt.wei1 = true;
+		else if (c == 'w') opt.wei1 = false;
 	}
 
 	if (args.length == getopt.ind) {
@@ -434,9 +434,9 @@ function bwa_postalt(args)
 			for (var i = 0; i < hits2.length; ++i)
 				if (weight_alt[hits2[i][3]] != null)
 					alts[hits2[i][3]] = [hits2[i][4], hits2[i][5]];
-			if (idx_pri[hits2[0][0]] != null) {
+			if (idx_pri[hits2[0][0]] != null) { // add other unreported hits
 				var ovlp = idx_pri[hits2[0][0]](start, end);
-				for (var i = 0; i < ovlp.length; ++i) // TODO: requiring reasonable overlap
+				for (var i = 0; i < ovlp.length; ++i)
 					if (ovlp[i][0] <= start && end <= ovlp[i][1] && alts[ovlp[i][2]] == null)
 						alts[ovlp[i][2]] = [0, 0];
 			}
