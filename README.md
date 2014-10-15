@@ -63,7 +63,6 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 3. [Does BWA work on reference sequences longer than 4GB in total?](#4gb)
 4. [Why can one read in a pair has high mapping quality but the other has zero?](#pe0)
 5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](#endref)
-6. [How to map sequences to GRCh38 with ALT contigs?](#h38)
 
 ####<a name="type"></a>1. What types of data does BWA work with?
 
@@ -92,6 +91,10 @@ settings:
 * PacBio subreads to a reference genome:
 
 		bwa mem -x pacbio ref.fa reads.fq > aln.sam
+
+* Oxford Nanopore reads to a reference genome:
+
+		bwa mem -x ont2d ref.fa reads.fq > aln.sam
 
 BWA-MEM is recommended for query sequences longer than ~70bp for a variety of
 error rates (or sequence divergence). Generally, BWA-MEM is more tolerant with
