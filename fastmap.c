@@ -230,7 +230,11 @@ int main_mem(int argc, char *argv[])
 	} else update_a(opt, &opt0);
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 
-	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
+	idx = bwa_idx_load_from_shm(argv[optind]);
+	if (idx == 0) {
+		if ((idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
+	} else if (bwa_verbose >= 3)
+		fprintf(stderr, "[M::%s] load the bwa index from shared memory\n", __func__);
 	if (ignore_alt)
 		for (i = 0; i < idx->bns->n_seqs; ++i)
 			idx->bns->anns[i].is_alt = 0;

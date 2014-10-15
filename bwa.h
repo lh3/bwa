@@ -44,6 +44,8 @@ extern "C" {
 	char *bwa_idx_infer_prefix(const char *hint);
 	bwt_t *bwa_idx_load_bwt(const char *hint);
 
+	bwaidx_t *bwa_idx_load_from_shm(const char *hint);
+	bwaidx_t *bwa_idx_load_from_disk(const char *hint, int which);
 	bwaidx_t *bwa_idx_load(const char *hint, int which);
 	void bwa_idx_destroy(bwaidx_t *idx);
 	int bwa_idx2mem(bwaidx_t *idx);
