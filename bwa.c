@@ -263,11 +263,11 @@ void bwa_idx_destroy(bwaidx_t *idx)
 		if (idx->bwt) bwt_destroy(idx->bwt);
 		if (idx->bns) bns_destroy(idx->bns);
 		if (idx->pac) free(idx->pac);
-	} else free((uint8_t*)idx->mem);
+	} else if (!idx->is_shm) free(idx->mem);
 	free(idx);
 }
 
-int bwa_mem2idx(int64_t l_mem, const uint8_t *mem, bwaidx_t *idx)
+int bwa_mem2idx(int64_t l_mem, uint8_t *mem, bwaidx_t *idx)
 {
 	int64_t k = 0, x;
 	int i;
