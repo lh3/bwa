@@ -71,11 +71,11 @@ algorithm and setting may vary. The following list gives the recommended
 settings:
 
 * Illumina/454/IonTorrent single-end reads longer than ~70bp or assembly
-  contigs up to a few megabases mapped to a close related reference genome:
+  contigs up to a few megabases mapped to a closely related reference genome:
 
 		bwa mem ref.fa reads.fq > aln.sam
 
-* Illumina single-end reads no longer than ~70bp:
+* Illumina single-end reads shorter than ~70bp:
 
 		bwa aln ref.fa reads.fq > reads.sai; bwa samse ref.fa reads.sai reads.fq > aln-se.sam
 
@@ -83,24 +83,21 @@ settings:
 
 		bwa mem ref.fa read1.fq read2.fq > aln-pe.sam
 
-* Illumina paired-end reads no longer than ~70bp:
+* Illumina paired-end reads shorter than ~70bp:
 
 		bwa aln ref.fa read1.fq > read1.sai; bwa aln ref.fa read2.fq > read2.sai
 		bwa sampe ref.fa read1.sai read2.sai read1.fq read2.fq > aln-pe.sam
 
-* PacBio subreads to a reference genome:
+* PacBio subreads or Oxford Nanopore reads to a reference genome:
 
 		bwa mem -x pacbio ref.fa reads.fq > aln.sam
-
-* Oxford Nanopore reads to a reference genome:
-
 		bwa mem -x ont2d ref.fa reads.fq > aln.sam
 
 BWA-MEM is recommended for query sequences longer than ~70bp for a variety of
 error rates (or sequence divergence). Generally, BWA-MEM is more tolerant with
 errors given longer query sequences as the chance of missing all seeds is small.
-As is shown above, with non-default settings, BWA-MEM works with PacBio subreads
-with a sequencing error rate as high as ~15%.
+As is shown above, with non-default settings, BWA-MEM works with Oxford Nanopore
+reads with a sequencing error rate over 20%.
 
 ####<a name="multihit"></a>2. Why does a read appear multiple times in the output SAM?
 

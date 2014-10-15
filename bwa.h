@@ -14,6 +14,9 @@ typedef struct {
 	bwt_t    *bwt; // FM-index
 	bntseq_t *bns; // information on the reference sequences
 	uint8_t  *pac; // the actual 2-bit encoded reference sequences with 'N' converted to a random base
+
+	int64_t l_mem;
+	const uint8_t *mem;
 } bwaidx_t;
 
 typedef struct {
@@ -39,6 +42,8 @@ extern "C" {
 
 	bwaidx_t *bwa_idx_load(const char *hint, int which);
 	void bwa_idx_destroy(bwaidx_t *idx);
+	int bwa_idx2mem(bwaidx_t *idx);
+	int bwa_mem2idx(int64_t l_mem, const uint8_t *mem, bwaidx_t *idx);
 
 	void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line);
 	char *bwa_set_rg(const char *s);
