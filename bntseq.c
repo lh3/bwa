@@ -179,17 +179,25 @@ bntseq_t *bns_restore(const char *prefix)
 	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
 		char str[1024];
 		khash_t(str) *h;
-		int i, absent;
+		int c, i, absent;
 		khint_t k;
 		h = kh_init(str);
 		for (i = 0; i < bns->n_seqs; ++i) {
 			k = kh_put(str, h, bns->anns[i].name, &absent);
 			kh_val(h, k) = i;
 		}
-		while (fscanf(fp, "%s", str) == 1) {
-			k = kh_get(str, h, str);
-			if (k != kh_end(h))
-				bns->anns[kh_val(h, k)].is_alt = 1;
+		i = 0;
+		while ((c = fgetc(fp)) != EOF) {
+			if (c == '\t' || c == '\n' || c == '\r') {
+				str[i] = 0;
+				if (str[0] != '@') {
+					k = kh_get(str, h, str);
+					if (k != kh_end(h))
+						bns->anns[kh_val(h, k)].is_alt = 1;
+				}
+				while (c != '\n' && c != EOF) c = fgetc(fp);
+				i = 0;
+			} else str[i++] = c; // FIXME: potential segfault here
 		}
 		kh_destroy(str, h);
 		fclose(fp);
