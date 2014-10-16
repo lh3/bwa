@@ -14,6 +14,10 @@ INCLUDES=
 LIBS=		-lm -lz -lpthread
 SUBDIRS=	.
 
+ifeq ($(shell uname -s),Linux)
+	LIBS += -lrt
+endif
+
 .SUFFIXES:.c .o .cc
 
 .c.o:
@@ -52,6 +56,7 @@ bwape.o: ksw.h khash.h
 bwase.o: bwase.h bntseq.h bwt.h bwtaln.h utils.h kstring.h malloc_wrap.h
 bwase.o: bwa.h ksw.h
 bwaseqio.o: bwtaln.h bwt.h utils.h bamlite.h malloc_wrap.h kseq.h
+bwashm.o: bwa.h bntseq.h bwt.h
 bwt.o: utils.h bwt.h kvec.h malloc_wrap.h
 bwt_gen.o: QSufSort.h malloc_wrap.h
 bwt_lite.o: bwt_lite.h malloc_wrap.h
@@ -66,7 +71,6 @@ bwtsw2_core.o: khash.h ksort.h
 bwtsw2_main.o: bwt.h bwtsw2.h bntseq.h bwt_lite.h utils.h bwa.h
 bwtsw2_pair.o: utils.h bwt.h bntseq.h bwtsw2.h bwt_lite.h kstring.h
 bwtsw2_pair.o: malloc_wrap.h ksw.h
-cutvar.o: bwa.h bntseq.h bwt.h kvec.h malloc_wrap.h
 example.o: bwamem.h bwt.h bntseq.h bwa.h kseq.h malloc_wrap.h
 fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
 is.o: malloc_wrap.h
