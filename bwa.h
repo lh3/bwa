@@ -10,8 +10,7 @@
 #define BWA_IDX_PAC 0x4
 #define BWA_IDX_ALL 0x7
 
-#define BWA_SHM_KEY  5291
-#define BWA_SHM_SIZE 0x10000
+#define BWA_CTL_SIZE 0x10000
 
 typedef struct {
 	bwt_t    *bwt; // FM-index
