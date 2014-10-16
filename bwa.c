@@ -282,8 +282,8 @@ int bwa_mem2idx(int64_t l_mem, uint8_t *mem, bwaidx_t *idx)
 
 	// generate idx->bwt
 	x = sizeof(bwt_t); idx->bwt = malloc(x); memcpy(idx->bwt, mem + k, x); k += x;
-	x = idx->bwt->n_sa * sizeof(bwtint_t); idx->bwt->sa = (bwtint_t*)(mem + k); k += x;
 	x = idx->bwt->bwt_size * 4; idx->bwt->bwt = (uint32_t*)(mem + k); k += x;
+	x = idx->bwt->n_sa * sizeof(bwtint_t); idx->bwt->sa = (bwtint_t*)(mem + k); k += x;
 
 	// generate idx->bns and idx->pac
 	x = sizeof(bntseq_t); idx->bns = malloc(x); memcpy(idx->bns, mem + k, x); k += x;
@@ -303,17 +303,16 @@ int bwa_mem2idx(int64_t l_mem, uint8_t *mem, bwaidx_t *idx)
 int bwa_idx2mem(bwaidx_t *idx)
 {
 	int i;
-	int64_t k = 0, x, tmp;
-	uint8_t *mem = 0;
+	int64_t k, x, tmp;
+	uint8_t *mem;
 
 	// copy idx->bwt
-	mem = malloc(sizeof(bwt_t) + idx->bwt->n_sa * sizeof(bwtint_t));
-	x = sizeof(bwt_t); memcpy(mem + k, idx->bwt, x); k += x;
-	x = idx->bwt->n_sa * sizeof(bwtint_t); memcpy(mem + k, idx->bwt->sa, x); k += x;
+	x = idx->bwt->bwt_size * 4;
+	mem = realloc(idx->bwt->bwt, sizeof(bwt_t) + x); idx->bwt->bwt = 0;
+	memmove(mem + sizeof(bwt_t), mem, x);
+	memcpy(mem, idx->bwt, sizeof(bwt_t)); k = sizeof(bwt_t) + x;
+	x = idx->bwt->n_sa * sizeof(bwtint_t); mem = realloc(mem, k + x); memcpy(mem + k, idx->bwt->sa, x); k += x;
 	free(idx->bwt->sa);
-	mem = realloc(mem, k + idx->bwt->bwt_size * 4);
-	x = idx->bwt->bwt_size * 4; memcpy(mem + k, idx->bwt->bwt, x); k += x;
-	free(idx->bwt->bwt);
 	free(idx->bwt); idx->bwt = 0;
 
 	// copy idx->bns
