@@ -9,13 +9,13 @@
 #include <stdio.h>
 #include "bwa.h"
 
-int bwa_shm_stage(bwaidx_t *idx, const char *hint)
+int bwa_shm_stage(bwaidx_t *idx, const char *hint, const char *_tmpfn)
 {
 	const char *name;
 	uint8_t *shm, *shm_idx;
 	uint16_t *cnt, i;
 	int shmid, to_init = 0, l;
-	char path[PATH_MAX + 1], *p;
+	char path[PATH_MAX + 1], *p, *tmpfn = (char*)_tmpfn;
 
 	if (hint == 0 || hint[0] == 0) return -1;
 	for (name = hint + strlen(hint) - 1; name >= hint && *name != '/'; --name);
@@ -45,6 +45,22 @@ int bwa_shm_stage(bwaidx_t *idx, const char *hint)
 
 	if (idx->mem == 0) bwa_idx2mem(idx);
 
+	if (tmpfn) {
+		FILE *fp;
+		if ((fp = fopen(tmpfn, "wb")) != 0) {
+			int64_t rest = idx->l_mem;
+			while (rest > 0) {
+				int64_t l = rest < 0x1000000? rest : 0x1000000;
+				rest -= fwrite(&idx->mem[idx->l_mem - rest], 1, l, fp);
+			}
+			fclose(fp);
+			free(idx->mem); idx->mem = 0;
+		} else {
+			fprintf(stderr, "[W::%s] fail to create the temporary file. Option '-f' is ignored.\n", __func__);
+			tmpfn = 0;
+		}
+	}
+
 	strcat(strcpy(path, "/bwaidx-"), name);
 	l = 8 + strlen(name) + 1;
 	if (cnt[1] + l > BWA_CTL_SIZE) return -1;
@@ -58,9 +74,21 @@ int bwa_shm_stage(bwaidx_t *idx, const char *hint)
 	cnt[1] += l; ++cnt[0];
 	ftruncate(shmid, idx->l_mem);
 	shm_idx = mmap(0, idx->l_mem, PROT_READ|PROT_WRITE, MAP_SHARED, shmid, 0);
-	memcpy(shm_idx, idx->mem, idx->l_mem);
-	free(idx->mem);
-	idx->mem = shm_idx;
+	if (tmpfn) {
+		FILE *fp;
+		fp = fopen(tmpfn, "rb");
+		int64_t rest = idx->l_mem;
+		while (rest > 0) {
+			int64_t l = rest < 0x1000000? rest : 0x1000000;
+			rest -= fread(&shm_idx[idx->l_mem - rest], 1, l, fp);
+		}
+		fclose(fp);
+		unlink(tmpfn);
+	} else {
+		memcpy(shm_idx, idx->mem, idx->l_mem);
+		free(idx->mem);
+	}
+	bwa_mem2idx(idx->l_mem, shm_idx, idx);
 	idx->is_shm = 1;
 	return 0;
 }
@@ -140,14 +168,17 @@ int bwa_shm_destroy(void)
 int main_shm(int argc, char *argv[])
 {
 	int c, to_list = 0, to_drop = 0, ret = 0;
-	while ((c = getopt(argc, argv, "ld")) >= 0) {
+	char *tmpfn = 0;
+	while ((c = getopt(argc, argv, "ldf:")) >= 0) {
 		if (c == 'l') to_list = 1;
 		else if (c == 'd') to_drop = 1;
+		else if (c == 'f') tmpfn = optarg;
 	}
 	if (optind == argc && !to_list && !to_drop) {
-		fprintf(stderr, "\nUsage: bwa shm [-d|-l] [idxbase]\n\n");
-		fprintf(stderr, "Options: -d      destroy all indices in shared memory\n");
-		fprintf(stderr, "         -l      list names of indices in shared memory\n\n");
+		fprintf(stderr, "\nUsage: bwa shm [-d|-l] [-f tmpFile] [idxbase]\n\n");
+		fprintf(stderr, "Options: -d       destroy all indices in shared memory\n");
+		fprintf(stderr, "         -l       list names of indices in shared memory\n");
+		fprintf(stderr, "         -f FILE  temporary file to reduce peak memory\n\n");
 		return 1;
 	}
 	if (optind < argc && (to_list || to_drop)) {
@@ -157,7 +188,7 @@ int main_shm(int argc, char *argv[])
 	if (optind < argc) {
 		bwaidx_t *idx;
 		idx = bwa_idx_load_from_disk(argv[optind], BWA_IDX_ALL);
-		if (bwa_shm_stage(idx, argv[optind]) < 0) {
+		if (bwa_shm_stage(idx, argv[optind], tmpfn) < 0) {
 			fprintf(stderr, "[E::%s] failed to stage the index in shared memory\n", __func__);
 			ret = 1;
 		}
