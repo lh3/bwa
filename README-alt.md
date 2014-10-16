@@ -6,7 +6,7 @@ ALT-aware mode, users need to provide pairwise ALT-to-reference alignment in the
 SAM format and rename the file to ""*idxbase*.alt". For GRCh38, this alignment is
 available from the [BWA resource bundle for GRCh38][res].
 
-### Option 1: Mapping to the official GRCh38 with ALT contigs
+#### Option 1: Mapping to the official GRCh38 with ALT contigs
 
 Construct the index:
 ```sh
@@ -27,7 +27,7 @@ bwa mem hs38a.fa read1.fq read2.fq \
 For short reads, the postprocessing script `bwa-postalt.js` runs at about the
 same speed as BAM compression.
 
-### Option 2: Mapping to the collection of GRCh38, decoy and HLA genes
+#### Option 2: Mapping to the collection of GRCh38, decoy and HLA genes
 
 Construct the index:
 ```sh
@@ -68,7 +68,7 @@ implementation encourages researchers to use ALT contigs soon and often.
 As of now, ALT mapping is done in two separate steps: BWA-MEM mapping and
 postprocessing.
 
-### Step 1: BWA-MEM mapping
+#### Step 1: BWA-MEM mapping
 
 At this step, BWA-MEM reads the ALT contig names from "*idxbase*.alt", ignoring
 the ALT-to-ref alignment, and labels a potential hit as *ALT* or *non-ALT*,
@@ -92,7 +92,7 @@ If we don't care about ALT hits, we may actually skip postprocessing (step 2).
 Nonetheless, postprocessing is recommended as it improves mapQ and gives more
 information about ALT hits.
 
-### Step 2: Postprocessing
+#### Step 2: Postprocessing
 
 Postprocessing is done with a separate script `bwa-postalt.js`. It reads all
 potential hits reported in the XA tag, lifts ALT hits to the chromosomal
