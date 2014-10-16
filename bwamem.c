@@ -79,7 +79,7 @@ mem_opt_t *mem_opt_init()
 	o->min_chain_weight = 0;
 	o->max_chain_extend = 1<<30;
 	o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
-	o->min_pa_ratio = 0.8;
+	o->min_pa_ratio = 0;
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
