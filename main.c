@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.10-r912-dirty"
+#define PACKAGE_VERSION "0.7.10-r915-dirty"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -26,8 +26,6 @@ int main_shm(int argc, char *argv[]);
 
 int main_pemerge(int argc, char *argv[]);
 	
-char *bwa_pg;
-
 static int usage()
 {
 	fprintf(stderr, "\n");
@@ -61,6 +59,7 @@ static int usage()
 
 int main(int argc, char *argv[])
 {
+	extern char *bwa_pg;
 	int i, ret;
 	double t_real;
 	kstring_t pg = {0,0,0};

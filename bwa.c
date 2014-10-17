@@ -14,6 +14,7 @@
 
 int bwa_verbose = 3;
 char bwa_rg_id[256];
+char *bwa_pg;
 
 /************************
  * Batch FASTA/Q reader *
@@ -352,7 +353,7 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
 	for (i = 0; i < bns->n_seqs; ++i)
 		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
 	if (rg_line) err_printf("%s\n", rg_line);
-	err_printf("%s\n", bwa_pg);
+	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }
 
 static char *bwa_escape(char *s)
