@@ -1,3 +1,4 @@
+![Travis-CI](https://travis-ci.org/lh3/bwa.svg?branch=dev)
 ##Getting started
 
 	git clone https://github.com/lh3/bwa.git
