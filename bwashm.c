@@ -53,15 +53,15 @@ int bwa_shm_stage(bwaidx_t *idx, const char *hint, const char *_tmpfn)
 	}
 
 	strcat(strcpy(path, "/bwaidx-"), name);
-	l = 8 + strlen(name) + 1;
-	if (cnt[1] + l > BWA_CTL_SIZE) return -1;
-	memcpy(shm + cnt[1], &idx->l_mem, 8);
-	memcpy(shm + cnt[1] + 8, name, l - 8);
 	if ((shmid = shm_open(path, O_CREAT|O_RDWR|O_EXCL, 0644)) < 0) {
 		shm_unlink(path);
 		perror("shm_open()");
 		return -1;
 	}
+	l = 8 + strlen(name) + 1;
+	if (cnt[1] + l > BWA_CTL_SIZE) return -1;
+	memcpy(shm + cnt[1], &idx->l_mem, 8);
+	memcpy(shm + cnt[1] + 8, name, l - 8);
 	cnt[1] += l; ++cnt[0];
 	ftruncate(shmid, idx->l_mem);
 	shm_idx = mmap(0, idx->l_mem, PROT_READ|PROT_WRITE, MAP_SHARED, shmid, 0);
