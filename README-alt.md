@@ -3,8 +3,8 @@
 Since version 0.7.11, BWA-MEM supports read mapping against a reference genome
 with long alternative haplotypes present in separate ALT contigs. To use the
 ALT-aware mode, users need to provide pairwise ALT-to-reference alignment in the
-SAM format and rename the file to ""*idxbase*.alt". For GRCh38, this alignment is
-available from the [BWA resource bundle for GRCh38][res].
+SAM format and rename the file to ""*idxbase*.alt". For GRCh38, this alignment
+is available from the [BWA resource bundle for GRCh38][res].
 
 #### Option 1: Mapping to the official GRCh38 with ALT contigs
 
@@ -37,13 +37,16 @@ cp bwa-hs38-res/hs38d4.fa.alt .
 ```
 Perform mapping:
 ```sh
-bwa mem -g.8 hs38d4.fa read1.fq read2.fq \
+bwa mem hs38d4.fa read1.fq read2.fq \
   | samblaster \
   | bwa-hs38-res/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
 This command line generates `postinfo.ctw` which loosely evaluates the presence
 of an ALT contig with an empirical score at the last column.
+
+**If you are not interested in the way BWA-MEM performs ALT mapping, you can
+skip the rest of this documentation.**
 
 ## Background
 
@@ -64,6 +67,8 @@ without mapping large cohorts to these extra sequences. We hope our current
 implementation encourages researchers to use ALT contigs soon and often.
 
 ## Methods
+
+### Sequence alignment
 
 As of now, ALT mapping is done in two separate steps: BWA-MEM mapping and
 postprocessing.
@@ -108,6 +113,27 @@ pow(4,s_i)}` is the posterior of c_k given a read r mapped to it with a
 Smith-Waterman score s_k. This weight is reported in `postinfo.ctw` in the
 option 2 above.
 
+### On the Completeness of GRCh38+ALT
+
+While GRCh38 is much more complete than GRCh37, it is still missing some true
+human sequences. To make sure every piece of sequence in the reference assembly
+is correct, the [Genome Reference Consortium][grc] (GRC) require each ALT contig
+to have enough support from multiple sources before considering to add it to the
+reference assembly. This careful procedure has left out some sequences, one of
+which is [this example][novel], a 10kb contig assembled from CHM1 short
+reads and present also in NA12878. You can try [BLAT][blat] or [BLAST][blast] to
+see where it maps.
+
+For a more complete reference genome, we compiled a new set of decoy sequences
+from GenBank clones and the de novo assembly of 254 public [SGDP][sgdp] samples.
+The sequences are included in `hs38d4-extra.fa` from the [BWA resource bundle
+for GRCh38][res].
+
+In addition to decoy, we also put multiple alleles of HLA genes in
+`hs38d4-extra.fa`. These genomic sequences were acquired from [IMGT/HLA][hladb],
+version 3.18.0. Script `bwa-postalt.js` also helps to genotype HLA genes, though
+not to high resolution for now.
+
 ## Problems and Future Development
 
 There are some uncertainties about ALT mappings - we are not sure whether they
@@ -119,5 +145,12 @@ for performance; if not, we will try new designs. It is also possible that we
 may make breakthrough on the representation of multiple genomes, in which case,
 we can even get rid of ALT contigs once for all.
 
+
 [res]: https://sourceforge.net/projects/bio-bwa/files/
 [sb]: https://github.com/GregoryFaust/samblaster
+[grc]: http://www.ncbi.nlm.nih.gov/projects/genome/assembly/grc/
+[novel]: https://gist.github.com/lh3/9935148b71f04ba1a8cc
+[blat]: https://genome.ucsc.edu/cgi-bin/hgBlat
+[blast]: http://blast.st-va.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastn&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome
+[sgdp]: http://www.simonsfoundation.org/life-sciences/simons-genome-diversity-project/
+[hladb]: http://www.ebi.ac.uk/ipd/imgt/hla/
