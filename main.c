@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.10-r858-dirty"
+#define PACKAGE_VERSION "0.7.10-r915-dirty"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -16,8 +16,9 @@ int bwt_bwtgen_main(int argc, char *argv[]);
 
 int main_fastmap(int argc, char *argv[]);
 int main_mem(int argc, char *argv[]);
+int main_shm(int argc, char *argv[]);
 
-char *bwa_pg;
+int main_pemerge(int argc, char *argv[]);
 
 static int usage()
 {
@@ -30,6 +31,7 @@ static int usage()
 	fprintf(stderr, "         mem           BWA-MEM algorithm\n");
 	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "         shm           manage indices in shared memory\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
 	fprintf(stderr, "         pac2bwtgen    alternative algorithm for generating BWT\n");
@@ -46,6 +48,7 @@ static int usage()
 
 int main(int argc, char *argv[])
 {
+	extern char *bwa_pg;
 	int i, ret;
 	double t_real;
 	kstring_t pg = {0,0,0};
@@ -62,6 +65,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "index") == 0) ret = bwa_index(argc-1, argv+1);
 	else if (strcmp(argv[1], "fastmap") == 0) ret = main_fastmap(argc-1, argv+1);
 	else if (strcmp(argv[1], "mem") == 0) ret = main_mem(argc-1, argv+1);
+	else if (strcmp(argv[1], "shm") == 0) ret = main_shm(argc-1, argv+1);
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);
 		return 1;

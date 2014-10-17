@@ -72,7 +72,8 @@ mem_opt_t *mem_opt_init()
 	o->split_factor = 1.5;
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
-	o->max_hits = 5;
+	o->max_XA_hits = 5;
+	o->max_XA_hits_alt = 200;
 	o->max_matesw = 50;
 	o->mask_level_redun = 0.95;
 	o->min_chain_weight = 0;
@@ -515,22 +516,34 @@ int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id
 	int_v z = {0,0,0};
 	if (n == 0) return 0;
 	for (i = n_pri = 0; i < n; ++i) {
-		a[i].sub = 0, a[i].alt_sc = 0, a[i].secondary = -1, a[i].hash = hash_64(id+i);
+		a[i].sub = a[i].alt_sc = 0, a[i].secondary = a[i].secondary_all = -1, a[i].hash = hash_64(id+i);
 		if (!a[i].is_alt) ++n_pri;
 	}
 	ks_introsort(mem_ars_hash, n, a);
 	mem_mark_primary_se_core(opt, n, a, &z);
 	for (i = 0; i < n; ++i) {
 		mem_alnreg_t *p = &a[i];
-		if (p->is_alt && p->secondary >= 0) // don't track the "parent" hit of ALT secondary hits
-			p->secondary = INT_MAX;
+		p->secondary_all = i; // keep the rank in the first round
 		if (!p->is_alt && p->secondary >= 0 && a[p->secondary].is_alt)
 			p->alt_sc = a[p->secondary].score;
 	}
-	if (n_pri > 0 && n_pri < n) {
-		ks_introsort(mem_ars_hash2, n, a);
-		for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
-		mem_mark_primary_se_core(opt, n_pri, a, &z);
+	if (n_pri >= 0 && n_pri < n) {
+		kv_resize(int, z, n);
+		if (n_pri > 0) ks_introsort(mem_ars_hash2, n, a);
+		for (i = 0; i < n; ++i) z.a[a[i].secondary_all] = i;
+		for (i = 0; i < n; ++i) {
+			if (a[i].secondary >= 0) {
+				a[i].secondary_all = z.a[a[i].secondary];
+				if (a[i].is_alt) a[i].secondary = INT_MAX;
+			} else a[i].secondary_all = -1;
+		}
+		if (n_pri > 0) { // mark primary for hits to the primary assembly only
+			for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
+			mem_mark_primary_se_core(opt, n_pri, a, &z);
+		}
+	} else {
+		for (i = 0; i < n; ++i)
+			a[i].secondary_all = a[i].secondary;
 	}
 	free(z.a);
 	return n_pri;
@@ -817,7 +830,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
 				int c = p->cigar[i]&0xf;
-				if (!(opt->flag&MEM_F_SOFTCLIP) && (c == 3 || c == 4))
+				if (!(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt && (c == 3 || c == 4))
 					c = which? 4 : 3; // use hard clipping for supplementary alignments
 				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
 			}
@@ -845,7 +858,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputsn("*\t*", 3, str);
 	} else if (!p->is_rev) { // the forward strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP)) { // have cigar && not the primary alignment && not softclip all
+		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt) { // have cigar && not the primary alignment && not softclip all
 			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qb += p->cigar[0]>>4;
 			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qe -= p->cigar[p->n_cigar-1]>>4;
 		}
@@ -859,7 +872,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		} else kputc('*', str);
 	} else { // the reverse strand
 		int i, qb = 0, qe = s->l_seq;
-		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP)) {
+		if (p->n_cigar && which && !(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt) {
 			if ((p->cigar[0]&0xf) == 4 || (p->cigar[0]&0xf) == 3) qe -= p->cigar[0]>>4;
 			if ((p->cigar[p->n_cigar-1]&0xf) == 4 || (p->cigar[p->n_cigar-1]&0xf) == 3) qb += p->cigar[p->n_cigar-1]>>4;
 		}
@@ -976,7 +989,7 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (k && p->secondary < 0) // if supplementary
 			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
-		if (k && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		if (k && !p->is_alt && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
 	}
 	if (aa.n == 0) { // no alignments good enough; then write an unaligned record
 		mem_aln_t t;
