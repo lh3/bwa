@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.10-r876-dirty"
+#define PACKAGE_VERSION "0.7.10-r907-dirty"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
@@ -22,6 +22,7 @@ int bwa_bwtsw2(int argc, char *argv[]);
 
 int main_fastmap(int argc, char *argv[]);
 int main_mem(int argc, char *argv[]);
+int main_shm(int argc, char *argv[]);
 
 int main_pemerge(int argc, char *argv[]);
 	
@@ -43,6 +44,7 @@ static int usage()
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
 	fprintf(stderr, "         bwasw         BWA-SW for long queries\n");
 	fprintf(stderr, "\n");
+	fprintf(stderr, "         shm           manage indices in shared memory\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
 	fprintf(stderr, "         pac2bwtgen    alternative algorithm for generating BWT\n");
@@ -81,6 +83,7 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "bwasw") == 0) ret = bwa_bwtsw2(argc-1, argv+1);
 	else if (strcmp(argv[1], "fastmap") == 0) ret = main_fastmap(argc-1, argv+1);
 	else if (strcmp(argv[1], "mem") == 0) ret = main_mem(argc-1, argv+1);
+	else if (strcmp(argv[1], "shm") == 0) ret = main_shm(argc-1, argv+1);
 	else if (strcmp(argv[1], "pemerge") == 0) ret = main_pemerge(argc-1, argv+1);
 	else {
 		fprintf(stderr, "[main] unrecognized command '%s'\n", argv[1]);

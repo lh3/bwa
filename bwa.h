@@ -10,10 +10,16 @@
 #define BWA_IDX_PAC 0x4
 #define BWA_IDX_ALL 0x7
 
+#define BWA_CTL_SIZE 0x10000
+
 typedef struct {
 	bwt_t    *bwt; // FM-index
 	bntseq_t *bns; // information on the reference sequences
 	uint8_t  *pac; // the actual 2-bit encoded reference sequences with 'N' converted to a random base
+
+	int    is_shm;
+	int64_t l_mem;
+	uint8_t  *mem;
 } bwaidx_t;
 
 typedef struct {
@@ -37,8 +43,12 @@ extern "C" {
 	char *bwa_idx_infer_prefix(const char *hint);
 	bwt_t *bwa_idx_load_bwt(const char *hint);
 
+	bwaidx_t *bwa_idx_load_from_shm(const char *hint);
+	bwaidx_t *bwa_idx_load_from_disk(const char *hint, int which);
 	bwaidx_t *bwa_idx_load(const char *hint, int which);
 	void bwa_idx_destroy(bwaidx_t *idx);
+	int bwa_idx2mem(bwaidx_t *idx);
+	int bwa_mem2idx(int64_t l_mem, uint8_t *mem, bwaidx_t *idx);
 
 	void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line);
 	char *bwa_set_rg(const char *s);
