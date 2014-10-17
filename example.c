@@ -7,10 +7,6 @@
 #include "kseq.h" // for the FASTA/Q parser
 KSEQ_DECLARE(gzFile)
 
-#ifdef USE_MALLOC_WRAPPERS
-#  include "malloc_wrap.h"
-#endif
-
 int main(int argc, char *argv[])
 {
 	bwaidx_t *idx;
