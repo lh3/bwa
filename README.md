@@ -1,4 +1,4 @@
-![Travis-CI](https://travis-ci.org/lh3/bwa.svg?branch=dev)
+[![Build Status](https://travis-ci.org/lh3/bwa.svg?branch=dev)](https://travis-ci.org/lh3/bwa)
 [![Build Status](https://drone.io/github.com/lh3/bwa/status.png)](https://drone.io/github.com/lh3/bwa/latest)
 ##Getting started
 
