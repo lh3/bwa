@@ -145,7 +145,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -w INT        band width for banded alignment [%d]\n", opt->w);
 		fprintf(stderr, "       -d INT        off-diagonal X-dropoff [%d]\n", opt->zdrop);
 		fprintf(stderr, "       -r FLOAT      look for internal seeds inside a seed longer than {-k} * FLOAT [%g]\n", opt->split_factor);
-		fprintf(stderr, "       -y INT        find MEMs longer than {-k} * {-r} with size less than INT (EXPERIMENTAL) [%ld]\n", (long)opt->max_mem_intv);
+		fprintf(stderr, "       -y INT        seed occurrence for the 3rd round seeding [%ld]\n", (long)opt->max_mem_intv);
 //		fprintf(stderr, "       -s INT        look for internal seeds inside a seed with less than INT occ [%d]\n", opt->split_width);
 		fprintf(stderr, "       -c INT        skip seeds with more than INT occurrences [%d]\n", opt->max_occ);
 		fprintf(stderr, "       -D FLOAT      drop chains shorter than FLOAT fraction of the longest overlapping chain [%.2f]\n", opt->drop_ratio);
