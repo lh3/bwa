@@ -205,15 +205,17 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:0.8 };
 
-	while ((c = getopt(args, 'Pqev:p:')) != null) {
+	while ((c = getopt(args, 'Pqev:p:r')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
 		else if (c == 'p') opt.pre = getopt.arg;
 		else if (c == 'P') opt.show_pri = true;
 		else if (c == 'q') opt.recover_maq = false;
 		else if (c == 'e') opt.show_ev = true;
+		else if (c == 'r') opt.min_pa_ratio = parseFloat(optarg.arg);
 	}
+	if (opt.min_pa_ratio > 1.) opt.min_pa_ratio = 1.;
 
 	if (opt.show_ev && opt.pre == null) {
 		warn("ERROR: option '-p' must be specified if '-e' is applied.");
@@ -490,14 +492,16 @@ function bwa_postalt(args)
 				while ((m = re_cigar.exec(t[5])) != null)
 					if (m[2] == 'M' || m[2] == 'D' || m[2] == 'N')
 						end += parseInt(m[1]);
-				var om = -1;
+				var om = -1, pa = 10.;
 				for (var j = 11; j < s.length; ++j)
 					if ((m = /^om:i:(\d+)/.exec(s[j])) != null)
 						om = parseInt(m[1]);
-				if (start < l[3] && l[2] < end) {
+					else if ((m = /^pa:f:(\S+)/.exec(s[j])) != null)
+						pa = parseFloat(m[1]);
+				if (start < l[3] && l[2] < end) { // overlapping the lifted hit
 					if (om > 0) s[4] = om;
 					s[4] = s[4] < mapQ? s[4] : mapQ;
-				} else {
+				} else if (pa < opt.min_pa_ratio) { // not overlapping; has a small pa
 					if (om < 0) s.push("om:i:" + s[4]);
 					s[4] = 0;
 				}
