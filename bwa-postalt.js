@@ -490,13 +490,16 @@ function bwa_postalt(args)
 				while ((m = re_cigar.exec(t[5])) != null)
 					if (m[2] == 'M' || m[2] == 'D' || m[2] == 'N')
 						end += parseInt(m[1]);
+				var om = -1;
+				for (var j = 11; j < s.length; ++j)
+					if ((m = /^om:i:(\d+)/.exec(s[j])) != null)
+						om = parseInt(m[1]);
 				if (start < l[3] && l[2] < end) {
-					var om = -1;
-					for (var j = 11; j < s.length; ++j)
-						if ((m = /^om:i:(\d+)/.exec(s[j])) != null)
-							om = parseInt(m[1]);
 					if (om > 0) s[4] = om;
 					s[4] = s[4] < mapQ? s[4] : mapQ;
+				} else {
+					if (om < 0) s.push("om:i:" + s[4]);
+					s[4] = 0;
 				}
 			}
 		}
