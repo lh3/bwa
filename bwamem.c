@@ -121,7 +121,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 	// first pass: find all SMEMs
 	while (x < len) {
 		if (seq[x] < 4) {
-			x = bwt_smem1a(bwt, len, seq, x, start_width, split_len, opt->max_mem_intv, &a->mem1, a->tmpv);
+			x = bwt_smem1(bwt, len, seq, x, start_width, &a->mem1, a->tmpv);
 			for (i = 0; i < a->mem1.n; ++i) {
 				bwtintv_t *p = &a->mem1.a[i];
 				int slen = (uint32_t)p->info - (p->info>>32); // seed length
@@ -131,7 +131,6 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 		} else ++x;
 	}
 	// second pass: find MEMs inside a long SMEM
-	if (opt->max_mem_intv > 0) goto sort_intv;
 	old_n = a->mem.n;
 	for (k = 0; k < old_n; ++k) {
 		bwtintv_t *p = &a->mem.a[k];
@@ -142,8 +141,24 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 			if ((uint32_t)a->mem1.a[i].info - (a->mem1.a[i].info>>32) >= opt->min_seed_len)
 				kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
 	}
+	// third pass: LAST-like
+	if (opt->max_mem_intv > 0) {
+		x = 0;
+		while (x < len) {
+			if (seq[x] < 4) {
+				if (1) {
+					bwtintv_t m;
+					x = bwt_seed_strategy1(bwt, len, seq, x, opt->max_mem_intv, &m);
+					if (m.x[2] > 0) kv_push(bwtintv_t, a->mem, m);
+				} else { // for now, we never come to this block which is slower
+					x = bwt_smem1a(bwt, len, seq, x, start_width, opt->max_mem_intv, &a->mem1, a->tmpv);
+					for (i = 0; i < a->mem1.n; ++i)
+						kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
+				}
+			} else ++x;
+		}
+	}
 	// sort
-sort_intv:
 	ks_introsort(mem_intv, a->mem.n, a->mem.a);
 }
 

@@ -65,7 +65,7 @@ const bwtintv_v *smem_next(smem_i *itr)
 	while (itr->start < itr->len && itr->query[itr->start] > 3) ++itr->start; // skip ambiguous bases
 	if (itr->start == itr->len) return 0;
 	ori_start = itr->start;
-	itr->start = bwt_smem1a(itr->bwt, itr->len, itr->query, ori_start, itr->min_intv, itr->max_len, itr->max_intv, itr->matches, itr->tmpvec); // search for SMEM
+	itr->start = bwt_smem1a(itr->bwt, itr->len, itr->query, ori_start, itr->min_intv, itr->max_intv, itr->matches, itr->tmpvec); // search for SMEM
 	return itr->matches;
 }
 
