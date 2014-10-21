@@ -205,7 +205,7 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, update_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:0.8 };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, update_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:1 };
 
 	while ((c = getopt(args, 'Pqev:p:r:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
@@ -225,13 +225,14 @@ function bwa_postalt(args)
 	if (args.length == getopt.ind) {
 		print("");
 		print("Usage:   k8 bwa-postalt.js [options] <alt.sam> [aln.sam]\n");
-		print("Options: -p STR   prefix of file(s) for additional information [null]");
-		print("                  PREFIX.ctw - weight of each ALT contig");
-		print("                  PREFIX.evi - reads supporting ALT contigs (effective with -e)");
-		print("         -q       don't modify mapQ for non-ALTs hit overlapping lifted ALT");
-		print("         -e       show reads supporting ALT contigs into file PREFIX.evi");
+		print("Options: -p STR     prefix of file(s) for additional information [null]");
+		print("                    PREFIX.ctw - weight of each ALT contig");
+		print("                    PREFIX.evi - reads supporting ALT contigs (effective with -e)");
+		print("         -e         show reads supporting ALT contigs into file PREFIX.evi");
+		print("         -r FLOAT   reduce mapQ to 0 if not overlapping lifted best and pa<FLOAT ["+opt.min_pa_ratio+"]");
+		print("         -q         don't modify mapQ for non-ALTs hit overlapping lifted ALT");
 		print("");
-		print("Note: This script inspects the XA tag, lifts the mapping positions of ALT hits to");
+		print("Note: This script extracts the XA tag, lifts the mapping positions of ALT hits to");
 		print("      the primary assembly, groups them and then estimates mapQ across groups. If");
 		print("      a non-ALT hit overlaps a lifted ALT hit, its mapping quality is set to the");
 		print("      smaller between its original mapQ and the adjusted mapQ of the ALT hit. If");
