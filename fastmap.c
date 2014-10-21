@@ -55,7 +55,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:g:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -85,7 +85,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'N') opt->max_chain_extend = atoi(optarg), opt0.max_chain_extend = 1;
 		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
 		else if (c == 'y') opt->max_mem_intv = atol(optarg), opt0.max_mem_intv = 1;
-		else if (c == 'g') opt->min_pa_ratio = atof(optarg), opt0.min_pa_ratio = 1;
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'K') fixed_chunk_size = atoi(optarg);
 		else if (c == 'h') {
@@ -172,7 +171,6 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -j            ignore ALT contigs\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
-		fprintf(stderr, "       -g FLOAT      set mapQ to zero if the ratio of the primary-to-alt scores below FLOAT [%.3f]\n", opt->min_pa_ratio);
 		fprintf(stderr, "       -T INT        minimum score to output [%d]\n", opt->T);
 		fprintf(stderr, "       -h INT[,INT]  if there are <INT hits with score >80%% of the max score, output all in XA [%d,%d]\n", opt->max_XA_hits, opt->max_XA_hits_alt);
 		fprintf(stderr, "       -a            output all alignments for SE or unpaired PE\n");

@@ -79,7 +79,6 @@ mem_opt_t *mem_opt_init()
 	o->min_chain_weight = 0;
 	o->max_chain_extend = 1<<30;
 	o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
-	o->min_pa_ratio = 0;
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -841,7 +840,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 	if (p->rid >= 0) { // with coordinate
 		kputs(bns->anns[p->rid].name, str); kputc('\t', str); // RNAME
 		kputl(p->pos + 1, str); kputc('\t', str); // POS
-		kputw(p->score < opt->min_pa_ratio * p->alt_sc? 0 : p->mapq, str); kputc('\t', str); // MAPQ
+		kputw(p->mapq, str); kputc('\t', str); // MAPQ
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
 				int c = p->cigar[i]&0xf;
@@ -931,8 +930,6 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		}
 		if (p->alt_sc > 0)
 			ksprintf(str, "\tpa:f:%.3f", (double)p->score / p->alt_sc);
-		if (p->score < opt->min_pa_ratio * p->alt_sc)
-			ksprintf(str, "\tom:i:%d", p->mapq);
 	}
 	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
