@@ -88,7 +88,9 @@ alignments and assigns mapQ following these two rules:
 
 In theory, non-ALT alignments from step 1 should be identical to alignments
 against a reference genome with ALT contigs. In practice, the two types of
-alignments may differ in rare cases due to seeding heuristics.
+alignments may differ in rare cases due to seeding heuristics. When an ALT hit
+is significantly better than non-ALT hits, BWA-MEM may miss seeds on the
+non-ALT hits. This happens more often for contig mapping.
 
 If we don't care about ALT hits, we may skip postprocessing (step 2).
 Nonetheless, postprocessing is recommended as it improves mapQ and gives more
@@ -134,7 +136,7 @@ not to high resolution for now.
 
 ### Evaluating ALT Mapping
 
-(To come later...)
+(Coming soon...)
 
 ## Problems and Future Development
 
