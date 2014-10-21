@@ -205,7 +205,7 @@ function parse_hit(s, opt)
 
 function bwa_postalt(args)
 {
-	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, recover_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:0.8 };
+	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, update_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:0.8 };
 
 	while ((c = getopt(args, 'Pqev:p:r:')) != null) {
 		if (c == 'v') opt.verbose = parseInt(getopt.arg);
@@ -482,17 +482,19 @@ function bwa_postalt(args)
 		}
 
 		// check if the reported hit overlaps a hit to the primary assembly; if so, don't reduce mapping quality
-		if (opt.recover_mapq && n_rpt_lifted == 1 && mapQ > 0) {
-			var l = rpt_lifted;
+		if (opt.update_mapq && mapQ > 0 && n_rpt_lifted <= 1) {
+			var l = n_rpt_lifted == 1? rpt_lifted : null;
 			for (var i = 0; i < buf2.length; ++i) {
 				var s = buf2[i], is_ovlp = true;
-				if (l[0] != s[2]) is_ovlp = false; // different chr
-				if (((s[1]&16) != 0) != l[1]) is_ovlp = false; // different strand
-				var start = s[3] - 1, end = start;
-				while ((m = re_cigar.exec(t[5])) != null)
-					if (m[2] == 'M' || m[2] == 'D' || m[2] == 'N')
-						end += parseInt(m[1]);
-				if (!(start < l[3] && l[2] < end)) is_ovlp = false; // no overlap
+				if (l != null) {
+					if (l[0] != s[2]) is_ovlp = false; // different chr
+					if (((s[1]&16) != 0) != l[1]) is_ovlp = false; // different strand
+					var start = s[3] - 1, end = start;
+					while ((m = re_cigar.exec(t[5])) != null)
+						if (m[2] == 'M' || m[2] == 'D' || m[2] == 'N')
+							end += parseInt(m[1]);
+					if (!(start < l[3] && l[2] < end)) is_ovlp = false; // no overlap
+				} else is_ovlp = false;
 				var om = -1, pa = 10.;
 				for (var j = 11; j < s.length; ++j)
 					if ((m = /^om:i:(\d+)/.exec(s[j])) != null)
