@@ -355,7 +355,7 @@ int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, 
 	return bwt_smem1a(bwt, len, q, x, min_intv, 0, mem, tmpvec);
 }
 
-int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int max_intv, bwtintv_t *mem)
+int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_len, int max_intv, bwtintv_t *mem)
 {
 	int i, c;
 	bwtintv_t ik, ok[4];
@@ -367,7 +367,7 @@ int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int m
 		if (q[i] < 4) { // an A/C/G/T base
 			c = 3 - q[i]; // complement of q[i]
 			bwt_extend(bwt, &ik, ok, 0);
-			if (ok[c].x[2] < max_intv) {
+			if (ok[c].x[2] < max_intv && i - x >= min_len) {
 				*mem = ok[c];
 				mem->info = (uint64_t)x<<32 | (i + 1);
 				return i + 1;
