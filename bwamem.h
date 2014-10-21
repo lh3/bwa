@@ -48,7 +48,6 @@ typedef struct {
 	float XA_drop_ratio;    // when counting hits for the XA tag, ignore alignments with score < XA_drop_ratio * max_score; only effective for the XA tag
 	float mask_level_redun;
 	float mapQ_coef_len;
-	float min_pa_ratio;
 	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
