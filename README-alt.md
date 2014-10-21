@@ -3,7 +3,7 @@
 Since version 0.7.11, BWA-MEM supports read mapping against a reference genome
 with long alternative haplotypes present in separate ALT contigs. To use the
 ALT-aware mode, users need to provide pairwise ALT-to-reference alignment in the
-SAM format and rename the file to ""*idxbase*.alt". For GRCh38, this alignment
+SAM format and rename the file to "*idxbase*.alt". For GRCh38, this alignment
 is available from the [BWA resource bundle for GRCh38][res].
 
 #### Option 1: Mapping to the official GRCh38 with ALT contigs
@@ -20,7 +20,6 @@ cp bwa-hs38-res/hs38d4.fa.alt hs38a.fa.alt
 Perform mapping:
 ```sh
 bwa mem hs38a.fa read1.fq read2.fq \
-  | samblaster \
   | bwa-hs38-res/k8-linux bwa-postalt.js hs38a.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
@@ -38,15 +37,14 @@ cp bwa-hs38-res/hs38d4.fa.alt .
 Perform mapping:
 ```sh
 bwa mem hs38d4.fa read1.fq read2.fq \
-  | samblaster \
   | bwa-hs38-res/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
 This command line generates `postinfo.ctw` which loosely evaluates the presence
 of an ALT contig with an empirical score at the last column.
 
-**If you are not interested in the way BWA-MEM performs ALT mapping, you can
-skip the rest of this documentation.**
+***If you are not interested in the way BWA-MEM performs ALT mapping, you can
+skip the rest of this documentation.***
 
 ## Background
 
@@ -80,20 +78,19 @@ the ALT-to-ref alignment, and labels a potential hit as *ALT* or *non-ALT*,
 depending on whether the hit lands on an ALT contig or not. BWA-MEM then reports
 alignments and assigns mapQ following these two rules:
 
- * The original mapQ of a non-ALT hit is computed across non-ALT hits only.
+1. The original mapQ of a non-ALT hit is computed across non-ALT hits only.
    The reported mapQ of an ALT hit is computed across all hits.
 
- * An ALT hit is only reported if its score is strictly better than all
-   overlapping non-ALT hits. A reported ALT hit is flagged with 0x800
-   (supplementary) unless there are no non-ALT hits.
+2. If there are no non-ALT hits, the best ALT hit is outputted as the primary
+   alignment. If there are both ALT and non-ALT hits, non-ALT hits will be
+   primary. ALT hits are reported as supplementary alignments (flag 0x800) only
+   if they are better than all overlapping non-ALT hits.
 
-When option `-g FLOAT` is in use (which is the default), a third rule kicks in:
+In theory, non-ALT alignments from step 1 should be identical to alignments
+against a reference genome with ALT contigs. In practice, the two types of
+alignments may differ in rare cases due to seeding heuristics.
 
- * The mapQ of a non-ALT hit is reduced to zero if its score is less than FLOAT
-   times the score of an overlapping ALT hit. In this case, the original mapQ is
-   moved to the `om` tag.
-
-If we don't care about ALT hits, we may actually skip postprocessing (step 2).
+If we don't care about ALT hits, we may skip postprocessing (step 2).
 Nonetheless, postprocessing is recommended as it improves mapQ and gives more
 information about ALT hits.
 
@@ -103,8 +100,9 @@ Postprocessing is done with a separate script `bwa-postalt.js`. It reads all
 potential hits reported in the XA tag, lifts ALT hits to the chromosomal
 positions using the ALT-to-ref alignment, groups them after lifting and then
 reassigns mapQ based on the best scoring hit in each group with all the hits in
-a group get the same mapQ. Knowing the ALT-to-ref alignment, this script can
-greatly improve mapQ of ALT hits and occasionally improve mapQ of non-ALT hits.
+a group get the same mapQ. Being aware of the ALT-to-ref alignment, this script
+can greatly improve mapQ of ALT hits and occasionally improve mapQ of non-ALT
+hits.
 
 The script also measures the presence of each ALT contig. For a group of
 overlapping ALT contigs c_1, ..., c_m, the weight for c_k equals `\frac{\sum_j
@@ -134,6 +132,10 @@ In addition to decoy, we also put multiple alleles of HLA genes in
 version 3.18.0. Script `bwa-postalt.js` also helps to genotype HLA genes, though
 not to high resolution for now.
 
+### Evaluating ALT Mapping
+
+(To come later...)
+
 ## Problems and Future Development
 
 There are some uncertainties about ALT mappings - we are not sure whether they
@@ -141,9 +143,10 @@ help biological discovery and don't know the best way to analyze them. Without
 clear demand from downstream analyses, it is very difficult to design the
 optimal mapping strategy. The current BWA-MEM method is just a start. If it
 turns out to be useful in research, we will probably rewrite bwa-postalt.js in C
-for performance; if not, we will try new designs. It is also possible that we
-may make breakthrough on the representation of multiple genomes, in which case,
-we can even get rid of ALT contigs once for all.
+for performance; if not, we may make changes. It is also possible that we might
+make breakthrough on the representation of multiple genomes, in which case, we
+can even get rid of ALT contigs for good.
+
 
 
 [res]: https://sourceforge.net/projects/bio-bwa/files/
