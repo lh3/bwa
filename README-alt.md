@@ -14,13 +14,13 @@ wget ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/H
 gzip -d GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
 mv GCA_000001405.15_GRCh38_full_analysis_set.fna hs38a.fa
 bwa index hs38a.fa
-cp bwa-hs38-res/hs38d4.fa.alt hs38a.fa.alt
+cp bwa-hs38-bundle/hs38d4.fa.alt hs38a.fa.alt
 ```
 
 Perform mapping:
 ```sh
 bwa mem hs38a.fa read1.fq read2.fq \
-  | bwa-hs38-res/k8-linux bwa-postalt.js hs38a.fa.alt \
+  | bwa-hs38-bundle/k8-linux bwa-postalt.js hs38a.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
 For short reads, the postprocessing script `bwa-postalt.js` runs at about the
@@ -30,14 +30,14 @@ same speed as BAM compression.
 
 Construct the index:
 ```sh
-cat hs38a.fa bwa-hs38-res/hs38d4-extra.fa > hs38d4.fa
+cat hs38a.fa bwa-hs38-bundle/hs38d4-extra.fa > hs38d4.fa
 bwa index hs38d4.fa
-cp bwa-hs38-res/hs38d4.fa.alt .
+cp bwa-hs38-bundle/hs38d4.fa.alt .
 ```
 Perform mapping:
 ```sh
 bwa mem hs38d4.fa read1.fq read2.fq \
-  | bwa-hs38-res/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
+  | bwa-hs38-bundle/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
 This command line generates `postinfo.ctw` which loosely evaluates the presence
