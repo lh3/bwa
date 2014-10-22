@@ -59,7 +59,7 @@ mem_opt_t *mem_opt_init()
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
 
-	o->max_mem_intv = 10;
+	o->max_mem_intv = 20;
 
 	o->min_seed_len = 19;
 	o->split_width = 10;
@@ -147,7 +147,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 			if (seq[x] < 4) {
 				if (1) {
 					bwtintv_t m;
-					x = bwt_seed_strategy1(bwt, len, seq, x, opt->max_mem_intv, &m);
+					x = bwt_seed_strategy1(bwt, len, seq, x, opt->min_seed_len, opt->max_mem_intv, &m);
 					if (m.x[2] > 0) kv_push(bwtintv_t, a->mem, m);
 				} else { // for now, we never come to this block which is slower
 					x = bwt_smem1a(bwt, len, seq, x, start_width, opt->max_mem_intv, &a->mem1, a->tmpv);
@@ -274,7 +274,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 		bwtintv_t *p = &aux->mem.a[i];
 		int step, count, slen = (uint32_t)p->info - (p->info>>32); // seed length
 		int64_t k;
-		if (slen < opt->min_seed_len) continue; // ignore if too short or too repetitive
+		// if (slen < opt->min_seed_len) continue; // ignore if too short or too repetitive
 		step = p->x[2] > opt->max_occ? p->x[2] / opt->max_occ : 1;
 		for (k = count = 0; k < p->x[2] && count < opt->max_occ; k += step, ++count) {
 			mem_chain_t tmp, *lower, *upper;
@@ -514,7 +514,8 @@ static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *
 				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].sub == 0) a[j].sub = a[i].score;
-					if (a[j].score - a[i].score <= tmp) ++a[j].sub_n;
+					if (a[j].score - a[i].score <= tmp && (a[j].is_alt || !a[i].is_alt))
+						++a[j].sub_n;
 					break;
 				}
 			}
@@ -980,14 +981,14 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, mem_alnreg_v *a, int l_query, const char *query);
 	kstring_t str;
 	kvec_t(mem_aln_t) aa;
-	int k;
+	int k, l;
 	char **XA = 0;
 
 	if (!(opt->flag & MEM_F_ALL))
 		XA = mem_gen_alt(opt, bns, pac, a, s->l_seq, s->seq);
 	kv_init(aa);
 	str.l = str.m = 0; str.s = 0;
-	for (k = 0; k < a->n; ++k) {
+	for (k = l = 0; k < a->n; ++k) {
 		mem_alnreg_t *p = &a->a[k];
 		mem_aln_t *q;
 		if (p->score < opt->T) continue;
@@ -999,9 +1000,10 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		q->XA = XA? XA[k] : 0;
 		q->flag |= extra_flag; // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
-		if (k && p->secondary < 0) // if supplementary
+		if (l && p->secondary < 0) // if supplementary
 			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
-		if (k && !p->is_alt && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		if (l && !p->is_alt && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		++l;
 	}
 	if (aa.n == 0) { // no alignments good enough; then write an unaligned record
 		mem_aln_t t;

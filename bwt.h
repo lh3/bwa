@@ -121,7 +121,7 @@ extern "C" {
 	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 	int bwt_smem1a(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, uint64_t max_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
-	int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int max_intv, bwtintv_t *mem);
+	int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_len, int max_intv, bwtintv_t *mem);
 
 #ifdef __cplusplus
 }
