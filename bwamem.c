@@ -59,7 +59,7 @@ mem_opt_t *mem_opt_init()
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
 
-	o->max_mem_intv = 10;
+	o->max_mem_intv = 20;
 
 	o->min_seed_len = 19;
 	o->split_width = 10;
