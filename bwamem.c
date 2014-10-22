@@ -514,7 +514,8 @@ static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *
 				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].sub == 0) a[j].sub = a[i].score;
-					if (a[j].score - a[i].score <= tmp) ++a[j].sub_n;
+					if (a[j].score - a[i].score <= tmp && (a[j].is_alt || !a[i].is_alt))
+						++a[j].sub_n;
 					break;
 				}
 			}
