@@ -23,8 +23,12 @@ bwa mem hs38a.fa read1.fq read2.fq \
   | bwa-hs38-bundle/k8-linux bwa-postalt.js hs38a.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
-For short reads, the postprocessing script `bwa-postalt.js` runs at about the
-same speed as BAM compression.
+
+In the final alignment, a read may be placed on the [primary assembly][grcdef]
+and multiple overlapping ALT contigs at the same time (on multiple SAM lines).
+Mapping quality (mapQ) is properly adjusted by the postprocessing script
+`bwa-postalt.js` using the ALT-to-reference alignment `hs38a.fa.alt`. For
+details, see the [Methods section](#methods).
 
 #### Option 2: Mapping to the collection of GRCh38, decoy and HLA genes
 
@@ -40,13 +44,19 @@ bwa mem hs38d4.fa read1.fq read2.fq \
   | bwa-hs38-bundle/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
   | samtools view -bS - > aln.unsrt.bam
 ```
-This command line generates `postinfo.ctw` which loosely evaluates the presence
-of an ALT contig with an empirical score at the last column.
+The benefit of this option is to have a more complete reference sequence and
+to facilitate HLA typing with a 3rd-party tool (see below).
 
 ***If you are not interested in the way BWA-MEM performs ALT mapping, you can
 skip the rest of this documentation.***
 
 ## Background
+
+GRCh38 consists of several components: chromosomal assembly, unlocalized contigs
+(chromosome known but location unknown), unplaced contigs (chromosome unknown)
+and ALT contigs (long clustered variations). The combination of the first three
+components is called the *primary assembly*. You can find the more exact
+definitions from the [GRC website][grcdef].
 
 GRCh38 ALT contigs are totaled 109Mb in length, spanning 60Mbp genomic regions.
 However, sequences that are highly diverged from the primary assembly only
@@ -113,7 +123,7 @@ pow(4,s_i)}` is the posterior of c_k given a read r mapped to it with a
 Smith-Waterman score s_k. This weight is reported in `postinfo.ctw` in the
 option 2 above.
 
-### On the Completeness of GRCh38+ALT
+### On the completeness of GRCh38+ALT
 
 While GRCh38 is much more complete than GRCh37, it is still missing some true
 human sequences. To make sure every piece of sequence in the reference assembly
@@ -133,6 +143,27 @@ In addition to decoy, we also put multiple alleles of HLA genes in
 `hs38d4-extra.fa`. These genomic sequences were acquired from [IMGT/HLA][hladb],
 version 3.18.0. Script `bwa-postalt.js` also helps to genotype HLA genes, though
 not to high resolution for now.
+
+### More on HLA typing
+
+It is [well known][hlalink] that HLA genes are associated with many autoimmune
+diseases as well as some others not directly related to the immune system.
+However, many HLA alleles are highly diverged from the reference genome. If we
+map whole-genome shotgun (WGS) reads to the reference only, many
+allele-informative will get lost. As a result, the vast majority of WGS projects
+have ignored these important genes.
+
+We recommend to include the genomic regions of classical HLA genes in the BWA
+index. This way we will be able to get a more complete collection of reads
+mapped to HLA. We can then isolate these reads with little computational cost
+and type HLA genes with another program, such as [Dilthey et al (2014)][hla1] or
+one from [this list][hlatools].
+
+If the postprocessing script `bwa-postalt.js` is invoked with `-p prefix`, it
+will also write the top three alleles to file `prefix.hla`. However, as most HLA
+alleles from IMGT/HLA don't have intronic sequences and thus are not included in
+the reference genome, we are unable to type HLA genes to high resolution with
+the BWA-MEM mapping alone. A dedicated tool is recommended for accurate typing.
 
 ### Evaluating ALT Mapping
 
@@ -159,3 +190,7 @@ can even get rid of ALT contigs for good.
 [blast]: http://blast.st-va.ncbi.nlm.nih.gov/Blast.cgi?PROGRAM=blastn&PAGE_TYPE=BlastSearch&LINK_LOC=blasthome
 [sgdp]: http://www.simonsfoundation.org/life-sciences/simons-genome-diversity-project/
 [hladb]: http://www.ebi.ac.uk/ipd/imgt/hla/
+[grcdef]: http://www.ncbi.nlm.nih.gov/projects/genome/assembly/grc/info/definitions.shtml
+[hla1]: http://biorxiv.org/content/early/2014/07/08/006973
+[hlalink]: http://www.hladiseaseassociations.com
+[hlatools]: https://www.biostars.org/p/93245/

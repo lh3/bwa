@@ -203,6 +203,44 @@ function parse_hit(s, opt)
 	return h;
 }
 
+function type_hla(w)
+{
+	var hla = ["A", "B", "C", "DQA1", "DQB1", "DRB1"];
+	var hla_hash = {}, a = [], r = [];
+	for (var i = 0; i < hla.length; ++i) {
+		hla_hash[hla[i]] = i;
+		a[i] = [];
+	}
+	for (var i = 0; i < w.length; ++i) {
+		var t = w[i][0].split(/[:\*]/);
+		var x = hla_hash[t[0]];
+		if (x != null)
+			a[x].push([w[i][0], t[1], t[1] + ':' + t[2], w[i][1]]);
+	}
+	for (var k = 1; k <= 2; ++k) {
+		for (var i = 0; i < hla.length; ++i) {
+			var ai = a[i], m = {};
+			for (var j = 0; j < ai.length; ++j) {
+				var key = ai[j][k], val = ai[j][3];
+				if (m[key] == null) m[key] = [-1, -1.0];
+				if (m[key][1] < val) m[key] = [j, val];
+			}
+			var sum = 0;
+			for (var x in m) sum += m[x][1];
+			var max = -1, max2 = -1, max3 = -1, max_x, max_x2, max_x3;
+			for (var x in m) {
+				if (max < m[x][1]) max3 = max2, max_x3 = max_x2, max2 = max, max_x2 = max_x, max = m[x][1], max_x = x;
+				else if (max2 < m[x][1]) max3 = max2, max_x3 = max_x2, max2 = m[x][1], max_x2 = x;
+				else if (max3 < m[x][1]) max3 = m[x][1], max_x3 = x;
+			}
+			r.push([hla[i], k, hla[i]+'*'+max_x, max.toFixed(3), hla[i]+'*'+max_x2, max2.toFixed(3), hla[i]+'*'+max_x3, max3.toFixed(3)]);
+		}
+	}
+	for (var i = 0; i < r.length; ++i)
+		print(r[i].join("\t"));
+	return r;
+}
+
 function bwa_postalt(args)
 {
 	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, update_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:1 };
@@ -574,11 +612,13 @@ function bwa_postalt(args)
 	if (opt.pre != null) {
 		var fpout = new File(opt.pre + '.ctw', "w");
 		var weight_arr = [];
+		var weight_hla = [];
 		for (var ctg in weight_alt) {
 			var w = weight_alt[ctg];
 			weight_arr.push([ctg, w[6], w[7], w[8],
 					w[0], w[1].toFixed(3), w[2].toFixed(3), w[1] > 0? (w[2]/w[1]).toFixed(3) : '0.000',
 					w[3], w[4].toFixed(3), w[5].toFixed(3), w[4] > 0? (w[5]/w[4]).toFixed(3) : '0.000']);
+			weight_hla.push([ctg, w[4] > 0? w[5]/w[4] : 0]);
 		}
 		weight_arr.sort(function(a,b) {
 				return a[1] < b[1]? -1 : a[1] > b[1]? 1 : a[2] != b[2]? a[2] - b[2] : a[0] < b[0]? -1 : a[0] > b[0]? 1 : 0;
@@ -587,6 +627,12 @@ function bwa_postalt(args)
 			if (weight_arr[i][1] == '~') weight_arr[i][1] = '*';
 			fpout.write(weight_arr[i].join("\t") + '\n');
 		}
+		fpout.close();
+
+		var r = type_hla(weight_hla);
+		fpout = new File(opt.pre + '.hla', "w");
+		for (var i = 0; i < r.length; ++i)
+			fpout.write(r[i].join("\t") + '\n');
 		fpout.close();
 	}
 }
