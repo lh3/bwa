@@ -236,8 +236,6 @@ function type_hla(w)
 			r.push([hla[i], k, hla[i]+'*'+max_x, max.toFixed(3), hla[i]+'*'+max_x2, max2.toFixed(3), hla[i]+'*'+max_x3, max3.toFixed(3)]);
 		}
 	}
-	for (var i = 0; i < r.length; ++i)
-		print(r[i].join("\t"));
 	return r;
 }
 
