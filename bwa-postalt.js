@@ -203,6 +203,24 @@ function parse_hit(s, opt)
 	return h;
 }
 
+function print_buffer(buf2, fp_hla)
+{
+	var m, hla = {};
+	if (buf2.length == 0) return;
+	for (var i = 0; i < buf2.length; ++i) {
+		print(buf2[i].join("\t"));
+		if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(buf2[i][2])) != null)
+			hla[m[1]] = true;
+	}
+	if (fp_hla != null) {
+		var name = buf2[0][0] + '/' + (buf2[0][1]>>6&3) + ((buf2[0][1]&16)? '-' : '+');
+		for (var x in hla) {
+			if (fp_hla[x] != null);
+				fp_hla[x].write('@' + name + '\n' + buf2[0][9] + '\n+\n' + buf2[0][10] + '\n');
+		}
+	}
+}
+
 function bwa_postalt(args)
 {
 	var c, opt = { a:1, b:4, o:6, e:1, verbose:3, show_pri:false, update_mapq:true, min_mapq:10, min_sc:90, max_nm_sc:10, show_ev:false, min_pa_ratio:1 };
@@ -247,7 +265,7 @@ function bwa_postalt(args)
 	var buf = new Bytes();
 
 	// read ALT-to-REF alignment
-	var intv_alt = {}, intv_pri = {}, idx_un = {};
+	var intv_alt = {}, intv_pri = {}, idx_un = {}, hla_ctg = {};
 	var file = new File(args[getopt.ind]);
 	while (file.readline(buf) >= 0) {
 		var line = buf.toString();
@@ -261,6 +279,10 @@ function bwa_postalt(args)
 			continue;
 		}
 		var m, cigar = [], l_qaln = 0, l_tlen = 0, l_qclip = 0;
+		if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(t[0])) != null) { // read HLA contigs
+			if (hla_ctg[m[1]] == null) hla_ctg[m[1]] = 0;
+			++hla_ctg[m[1]];
+		}
 		while ((m = re_cigar.exec(t[5])) != null) {
 			var l = parseInt(m[1]);
 			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
@@ -282,6 +304,14 @@ function bwa_postalt(args)
 		idx_alt[ctg] = intv_ovlp(intv_alt[ctg]);
 	for (var ctg in intv_pri)
 		idx_pri[ctg] = intv_ovlp(intv_pri[ctg]);
+
+	// initialize the list of HLA contigs
+	var fp_hla = null;
+	if (opt.pre) {
+		fp_hla = {};
+		for (var h in hla_ctg)
+			fp_hla[h] = new File(opt.pre + '.' + h + '.fq', "w");
+	}
 
 	// initialize the list of ALT contigs
 	var weight_alt = [];
@@ -305,8 +335,7 @@ function bwa_postalt(args)
 
 		// print bufferred reads
 		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
-			for (var i = 0; i < buf2.length; ++i)
-				print(buf2[i].join("\t"));
+			print_buffer(buf2, fp_hla);
 			buf2 = [];
 		}
 
@@ -562,10 +591,12 @@ function bwa_postalt(args)
 			buf2.push(s);
 		}
 	}
-	for (var i = 0; i < buf2.length; ++i)
-		print(buf2[i].join("\t"));
+	print_buffer(buf2, fp_hla);
 	file.close();
 	if (fp_evi != null) fp_evi.close();
+	if (fp_hla != null)
+		for (var h in fp_hla)
+			fp_hla[h].close();
 
 	buf.destroy();
 	aux.destroy();
