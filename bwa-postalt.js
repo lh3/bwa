@@ -203,15 +203,9 @@ function parse_hit(s, opt)
 	return h;
 }
 
-function print_buffer(buf2, fp_hla)
+function print_buffer(buf2, fp_hla, hla)
 {
-	var m, hla = {};
 	if (buf2.length == 0) return;
-	for (var i = 0; i < buf2.length; ++i) {
-		print(buf2[i].join("\t"));
-		if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(buf2[i][2])) != null)
-			hla[m[1]] = true;
-	}
 	if (fp_hla != null) {
 		var name = buf2[0][0] + '/' + (buf2[0][1]>>6&3) + ((buf2[0][1]&16)? '-' : '+');
 		for (var x in hla) {
@@ -321,7 +315,7 @@ function bwa_postalt(args)
 		weight_alt[ctg] = [0, 0, 0, 0, 0, 0, '~', 0, 0];
 
 	// process SAM
-	var buf2 = [];
+	var buf2 = [], hla = {};
 	file = args.length - getopt.ind >= 2? new File(args[getopt.ind+1]) : new File();
 	while (file.readline(buf) >= 0) {
 		var m, line = buf.toString();
@@ -335,8 +329,8 @@ function bwa_postalt(args)
 
 		// print bufferred reads
 		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
-			print_buffer(buf2, fp_hla);
-			buf2 = [];
+			print_buffer(buf2, fp_hla, hla);
+			buf2 = [], hla = {};
 		}
 
 		// skip unmapped lines
@@ -459,27 +453,35 @@ function bwa_postalt(args)
 			else mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
 		} else mapQ = t[4];
 
+		var pri_ofunc = idx_pri[hits[reported_i].pctg], ovlp_alt = [];
+		if (pri_ofunc != null) {
+			var rpt_start = 1<<30, rpt_end = 0;
+			for (var i = 0; i < hits.length; ++i) {
+				var h = hits[i];
+				if (h.g == reported_g) {
+					rpt_start = rpt_start < h.pstart? rpt_start : h.pstart;
+					rpt_end   = rpt_end   > h.pend  ? rpt_end   : h.pend;
+				}
+			}
+			ovlp_alt = pri_ofunc(rpt_start, rpt_end);
+			for (var i = 0; i < ovlp_alt.length; ++i)
+				if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(ovlp_alt[i][2])) != null)
+					hla[m[1]] = true;
+		}
+
 		// ALT genotyping
 		if (mapQ >= opt.min_mapq && hits[reported_i].score >= opt.min_sc) {
 			// collect all overlapping ALT contigs
-			var hits2 = [];
+			var alts = {};
 			for (var i = 0; i < hits.length; ++i) {
 				var h = hits[i];
-				if (h.g == reported_g)
-					hits2.push([h.pctg, h.pstart, h.pend, h.ctg, h.score, h.NM]);
+				if (h.g == reported_g && weight_alt[h.ctg] != null)
+					alts[h.ctg] = [h.score, h.NM];
 			}
-			var start = hits2[0][1], end = hits2[0][2];
-			for (var i = 1; i < hits2.length; ++i)
-				end = end > hits2[i][2]? end : hits2[i][2];
-			var alts = {};
-			for (var i = 0; i < hits2.length; ++i)
-				if (weight_alt[hits2[i][3]] != null)
-					alts[hits2[i][3]] = [hits2[i][4], hits2[i][5]];
-			if (idx_pri[hits2[0][0]] != null) { // add other unreported hits
-				var ovlp = idx_pri[hits2[0][0]](start, end);
-				for (var i = 0; i < ovlp.length; ++i)
-					if (ovlp[i][0] <= start && end <= ovlp[i][1] && alts[ovlp[i][2]] == null)
-						alts[ovlp[i][2]] = [0, 0];
+			if (ovlp_alt.length > 0) { // add other unreported hits
+				for (var i = 0; i < ovlp_alt.length; ++i)
+					if (ovlp_alt[i][0] <= rpt_start && rpt_end <= ovlp_alt[i][1])
+						alts[ovlp_alt[i][2]] = [0, 0];
 			}
 
 			// add weight to each ALT contig
@@ -591,7 +593,7 @@ function bwa_postalt(args)
 			buf2.push(s);
 		}
 	}
-	print_buffer(buf2, fp_hla);
+	print_buffer(buf2, fp_hla, hla);
 	file.close();
 	if (fp_evi != null) fp_evi.close();
 	if (fp_hla != null)
