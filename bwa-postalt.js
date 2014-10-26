@@ -203,42 +203,18 @@ function parse_hit(s, opt)
 	return h;
 }
 
-function type_hla(w)
+function print_buffer(buf2, fp_hla, hla)
 {
-	var hla = ["A", "B", "C", "DQA1", "DQB1", "DRB1"];
-	var hla_hash = {}, a = [], r = [];
-	for (var i = 0; i < hla.length; ++i) {
-		hla_hash[hla[i]] = i;
-		a[i] = [];
-	}
-	for (var i = 0; i < w.length; ++i) {
-		var t = w[i][0].split(/[:\*]/);
-		var x = hla_hash[t[0]];
-		if (x != null)
-			a[x].push([w[i][0], t[1], t[1] + ':' + t[2], w[i][1]]);
-	}
-	for (var k = 1; k <= 2; ++k) {
-		for (var i = 0; i < hla.length; ++i) {
-			var ai = a[i], m = {};
-			for (var j = 0; j < ai.length; ++j) {
-				var key = ai[j][k], val = ai[j][3];
-				if (m[key] == null) m[key] = [-1, -1.0];
-				if (m[key][1] < val) m[key] = [j, val];
-			}
-			var sum = 0;
-			for (var x in m) sum += m[x][1];
-			var max = -1, max2 = -1, max3 = -1, max_x, max_x2, max_x3;
-			for (var x in m) {
-				if (max < m[x][1]) max3 = max2, max_x3 = max_x2, max2 = max, max_x2 = max_x, max = m[x][1], max_x = x;
-				else if (max2 < m[x][1]) max3 = max2, max_x3 = max_x2, max2 = m[x][1], max_x2 = x;
-				else if (max3 < m[x][1]) max3 = m[x][1], max_x3 = x;
-			}
-			r.push([hla[i], k, hla[i]+'*'+max_x, max.toFixed(3), hla[i]+'*'+max_x2, max2.toFixed(3), hla[i]+'*'+max_x3, max3.toFixed(3)]);
+	if (buf2.length == 0) return;
+	for (var i = 0; i < buf2.length; ++i)
+		print(buf2[i].join("\t"));
+	if (fp_hla != null) {
+		var name = buf2[0][0] + '/' + (buf2[0][1]>>6&3) + ((buf2[0][1]&16)? '-' : '+');
+		for (var x in hla) {
+			if (fp_hla[x] != null);
+				fp_hla[x].write('@' + name + '\n' + buf2[0][9] + '\n+\n' + buf2[0][10] + '\n');
 		}
 	}
-	for (var i = 0; i < r.length; ++i)
-		print(r[i].join("\t"));
-	return r;
 }
 
 function bwa_postalt(args)
@@ -285,7 +261,7 @@ function bwa_postalt(args)
 	var buf = new Bytes();
 
 	// read ALT-to-REF alignment
-	var intv_alt = {}, intv_pri = {}, idx_un = {};
+	var intv_alt = {}, intv_pri = {}, idx_un = {}, hla_ctg = {};
 	var file = new File(args[getopt.ind]);
 	while (file.readline(buf) >= 0) {
 		var line = buf.toString();
@@ -299,6 +275,10 @@ function bwa_postalt(args)
 			continue;
 		}
 		var m, cigar = [], l_qaln = 0, l_tlen = 0, l_qclip = 0;
+		if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(t[0])) != null) { // read HLA contigs
+			if (hla_ctg[m[1]] == null) hla_ctg[m[1]] = 0;
+			++hla_ctg[m[1]];
+		}
 		while ((m = re_cigar.exec(t[5])) != null) {
 			var l = parseInt(m[1]);
 			cigar.push([m[2] != 'H'? m[2] : 'S', l]); // convert hard clip to soft clip
@@ -321,6 +301,14 @@ function bwa_postalt(args)
 	for (var ctg in intv_pri)
 		idx_pri[ctg] = intv_ovlp(intv_pri[ctg]);
 
+	// initialize the list of HLA contigs
+	var fp_hla = null;
+	if (opt.pre) {
+		fp_hla = {};
+		for (var h in hla_ctg)
+			fp_hla[h] = new File(opt.pre + '.' + h + '.fq', "w");
+	}
+
 	// initialize the list of ALT contigs
 	var weight_alt = [];
 	for (var ctg in idx_alt)
@@ -329,7 +317,7 @@ function bwa_postalt(args)
 		weight_alt[ctg] = [0, 0, 0, 0, 0, 0, '~', 0, 0];
 
 	// process SAM
-	var buf2 = [];
+	var buf2 = [], hla = {};
 	file = args.length - getopt.ind >= 2? new File(args[getopt.ind+1]) : new File();
 	while (file.readline(buf) >= 0) {
 		var m, line = buf.toString();
@@ -343,9 +331,8 @@ function bwa_postalt(args)
 
 		// print bufferred reads
 		if (buf2.length && (buf2[0][0] != t[0] || (buf2[0][1]&0xc0) != (t[1]&0xc0))) {
-			for (var i = 0; i < buf2.length; ++i)
-				print(buf2[i].join("\t"));
-			buf2 = [];
+			print_buffer(buf2, fp_hla, hla);
+			buf2 = [], hla = {};
 		}
 
 		// skip unmapped lines
@@ -468,27 +455,35 @@ function bwa_postalt(args)
 			else mapQ = mapQ > ori_mapQ? mapQ : ori_mapQ;
 		} else mapQ = t[4];
 
+		var pri_ofunc = idx_pri[hits[reported_i].pctg], ovlp_alt = [];
+		if (pri_ofunc != null) {
+			var rpt_start = 1<<30, rpt_end = 0;
+			for (var i = 0; i < hits.length; ++i) {
+				var h = hits[i];
+				if (h.g == reported_g) {
+					rpt_start = rpt_start < h.pstart? rpt_start : h.pstart;
+					rpt_end   = rpt_end   > h.pend  ? rpt_end   : h.pend;
+				}
+			}
+			ovlp_alt = pri_ofunc(rpt_start, rpt_end);
+			for (var i = 0; i < ovlp_alt.length; ++i)
+				if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(ovlp_alt[i][2])) != null)
+					hla[m[1]] = true;
+		}
+
 		// ALT genotyping
 		if (mapQ >= opt.min_mapq && hits[reported_i].score >= opt.min_sc) {
 			// collect all overlapping ALT contigs
-			var hits2 = [];
+			var alts = {};
 			for (var i = 0; i < hits.length; ++i) {
 				var h = hits[i];
-				if (h.g == reported_g)
-					hits2.push([h.pctg, h.pstart, h.pend, h.ctg, h.score, h.NM]);
+				if (h.g == reported_g && weight_alt[h.ctg] != null)
+					alts[h.ctg] = [h.score, h.NM];
 			}
-			var start = hits2[0][1], end = hits2[0][2];
-			for (var i = 1; i < hits2.length; ++i)
-				end = end > hits2[i][2]? end : hits2[i][2];
-			var alts = {};
-			for (var i = 0; i < hits2.length; ++i)
-				if (weight_alt[hits2[i][3]] != null)
-					alts[hits2[i][3]] = [hits2[i][4], hits2[i][5]];
-			if (idx_pri[hits2[0][0]] != null) { // add other unreported hits
-				var ovlp = idx_pri[hits2[0][0]](start, end);
-				for (var i = 0; i < ovlp.length; ++i)
-					if (ovlp[i][0] <= start && end <= ovlp[i][1] && alts[ovlp[i][2]] == null)
-						alts[ovlp[i][2]] = [0, 0];
+			if (ovlp_alt.length > 0) { // add other unreported hits
+				for (var i = 0; i < ovlp_alt.length; ++i)
+					if (ovlp_alt[i][0] <= rpt_start && rpt_end <= ovlp_alt[i][1] && alts[ovlp_alt[i][2]] == null)
+						alts[ovlp_alt[i][2]] = [0, 0];
 			}
 
 			// add weight to each ALT contig
@@ -600,10 +595,12 @@ function bwa_postalt(args)
 			buf2.push(s);
 		}
 	}
-	for (var i = 0; i < buf2.length; ++i)
-		print(buf2[i].join("\t"));
+	print_buffer(buf2, fp_hla, hla);
 	file.close();
 	if (fp_evi != null) fp_evi.close();
+	if (fp_hla != null)
+		for (var h in fp_hla)
+			fp_hla[h].close();
 
 	buf.destroy();
 	aux.destroy();
@@ -627,12 +624,6 @@ function bwa_postalt(args)
 			if (weight_arr[i][1] == '~') weight_arr[i][1] = '*';
 			fpout.write(weight_arr[i].join("\t") + '\n');
 		}
-		fpout.close();
-
-		var r = type_hla(weight_hla);
-		fpout = new File(opt.pre + '.hla', "w");
-		for (var i = 0; i < r.length; ++i)
-			fpout.write(r[i].join("\t") + '\n');
 		fpout.close();
 	}
 }

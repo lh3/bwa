@@ -156,14 +156,16 @@ have ignored these important genes.
 We recommend to include the genomic regions of classical HLA genes in the BWA
 index. This way we will be able to get a more complete collection of reads
 mapped to HLA. We can then isolate these reads with little computational cost
-and type HLA genes with another program, such as [Dilthey et al (2014)][hla1] or
-one from [this list][hlatools].
+and type HLA genes with another program, such as [Warren et al (2012)][hla4],
+[Liu et al (2013)][hla2], [Bai et al (2014)][hla3], [Dilthey et al (2014)][hla1]
+or others from [this list][hlatools].
 
 If the postprocessing script `bwa-postalt.js` is invoked with `-p prefix`, it
 will also write the top three alleles to file `prefix.hla`. However, as most HLA
 alleles from IMGT/HLA don't have intronic sequences and thus are not included in
-the reference genome, we are unable to type HLA genes to high resolution with
-the BWA-MEM mapping alone. A dedicated tool is recommended for accurate typing.
+the BWA index from option 2, we are unable to type HLA genes to high resolution
+with the BWA-MEM mapping alone. A dedicated tool is recommended for accurate
+typing.
 
 ### Evaluating ALT Mapping
 
@@ -194,3 +196,6 @@ can even get rid of ALT contigs for good.
 [hla1]: http://biorxiv.org/content/early/2014/07/08/006973
 [hlalink]: http://www.hladiseaseassociations.com
 [hlatools]: https://www.biostars.org/p/93245/
+[hla2]: http://nar.oxfordjournals.org/content/41/14/e142.full.pdf+html
+[hla3]: http://www.biomedcentral.com/1471-2164/15/325
+[hla4]: http://genomemedicine.com/content/4/12/95
