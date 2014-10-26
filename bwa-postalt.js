@@ -482,7 +482,7 @@ function bwa_postalt(args)
 			}
 			if (ovlp_alt.length > 0) { // add other unreported hits
 				for (var i = 0; i < ovlp_alt.length; ++i)
-					if (ovlp_alt[i][0] <= rpt_start && rpt_end <= ovlp_alt[i][1])
+					if (ovlp_alt[i][0] <= rpt_start && rpt_end <= ovlp_alt[i][1] && alts[ovlp_alt[i][2]] == null)
 						alts[ovlp_alt[i][2]] = [0, 0];
 			}
 
