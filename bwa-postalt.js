@@ -206,6 +206,8 @@ function parse_hit(s, opt)
 function print_buffer(buf2, fp_hla, hla)
 {
 	if (buf2.length == 0) return;
+	for (var i = 0; i < buf2.length; ++i)
+		print(buf2[i].join("\t"));
 	if (fp_hla != null) {
 		var name = buf2[0][0] + '/' + (buf2[0][1]>>6&3) + ((buf2[0][1]&16)? '-' : '+');
 		for (var x in hla) {
