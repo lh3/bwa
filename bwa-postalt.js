@@ -577,6 +577,7 @@ function bwa_postalt(args)
 
 		// stage the hits generated from the XA tag
 		var cnt = 0;
+		var rg = (m = /\t(RG:Z:\S+)/.exec(line)) != null? m[1] : null;
 		for (var i = 0; i < hits.length; ++i) {
 			if (opt.verbose >= 5) print(obj2str(hits[i]));
 			if (hits[i].g != reported_g || i == reported_i) continue;
@@ -592,6 +593,7 @@ function bwa_postalt(args)
 			}
 			s.push("NM:i:" + hits[i].NM);
 			if (hits[i].lifted_str) s.push("lt:Z:" + hits[i].lifted_str);
+			if (rg != null) s.push(rg);
 			buf2.push(s);
 		}
 	}
