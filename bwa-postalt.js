@@ -582,7 +582,7 @@ function bwa_postalt(args)
 			if (opt.verbose >= 5) print(obj2str(hits[i]));
 			if (hits[i].g != reported_g || i == reported_i) continue;
 			if (!opt.show_pri && idx_alt[hits[i].ctg] == null) continue;
-			var s = [t[0], 0, hits[i].ctg, hits[i].start+1, mapQ, hits[i].cigar, '*', 0, 0];
+			var s = [t[0], 0, hits[i].ctg, hits[i].start+1, mapQ, hits[i].cigar, t[6], t[7], t[8]];
 			// print sequence/quality and set the rev flag
 			if (hits[i].rev == hits[reported_i].rev) {
 				s.push(t[9], t[10]);
