@@ -327,13 +327,13 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// suboptimal hits
 		if (!(opt->flag & MEM_F_ALL)) {
 			for (i = 0; i < 2; ++i) {
-				int k = a[i].a[z[i]].secondary;
-				if (k >= 0) { // switch secondary and primary
-					assert(a[i].a[k].secondary < 0);
-					for (j = 0; j < n_pri[i]; ++j)
-						if (a[i].a[j].secondary == k || j == k)
-							a[i].a[j].secondary = z[i];
-					a[i].a[z[i]].secondary = -1;
+				int k = a[i].a[z[i]].secondary_all;
+				if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
+					assert(a[i].a[k].secondary_all < 0);
+					for (j = 0; j < a[i].n; ++j)
+						if (a[i].a[j].secondary_all == k || j == k)
+							a[i].a[j].secondary_all = z[i];
+					a[i].a[z[i]].secondary_all = -1;
 				}
 				XA[i] = mem_gen_alt(opt, bns, pac, &a[i], s[i].l_seq, s[i].seq);
 			}
