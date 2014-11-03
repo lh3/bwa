@@ -195,14 +195,14 @@ for (var e = 0; e < exons.length; ++e) {
 		}
 	// drop mismapped contigs
 	var dropped = [];
-	for (var c = 0; c < ca.length; ++c) {
-		var min = 0x7fffffff, cc = ca[c];
-		for (var g = 0; g < ga.length; ++g) {
-			var gg = ga[g];
-			min = min < sc[gg][cc]? min : sc[gg][cc];
+	for (var k = 0; k < ca.length; ++k) {
+		var min = 0x7fffffff, c = ca[k];
+		for (var i = 0; i < ga.length; ++i) {
+			var g = ga[i];
+			min = min < sc[g][c]? min : sc[g][c];
 		}
-		dropped[cc] = min > drop_thres? true : false;
-		if (dropped[cc]) warn("Dropped contig " +clist[cc]+ " due to high divergence to all genes (minNM=" +min+ ")");
+		dropped[c] = min > drop_thres? true : false;
+		if (dropped[c]) warn("Dropped contig " +clist[c]+ " due to high divergence to all genes (minNM=" +min+ ")");
 	}
 	// fill the pair array
 	var min_nm = 0xffff;
@@ -211,7 +211,7 @@ for (var e = 0; e < exons.length; ++e) {
 		for (var j = i; j < ga.length; ++j) {
 			var gj = ga[j], g2 = sc[gj], m = 0;
 			for (var k = 0; k < ca.length; ++k) {
-				c = ca[k];
+				var c = ca[k];
 				if (!dropped[c])
 					m += g1[c] < g2[c]? g1[c] : g2[c];
 			}
