@@ -97,7 +97,7 @@ while (file.readline(buf) >= 0) {
 		else if (m[2] == 'D') te += l;
 		else if (m[2] == 'S' || m[2] == 'H') clip[x==0?0:1] = l;
 	}
-	if (x < min_qal && clip[0] + clip[1] > 0) continue;
+	//if (x < min_qal && clip[0] + clip[1] > 0) continue;
 	var tl = len[t[2]];
 	var left  = ts < clip[0]? ts : clip[0];
 	var right = tl - te < clip[1]? tl - te : clip[1];
@@ -134,15 +134,15 @@ var pri_exon = [], n_pri_exons;
 // convert strings to integers (for performance)
 var ghash = {}, glist = [], chash = {}, clist = [], elist = [];
 for (var i = 0; i < list.length; ++i) {
-	var g = glist.length, c = clist.length;
 	if (ghash[list[i][1]] == null) {
+		ghash[list[i][1]] = glist.length;
 		glist.push(list[i][1]);
-		ghash[list[i][1]] = g;
 	}
 	if (chash[list[i][0]] == null) {
+		chash[list[i][0]] = clist.length;
 		clist.push(list[i][0]);
-		chash[list[i][0]] = c;
 	}
+	var g = ghash[list[i][1]];
 	if (elist[g] == null) elist[g] = {};
 	elist[g][list[i][2]] = true;
 }
@@ -207,17 +207,24 @@ for (var e = 0; e < exons.length; ++e) {
 	// fill the pair array
 	var min_nm = 0xffff;
 	for (var i = 0; i < ga.length; ++i) {
-		var gi = ga[i], g1 = sc[gi];
-		for (var j = i; j < ga.length; ++j) {
-			var gj = ga[j], g2 = sc[gj], m = 0;
+		var m = 0, gi = ga[i], g1 = sc[gi];
+		// homozygous
+		for (var k = 0; k < ca.length; ++k) {
+			var c = ca[k];
+			if (!dropped[c]) m += g1[c];
+		}
+		pair[gi][gi] += m<<20 | 1<<6 | pri_exon[e];
+		// heterozygous
+		for (var j = i + 1; j < ga.length; ++j) {
+			var gj = ga[j], g2 = sc[gj], m = 0, a = [0, 0];
 			for (var k = 0; k < ca.length; ++k) {
 				var c = ca[k];
 				if (!dropped[c]) {
 					m += g1[c] < g2[c]? g1[c] : g2[c];
-					if ((gi == 518 && gj == 653) || (gi == 653 && gj == 518))
-						print(e+1, clist[c], g1[c], g2[c]);
+					++a[g1[c]<g2[c]? 0:1];
 				}
 			}
+			if (a[0] == 0 || a[1] == 0) m = 0xff; // if all contigs are assigned to one gene, it is not good
 			var x = m<<20 | 1<<6 | pri_exon[e];
 			if (gi < gj) pair[gj][gi] += x;
 			else pair[gi][gj] += x;
@@ -233,8 +240,6 @@ for (var i = 0; i < glist.length; ++i) {
 	gsub[i] = parseInt(m[1]);
 	gsuf[i] = /[A-Z]$/.test(glist[i])? 1 : 0;
 }
-
-warn(ghash["HLA-DQB1*06:04:02"], ghash["HLA-DQB1*06:44"], pair[518][518].toString(16), pair[653][518].toString(16));
 
 // genotyping
 var min_nm = 0x7fffffff;
