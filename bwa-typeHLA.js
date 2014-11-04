@@ -47,17 +47,18 @@ var getopt = function(args, ostr) {
  *** Main function ***
  *********************/
 
-var c, min_qal = 100, drop_thres = 5;
+var c, thres_len = 100, thres_ratio = .8, thres_nm = 5;
 
 // parse command line options
-while ((c = getopt(arguments, "m:d:")) != null) {
-	if (c == 'm') min_qal = parseInt(getopt.arg);
-	else if (c == 'd') drop_thres = parseInt(getopt.arg);
+while ((c = getopt(arguments, "l:d:")) != null) {
+	if (c == 'l') thres_len = parseInt(getopt.arg);
+	else if (c == 'd') thres_nm = parseInt(getopt.arg);
 }
 if (arguments.length == getopt.ind) {
 	print("");
 	print("Usage:   k8 bwa-typeHLA.js [options] <HLA-to-contig.sam>\n");
-	print("Options: -d INT     drop a contig if the edit distance to the closest gene is >INT ["+drop_thres+"]");
+	print("Options: -d INT     drop a contig if the edit distance to the closest gene is >INT ["+thres_nm+"]");
+	print("         -l INT     drop a contig if its match too short ["+thres_len+"]");
 	print("");
 	exit(1);
 }
@@ -148,7 +149,7 @@ var exons = [];
 for (var i = 0; i < list.length; ++i) {
 	var li = list[i];
 	if (exons[li[2]] == null) exons[li[2]] = [];
-	exons[li[2]].push([chash[li[0]], ghash[li[1]], li[5] + li[6]]);
+	exons[li[2]].push([chash[li[0]], ghash[li[1]], li[5] + li[6], li[4] - li[3]]);
 }
 
 // initialize genotype scores
@@ -193,11 +194,17 @@ for (var e = 0; e < exons.length; ++e) {
 			sc[g][ca[i]] = 0xff;
 	}
 	// convert representation again
+	var max_len = [];
 	for (var i = 0; i < ee.length; ++i) {
 		var c = ee[i][0], g = ee[i][1];
 		sc[g][c] = sc[g][c] < ee[i][2]? sc[g][c] : ee[i][2];
+		if (max_len[c] == null) max_len[c] = 0;
+		max_len[c] = max_len[c] > ee[i][3]? max_len[c] : ee[i][3];
 	}
 	// drop mismapped contigs
+	var max_max_len = 0;
+	for (var k = 0; k < ca.length; ++k)
+		max_max_len = max_max_len > max_len[ca[k]]? max_max_len : max_len[ca[k]];
 	var dropped = [];
 	for (var k = 0; k < ca.length; ++k) {
 		var min = 0x7fffffff, c = ca[k];
@@ -205,8 +212,9 @@ for (var e = 0; e < exons.length; ++e) {
 			var g = ga[i];
 			min = min < sc[g][c]? min : sc[g][c];
 		}
-		dropped[c] = min > drop_thres? true : false;
-		if (dropped[c]) warn("Dropped contig " +clist[c]+ " due to high divergence to all genes (minNM=" +min+ ")");
+		dropped[c] = min > thres_nm? true : false;
+		if (max_len[c] < thres_len && max_len[c] < thres_ratio * max_max_len) dropped[c] = true;
+		if (dropped[c]) warn("Dropped contig " +clist[c]+ " due to high divergence to all genes (minNM=" +min+ "; maxLen=" +max_len[c]+ ")");
 	}
 	// fill the pair array
 	for (var i = 0; i < ga.length; ++i) {
