@@ -97,7 +97,6 @@ while (file.readline(buf) >= 0) {
 		else if (m[2] == 'D') te += l;
 		else if (m[2] == 'S' || m[2] == 'H') clip[x==0?0:1] = l;
 	}
-	//if (x < min_qal && clip[0] + clip[1] > 0) continue;
 	var tl = len[t[2]];
 	var left  = ts < clip[0]? ts : clip[0];
 	var right = tl - te < clip[1]? tl - te : clip[1];
@@ -179,20 +178,19 @@ for (var e = 0; e < exons.length; ++e) {
 	var named_ca = [];
 	for (var i = 0; i < ca.length; ++i) named_ca.push(clist[ca[i]]);
 	warn("Processing exon "+(e+1)+" (" +ga.length+ " genes; " +ca.length+ " contigs: [" +named_ca.join(", ")+ "])...");
-	// convert representation again
+	// set unmapped entries to high mismatch
 	var sc = [];
+	for (var k = 0; k < ga.length; ++k) {
+		var g = ga[k];
+		if (sc[g] == null) sc[g] = [];
+		for (var i = 0; i < ca.length; ++i)
+			sc[g][ca[i]] = 0xff;
+	}
+	// convert representation again
 	for (var i = 0; i < ee.length; ++i) {
 		var c = ee[i][0], g = ee[i][1];
-		if (sc[g] == null) sc[g] = [];
-		if (sc[g][c] == null) sc[g][c] = 0xffff;
 		sc[g][c] = sc[g][c] < ee[i][2]? sc[g][c] : ee[i][2];
 	}
-	// set unmapped entries to high mismatch
-	for (var i = 0; i < ga.length; ++i)
-		for (var j = 0; j < ca.length; ++j) {
-			var g = ga[i], c = ca[j];
-			if (sc[g][c] == null) sc[g][c] = 0xff;
-		}
 	// drop mismapped contigs
 	var dropped = [];
 	for (var k = 0; k < ca.length; ++k) {
