@@ -47,7 +47,7 @@ var getopt = function(args, ostr) {
  *** Main function ***
  *********************/
 
-var c, thres_len = 100, thres_ratio = .8, thres_nm = 5;
+var c, thres_len = 50, thres_ratio = .8, thres_nm = 5;
 
 // parse command line options
 while ((c = getopt(arguments, "l:d:")) != null) {
