@@ -47,7 +47,7 @@ var getopt = function(args, ostr) {
  *** Main function ***
  *********************/
 
-var c, fuzzy = 1, min_qal = 100, drop_thres = 7;
+var c, fuzzy = 1, min_qal = 100, drop_thres = 5;
 
 // parse command line options
 while ((c = getopt(arguments, "f:m:d:")) != null) {
@@ -212,8 +212,11 @@ for (var e = 0; e < exons.length; ++e) {
 			var gj = ga[j], g2 = sc[gj], m = 0;
 			for (var k = 0; k < ca.length; ++k) {
 				var c = ca[k];
-				if (!dropped[c])
+				if (!dropped[c]) {
 					m += g1[c] < g2[c]? g1[c] : g2[c];
+					if ((gi == 518 && gj == 653) || (gi == 653 && gj == 518))
+						print(e+1, clist[c], g1[c], g2[c]);
+				}
 			}
 			var x = m<<20 | 1<<6 | pri_exon[e];
 			if (gi < gj) pair[gj][gi] += x;
@@ -222,6 +225,16 @@ for (var e = 0; e < exons.length; ++e) {
 		}
 	}
 }
+
+// extract the 3rd and 4th digits
+var gsub = [], gsuf = [];
+for (var i = 0; i < glist.length; ++i) {
+	var m = /^HLA-[^*\s]+\*\d+:(\d+).*([A-Z]?)$/.exec(glist[i]);
+	gsub[i] = parseInt(m[1]);
+	gsuf[i] = /[A-Z]$/.test(glist[i])? 1 : 0;
+}
+
+warn(ghash["HLA-DQB1*06:04:02"], ghash["HLA-DQB1*06:44"], pair[518][518].toString(16), pair[653][518].toString(16));
 
 // genotyping
 var min_nm = 0x7fffffff;
@@ -234,8 +247,8 @@ var out = [];
 for (var i = 0; i < glist.length; ++i)
 	for (var j = 0; j <= i; ++j)
 		if ((pair[i][j]&63) == n_pri_exons && pair[i][j]>>20 <= min_nm + fuzzy)
-			out.push([pair[i][j]>>20, pair[i][j]>>6&63, i, j]);
+			out.push([pair[i][j]>>20, pair[i][j]>>6&63, i, j, (gsuf[i] + gsuf[j])<<16|(gsub[i] + gsub[j])]);
 
-out.sort(function(a, b) { return a[0]!=b[0]? a[0]-b[0] : b[1]-a[1]});
+out.sort(function(a, b) { return a[0]!=b[0]? a[0]-b[0] : a[1]!=b[1]? b[1]-a[1] : a[4]!=b[4]? a[4]-b[4] : a[2]!=b[2]? a[2]-b[2] : a[3]-b[3]});
 for (var i = 0; i < out.length; ++i)
 	print(glist[out[i][2]], glist[out[i][3]], out[i][0], out[i][1]);
