@@ -47,20 +47,17 @@ var getopt = function(args, ostr) {
  *** Main function ***
  *********************/
 
-var c, fuzzy = 1, min_qal = 100, drop_thres = 5;
+var c, min_qal = 100, drop_thres = 5;
 
 // parse command line options
-while ((c = getopt(arguments, "f:m:d:")) != null) {
-	if (c == 'f') fuzzy = parseInt(getopt.arg);
-	else if (c == 'm') min_qal = parseInt(getopt.arg);
+while ((c = getopt(arguments, "m:d:")) != null) {
+	if (c == 'm') min_qal = parseInt(getopt.arg);
 	else if (c == 'd') drop_thres = parseInt(getopt.arg);
 }
 if (arguments.length == getopt.ind) {
 	print("");
 	print("Usage:   k8 bwa-typeHLA.js [options] <HLA-to-contig.sam>\n");
 	print("Options: -d INT     drop a contig if the edit distance to the closest gene is >INT ["+drop_thres+"]");
-	print("         -m INT     ignore a hit if the gene sequence in the alignment is <INT ["+min_qal+"]");
-	print("         -f INT     output genotypes whose edit distance is within INT from the best ["+fuzzy+"]");
 	print("");
 	exit(1);
 }
@@ -162,10 +159,19 @@ for (var i = 0; i < glist.length; ++i) {
 		pair[i][j] = 0;
 }
 
+function update_pair(x, m, is_pri)
+{
+	var y, z;
+	y = (x>>14&0xff) + m < 0xff? (x>>14&0xff) + m : 0xff;
+	if (is_pri) z = (x>>22) + m < 0xff? (x>>22) + m : 0xff;
+	else z = x>>22;
+	return z<<22 | y<<14 | ((x&0x3fff) + (1<<6|is_pri));
+}
+
 // type each exon
 for (var e = 0; e < exons.length; ++e) {
 	if (exons[e] == null) continue;
-	var ee = exons[e];
+	var ee = exons[e], is_pri = pri_exon[e]? 1 : 0;
 	// find contigs and genes associated with the current exon
 	var ch = {}, gh = {};
 	for (var i = 0; i < ee.length; ++i) {
@@ -203,7 +209,6 @@ for (var e = 0; e < exons.length; ++e) {
 		if (dropped[c]) warn("Dropped contig " +clist[c]+ " due to high divergence to all genes (minNM=" +min+ ")");
 	}
 	// fill the pair array
-	var min_nm = 0xffff;
 	for (var i = 0; i < ga.length; ++i) {
 		var m = 0, gi = ga[i], g1 = sc[gi];
 		// homozygous
@@ -211,7 +216,7 @@ for (var e = 0; e < exons.length; ++e) {
 			var c = ca[k];
 			if (!dropped[c]) m += g1[c];
 		}
-		pair[gi][gi] += m<<20 | 1<<6 | pri_exon[e];
+		pair[gi][gi] = update_pair(pair[gi][gi], m, is_pri);
 		// heterozygous
 		for (var j = i + 1; j < ga.length; ++j) {
 			var gj = ga[j], g2 = sc[gj], m = 0, a = [0, 0];
@@ -223,10 +228,8 @@ for (var e = 0; e < exons.length; ++e) {
 				}
 			}
 			if (a[0] == 0 || a[1] == 0) m = 0xff; // if all contigs are assigned to one gene, it is not good
-			var x = m<<20 | 1<<6 | pri_exon[e];
-			if (gi < gj) pair[gj][gi] += x;
-			else pair[gi][gj] += x;
-			min_nm = min_nm < m? min_nm : m;
+			if (gi < gj) pair[gj][gi] = update_pair(pair[gj][gi], m, is_pri);
+			else pair[gi][gj] = update_pair(pair[gi][gj], m, is_pri);
 		}
 	}
 }
@@ -244,14 +247,14 @@ var min_nm = 0x7fffffff;
 for (var i = 0; i < glist.length; ++i)
 	for (var j = 0; j <= i; ++j)
 		if ((pair[i][j]&63) == n_pri_exons)
-			min_nm = min_nm < pair[i][j]>>20? min_nm : pair[i][j]>>20;
+			min_nm = min_nm < pair[i][j]>>14? min_nm : pair[i][j]>>14;
 
 var out = [];
 for (var i = 0; i < glist.length; ++i)
 	for (var j = 0; j <= i; ++j)
-		if ((pair[i][j]&63) == n_pri_exons && pair[i][j]>>20 <= min_nm + fuzzy)
-			out.push([pair[i][j]>>20, pair[i][j]>>6&63, i, j, (gsuf[i] + gsuf[j])<<16|(gsub[i] + gsub[j])]);
+		if ((pair[i][j]&63) == n_pri_exons && pair[i][j]>>14 <= min_nm + 1)
+			out.push([pair[i][j]>>14, pair[i][j]>>6&0xff, i, j, (gsuf[i] + gsuf[j])<<16|(gsub[i] + gsub[j])]);
 
 out.sort(function(a, b) { return a[0]!=b[0]? a[0]-b[0] : a[1]!=b[1]? b[1]-a[1] : a[4]!=b[4]? a[4]-b[4] : a[2]!=b[2]? a[2]-b[2] : a[3]-b[3]});
 for (var i = 0; i < out.length; ++i)
-	print(glist[out[i][2]], glist[out[i][3]], out[i][0], out[i][1]);
+	print(glist[out[i][2]], glist[out[i][3]], out[i][0]>>8&0xff, out[i][0]&0xff, out[i][1]);
