@@ -56,10 +56,13 @@ while ((c = getopt(arguments, "l:d:")) != null) {
 }
 if (arguments.length == getopt.ind) {
 	print("");
-	print("Usage:   k8 bwa-typeHLA.js [options] <HLA-to-contig.sam>\n");
+	print("Usage:   k8 bwa-typeHLA.js [options] <exon-to-contig.sam>\n");
 	print("Options: -d INT     drop a contig if the edit distance to the closest gene is >INT ["+thres_nm+"]");
 	print("         -l INT     drop a contig if its match too short ["+thres_len+"]");
 	print("");
+	print("Note: The output is TAB delimited with each line consisting of allele1, allele2,");
+	print("      #mismatches/gaps on primary exons, #mismatches/gaps on other exons and");
+	print("      #exons used in typing.");
 	exit(1);
 }
 
@@ -265,4 +268,4 @@ for (var i = 0; i < glist.length; ++i)
 
 out.sort(function(a, b) { return a[0]!=b[0]? a[0]-b[0] : a[1]!=b[1]? b[1]-a[1] : a[4]!=b[4]? a[4]-b[4] : a[2]!=b[2]? a[2]-b[2] : a[3]-b[3]});
 for (var i = 0; i < out.length; ++i)
-	print(glist[out[i][2]], glist[out[i][3]], out[i][0]>>8&0xff, out[i][0]&0xff, out[i][1]);
+	print(glist[out[i][3]], glist[out[i][2]], out[i][0]>>8&0xff, out[i][0]&0xff, out[i][1]);
