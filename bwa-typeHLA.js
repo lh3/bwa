@@ -62,7 +62,7 @@ if (arguments.length == getopt.ind) {
 	print("");
 	print("Note: The output is TAB delimited with each line consisting of allele1, allele2,");
 	print("      #mismatches/gaps on primary exons, #mismatches/gaps on other exons and");
-	print("      #exons used in typing.");
+	print("      #exons used in typing.\n");
 	exit(1);
 }
 
