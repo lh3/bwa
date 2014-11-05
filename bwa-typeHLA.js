@@ -47,17 +47,18 @@ var getopt = function(args, ostr) {
  *** Main function ***
  *********************/
 
-var c, thres_len = 50, thres_ratio = .8, thres_nm = 5;
+var c, thres_len = 50, thres_ratio = .8, thres_nm = 5, dbg = false;
 
 // parse command line options
-while ((c = getopt(arguments, "l:d:")) != null) {
+while ((c = getopt(arguments, "dl:n:")) != null) {
 	if (c == 'l') thres_len = parseInt(getopt.arg);
-	else if (c == 'd') thres_nm = parseInt(getopt.arg);
+	else if (c == 'n') thres_nm = parseInt(getopt.arg);
+	else if (c == 'd') dbg = true;
 }
 if (arguments.length == getopt.ind) {
 	print("");
 	print("Usage:   k8 bwa-typeHLA.js [options] <exon-to-contig.sam>\n");
-	print("Options: -d INT     drop a contig if the edit distance to the closest gene is >INT ["+thres_nm+"]");
+	print("Options: -n INT     drop a contig if the edit distance to the closest gene is >INT ["+thres_nm+"]");
 	print("         -l INT     drop a contig if its match too short ["+thres_len+"]");
 	print("");
 	print("Note: The output is TAB delimited with each line consisting of allele1, allele2,");
@@ -173,7 +174,9 @@ function update_pair(x, m, is_pri)
 }
 
 // type each exon
+var score = [], ctg = [];
 for (var e = 0; e < exons.length; ++e) {
+	score[e] = []; ctg[e] = [];
 	if (exons[e] == null) continue;
 	var ee = exons[e], is_pri = pri_exon[e]? 1 : 0;
 	// find contigs and genes associated with the current exon
@@ -182,14 +185,14 @@ for (var e = 0; e < exons.length; ++e) {
 		if (elist[ee[i][1]][e] != null)
 			ch[ee[i][0]] = true, gh[ee[i][1]] = true;
 	}
-	var ca = [], ga = [];
+	var ga = [], ca = ctg[e];
 	for (var c in ch) ca.push(parseInt(c));
 	for (var g in gh) ga.push(parseInt(g));
 	var named_ca = [];
 	for (var i = 0; i < ca.length; ++i) named_ca.push(clist[ca[i]]);
 	warn("Processing exon "+(e+1)+" (" +ga.length+ " genes; " +ca.length+ " contigs: [" +named_ca.join(", ")+ "])...");
 	// set unmapped entries to high mismatch
-	var sc = [];
+	var sc = score[e];
 	for (var k = 0; k < ga.length; ++k) {
 		var g = ga[k];
 		if (sc[g] == null) sc[g] = [];
@@ -267,5 +270,18 @@ for (var i = 0; i < glist.length; ++i)
 			out.push([pair[i][j]>>14, pair[i][j]>>6&0xff, i, j, (gsuf[i] + gsuf[j])<<16|(gsub[i] + gsub[j])]);
 
 out.sort(function(a, b) { return a[0]!=b[0]? a[0]-b[0] : a[1]!=b[1]? b[1]-a[1] : a[4]!=b[4]? a[4]-b[4] : a[2]!=b[2]? a[2]-b[2] : a[3]-b[3]});
-for (var i = 0; i < out.length; ++i)
-	print(glist[out[i][3]], glist[out[i][2]], out[i][0]>>8&0xff, out[i][0]&0xff, out[i][1]);
+
+for (var i = 0; i < out.length; ++i) {
+	print("GT", glist[out[i][3]], glist[out[i][2]], out[i][0]>>8&0xff, out[i][0]&0xff, out[i][1]);
+	if (dbg) {
+		var a1 = out[i][2], a2 = out[i][3];
+		for (var e = 0; e < exons.length; ++e) {
+			if (exons[e] == null) continue;
+			if (elist[a1][e] == null || elist[a2][e] == null) continue;
+			for (var k = 0; k < ctg[e].length; ++k) {
+				var c = ctg[e][k];
+				print("DB", e+1, score[e][a2][c], score[e][a1][c], clist[c]);
+			}
+		}
+	}
+}
