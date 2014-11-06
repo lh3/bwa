@@ -21,12 +21,14 @@ if [ $is_ctg -eq 0 ]; then
 	$root/fermi2.pl unitig -t2 -l$len -p $pre.tmp $pre.fq > $pre.tmp.mak
 	make -f $pre.tmp.mak EXE_FERMI2=$root/fermi2 EXE_ROPEBWT2=$root/ropebwt2
 else
-	ln -s $pre.fq $pre.tmp.mag.gz
+	ln -sf $pre.fq $pre.tmp.mag.gz
 fi
 
 # get contigs overlapping HLA exons
-$root/bwa mem -B1 -O1 -E1 $root/HLA-ALT.fa $pre.tmp.mag.gz | grep -v ^@ | sort -k3,3 -k4,4n | bgzip > $pre.tmp.alt.gz
-$root/tabix -Bpsam $pre.tmp.alt.gz $root/HLA-approx.anno | cut -f1 | sort | uniq | $root/seqtk subseq $pre.tmp.mag.gz - | gzip -1 > $pre.tmp.fq.gz
+(ls $root/HLA-idx/*.fa | xargs -i $root/bwa mem -t2 -B1 -O1 -E1 {} $pre.tmp.mag.gz 2>/dev/null) | grep -v ^@ | sort -k3,3 -k4,4n | bgzip > $pre.tmp.sam.gz
+$root/tabix -Bpsam $pre.tmp.sam.gz $root/HLA-approx.anno | cut -f1 | sort | uniq > $pre.tmp.kept
+gzip -dc $pre.tmp.sam.gz | perl -ane 'print "$F[0]\n" if /AS:i:(\d+).*XS:i:(\d+)/&&$1==$2' | cut -f1 | sort | uniq > $pre.tmp.dropped
+awk -v f=$pre.tmp.dropped 'BEGIN{while((getline<f)>0)l[$1]=1}!l[$1]' $pre.tmp.kept | $root/seqtk subseq $pre.tmp.mag.gz - | gzip -1 > $pre.tmp.fq.gz
 
 # map HLA exons to de novo contigs
 $root/bwa index -p $pre.tmp $pre.tmp.fq.gz 2> /dev/null
