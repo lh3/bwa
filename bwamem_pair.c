@@ -362,8 +362,13 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 
 no_pairing:
 	for (i = 0; i < 2; ++i) {
-		if (a[i].n && a[i].a[0].score >= opt->T)
-			h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[0]);
+		int which = -1;
+		if (a[i].n) {
+			if (a[i].a[0].score >= opt->T) which = 0;
+			else if (n_pri[i] < a[i].n && a[i].a[n_pri[i]].score >= opt->T)
+				which = n_pri[i];
+		}
+		if (which >= 0) h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[which]);
 		else h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, 0);
 	}
 	if (!(opt->flag & MEM_F_NOPAIRING) && h[0].rid == h[1].rid && h[0].rid >= 0) { // if the top hits from the two ends constitute a proper pair, flag it.
