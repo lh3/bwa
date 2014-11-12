@@ -11,16 +11,16 @@
 struct __smem_i;
 typedef struct __smem_i smem_i;
 
-#define MEM_F_PE        0x2
-#define MEM_F_NOPAIRING 0x4
-#define MEM_F_ALL       0x8
-#define MEM_F_NO_MULTI  0x10
-#define MEM_F_NO_RESCUE 0x20
-#define MEM_F_SELF_OVLP 0x40
-#define MEM_F_ALN_REG   0x80
-#define MEM_F_REF_HDR	0x100
-#define MEM_F_SOFTCLIP  0x200
-
+#define MEM_F_PE           0x2
+#define MEM_F_NOPAIRING    0x4
+#define MEM_F_ALL          0x8
+#define MEM_F_NO_MULTI     0x10
+#define MEM_F_NO_RESCUE    0x20
+#define MEM_F_SELF_OVLP    0x40
+#define MEM_F_ALN_REG      0x80
+#define MEM_F_REF_HDR      0x100
+#define MEM_F_SOFTCLIP     0x200
+#define MEM_F_SEC_SEQ_QUAL 0x400  
 typedef struct {
 	int a, b;               // match score and mismatch penalty
 	int o_del, e_del;
