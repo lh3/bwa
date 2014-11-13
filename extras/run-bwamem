@@ -1,0 +1,122 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use Getopt::Std;
+
+my %opts = (t=>1, n=>64);
+getopts("SPADsp:R:x:t:", \%opts);
+
+die('
+Usage:   run-bwamem [options] <idxbase> <file1> [file2]
+
+Options: -p STR    prefix for output files                       [inferred from file1]
+         -R STR    read group header line such as \'@RG\tID:foo\tSM:bar\'         [null]
+         -x STR    read type: pacbio, ont2d or intractg                      [default]
+         -t INT    number of threads                                               [1]
+         -P        input are paired-end reads if file2 absent
+
+         -A        skip HiSeq2000/2500 PE resequencing adapter trimming (via trimadap)
+         -D        skip duplicate marking (via samblaster)
+         -S        for SAM/BAM input, don\'t shuffle
+         -s        sort the output alignment (more RAM)
+
+Note: File type is determined by the file extension of the first input sequence file.
+      Recognized file extensions: fasta, fa, fastq, fq, fasta.gz, fa.gz, fastq.gz,
+      fq.gz, sam, sam.gz and bam. SAM/BAM input will be converted to FASTQ.
+
+') if @ARGV < 2;
+
+warn("WARNING: many programs require read groups. Please specify with -R if you can.\n") unless defined($opts{R});
+
+my $idx = $ARGV[0];
+
+my $exepath = $0 =~/^\S+\/[^\/\s]+/? $0 : &which($0);
+my $root = $0 =~/^(\S+)\/[^\/\s]+/? $1 : undef;
+die "ERROR: failed to locate the 'bwa.kit' directory\n" if !defined($root);
+
+my $prefix;
+if (defined $opts{p}) {
+	$prefix = $opts{p};
+} elsif ($ARGV[1] =~ /^(\S+)\.(fastq|fq|fasta|fa|mag|sam|sam\.gz|mag\.gz|fasta\.gz|fa\.gz|fastq\.gz|fq\.gz|bam)$/) {
+	$prefix = $1;
+} else {
+	die("ERROR: failed to identify the prefix for output. Please specify -p.\n")
+}
+
+my $prefix_dir = $prefix =~ /^(\S+)\/[^\/\s]+$/? $1 : ".";
+die("ERROR: directory $prefix_dir is not writable. Please specify a new output prefix with -p.\n") unless (-w $prefix_dir);
+
+die("ERROR: failed to locate the BWA index. Please run '$root/bwa index -p $idx ref.fa'.\n")
+  unless (-f "$idx.bwt" && -f "$idx.pac" && -f "$idx.sa" && -f "$idx.ann" && -f "$idx.amb");
+
+if (@ARGV >= 3 && $ARGV[1] =~ /\.(bam|sam|sam\.gz)$/) {
+	warn("WARNING: for SAM/BAM input, only the first sequence file is used.\n");
+	@ARGV = 2;
+}
+
+if (defined($opts{P}) && @ARGV >= 3) {
+	warn("WARNING: option -P is ignored as there are two input sequence files.\n");
+	delete $opts{P};
+}
+
+my $size = 0;
+my $comp_ratio = 3.;
+for my $f (@ARGV[1..$#ARGV]) {
+	my @a = stat($f);
+	my $s = $a[7];
+	$s *= $comp_ratio if $f =~ /\.(gz|bam)$/;
+	$size += int($s) + 1;
+}
+
+my $is_pe = (defined($opts{P}) || @ARGV >= 3)? 1 : 0;
+my $is_sam = $ARGV[1] =~ /\.(sam|sam\.gz)$/? 1 : 0;
+my $is_bam = $ARGV[1] =~ /\.bam$/? 1 : 0;
+
+my $cmd = '';
+if ($is_sam || $is_bam) {
+	my $cmd_sam2bam = $is_sam? "$root/htsbox samview -uS $ARGV[1] \\\n" : "cat $ARGV[1] \\\n";
+	my $ntmps = int($size / 4e9) + 1;
+	my $cmd_shuf = ($is_bam || $is_sam) && !defined($opts{S})? "  | $root/htsbox bamshuf -uOn$ntmps - $prefix.shuf \\\n" : "";
+	my $cmd_bam2fq = "";
+	$cmd_bam2fq = "  | $root/htsbox bam2fq -O " . (defined($opts{P})? "-s $prefix.out.se.fq.gz " : "") . "- \\\n";
+	$cmd = $cmd_sam2bam . $cmd_shuf . $cmd_bam2fq;
+} elsif (@ARGV >= 3) {
+	$cmd = "  | $root/seqtk mergepe $ARGV[1] $ARGV[2] \\\n";
+} else {
+	$cmd = "cat $ARGV[1] \\\n";
+}
+
+$cmd .= "  | $root/trimadap \\\n" unless defined($opts{A});
+$cmd .= "  | $root/bwa mem -t$opts{t} " . (defined($opts{x})? "-x $opts{x} " : "") . ($is_pe? "-P " : "") . (defined($opts{R})? "-R'$opts{R}' " : "") . "$ARGV[0] - 2> $prefix.log.bwamem \\\n";
+$cmd .= "  | $root/samblaster 2> $prefix.log.dedup \\\n" unless defined($opts{D});
+
+my $has_hla = 0;
+if (-f "$ARGV[0].alt") {
+	my $fh;
+	open($fh, "$ARGV[0].alt") || die;
+	while (<$fh>) {
+		$has_hla = 1 if /^HLA-[^\s\*]+\*\d+/;
+	}
+	close($fh);
+	my $hla_pre = $has_hla? "-p $prefix.out " : "";
+	$cmd .= "  | $root/k8 $root/bwa-postalt.js $hla_pre$ARGV[0].alt \\\n";
+}
+
+my $t_sort = $opts{t} < 4? $opts{t} : 4;
+$cmd .= defined($opts{s})? "  | $root/samtools sort -@ $t_sort -m1G - $prefix.out;\n" : "  | gzip -1 > $prefix.out.sam.gz;\n";
+$cmd .= "$root/run-HLA $prefix.out;\n" if ($has_hla);
+
+print $cmd;
+
+sub which
+{
+	my $file = shift;
+	my $path = (@_)? shift : $ENV{PATH};
+	return if (!defined($path));
+	foreach my $x (split(":", $path)) {
+		$x =~ s/\/$//;
+		return "$x/$file" if (-x "$x/$file");
+	}
+	return;
+}
