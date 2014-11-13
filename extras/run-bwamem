@@ -5,16 +5,16 @@ use warnings;
 use Getopt::Std;
 
 my %opts = (t=>1, n=>64);
-getopts("SPADsp:R:x:t:", \%opts);
+getopts("SpADso:R:x:t:", \%opts);
 
 die('
 Usage:   run-bwamem [options] <idxbase> <file1> [file2]
 
-Options: -p STR    prefix for output files                       [inferred from file1]
+Options: -o STR    prefix for output files                       [inferred from input]
          -R STR    read group header line such as \'@RG\tID:foo\tSM:bar\'         [null]
          -x STR    read type: pacbio, ont2d or intractg                      [default]
          -t INT    number of threads                                               [1]
-         -P        input are paired-end reads if file2 absent
+         -p        input are paired-end reads if file2 absent
 
          -A        skip HiSeq2000/2500 PE resequencing adapter trimming (via trimadap)
          -D        skip duplicate marking (via samblaster)
@@ -35,18 +35,6 @@ my $exepath = $0 =~/^\S+\/[^\/\s]+/? $0 : &which($0);
 my $root = $0 =~/^(\S+)\/[^\/\s]+/? $1 : undef;
 die "ERROR: failed to locate the 'bwa.kit' directory\n" if !defined($root);
 
-my $prefix;
-if (defined $opts{p}) {
-	$prefix = $opts{p};
-} elsif ($ARGV[1] =~ /^(\S+)\.(fastq|fq|fasta|fa|mag|sam|sam\.gz|mag\.gz|fasta\.gz|fa\.gz|fastq\.gz|fq\.gz|bam)$/) {
-	$prefix = $1;
-} else {
-	die("ERROR: failed to identify the prefix for output. Please specify -p.\n")
-}
-
-my $prefix_dir = $prefix =~ /^(\S+)\/[^\/\s]+$/? $1 : ".";
-die("ERROR: directory $prefix_dir is not writable. Please specify a new output prefix with -p.\n") unless (-w $prefix_dir);
-
 die("ERROR: failed to locate the BWA index. Please run '$root/bwa index -p $idx ref.fa'.\n")
   unless (-f "$idx.bwt" && -f "$idx.pac" && -f "$idx.sa" && -f "$idx.ann" && -f "$idx.amb");
 
@@ -55,21 +43,37 @@ if (@ARGV >= 3 && $ARGV[1] =~ /\.(bam|sam|sam\.gz)$/) {
 	@ARGV = 2;
 }
 
-if (defined($opts{P}) && @ARGV >= 3) {
+if (defined($opts{p}) && @ARGV >= 3) {
 	warn("WARNING: option -P is ignored as there are two input sequence files.\n");
-	delete $opts{P};
+	delete $opts{p};
 }
+
+my $prefix;
+if (defined $opts{o}) {
+	$prefix = $opts{o};
+} elsif (@ARGV >= 3) {
+	my $len = length($ARGV[1]) < length($ARGV[2])? length($ARGV[1]) : length($ARGV[2]);
+	my $i;
+	for ($i = 0; $i < $len; ++$i) {
+		last if substr($ARGV[1], $i, 1) ne substr($ARGV[2], $i, 1)
+	}
+	$prefix = substr($ARGV[1], 0, $i) if $i > 0;
+} elsif ($ARGV[1] =~ /^(\S+)\.(fastq|fq|fasta|fa|mag|sam|sam\.gz|mag\.gz|fasta\.gz|fa\.gz|fastq\.gz|fq\.gz|bam)$/) {
+	$prefix = $1;
+}
+die("ERROR: failed to identify the prefix for output. Please specify -p.\n") unless defined($prefix);
 
 my $size = 0;
 my $comp_ratio = 3.;
 for my $f (@ARGV[1..$#ARGV]) {
 	my @a = stat($f);
 	my $s = $a[7];
+	die("ERROR: failed to read file $f\n") if !defined($s);
 	$s *= $comp_ratio if $f =~ /\.(gz|bam)$/;
 	$size += int($s) + 1;
 }
 
-my $is_pe = (defined($opts{P}) || @ARGV >= 3)? 1 : 0;
+my $is_pe = (defined($opts{p}) || @ARGV >= 3)? 1 : 0;
 my $is_sam = $ARGV[1] =~ /\.(sam|sam\.gz)$/? 1 : 0;
 my $is_bam = $ARGV[1] =~ /\.bam$/? 1 : 0;
 
@@ -79,7 +83,7 @@ if ($is_sam || $is_bam) {
 	my $ntmps = int($size / 4e9) + 1;
 	my $cmd_shuf = ($is_bam || $is_sam) && !defined($opts{S})? "  | $root/htsbox bamshuf -uOn$ntmps - $prefix.shuf \\\n" : "";
 	my $cmd_bam2fq = "";
-	$cmd_bam2fq = "  | $root/htsbox bam2fq -O " . (defined($opts{P})? "-s $prefix.out.se.fq.gz " : "") . "- \\\n";
+	$cmd_bam2fq = "  | $root/htsbox bam2fq -O " . (defined($opts{p})? "-s $prefix.out.se.fq.gz " : "") . "- \\\n";
 	$cmd = $cmd_sam2bam . $cmd_shuf . $cmd_bam2fq;
 } elsif (@ARGV >= 3) {
 	$cmd = "  | $root/seqtk mergepe $ARGV[1] $ARGV[2] \\\n";

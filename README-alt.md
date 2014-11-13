@@ -4,24 +4,16 @@ Since version 0.7.11, BWA-MEM supports read mapping against a reference genome
 with long alternative haplotypes present in separate ALT contigs. To use the
 ALT-aware mode, users need to provide pairwise ALT-to-reference alignment in the
 SAM format and rename the file to "*idxbase*.alt". For GRCh38, this alignment
-is available from the [BWA resource bundle for GRCh38][res].
+is available from the [binary package of BWA][res].
 
-#### Option 1: Mapping to the official GRCh38 with ALT contigs
-
-Construct the index:
 ```sh
-wget ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
-gzip -d GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
-mv GCA_000001405.15_GRCh38_full_analysis_set.fna hs38a.fa
-bwa index hs38a.fa
-cp bwa-hs38-bundle/hs38d4.fa.alt hs38a.fa.alt
-```
-
-Perform mapping:
-```sh
-bwa mem hs38a.fa read1.fq read2.fq \
-  | bwa-hs38-bundle/k8-linux bwa-postalt.js hs38a.fa.alt \
-  | samtools view -bS - > aln.unsrt.bam
+# Generate the GRCh38+ALT+decoy+HLA and create the BWA index
+wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit-0.7.11_x64-linux.tar.bz2/download \
+  | gzip -dc | tar xf -
+bwa.kit/run-gen-hs38d6       # download GRCh38 and write hs38d6.fa
+bwa.kit/bwa index hs38d6.fa  # create BWA index
+# mapping
+bwa.kit/run-bwamem hs38d6.fa read1.fq read2.fq
 ```
 
 In the final alignment, a read may be placed on the [primary assembly][grcdef]
@@ -29,26 +21,6 @@ and multiple overlapping ALT contigs at the same time (on multiple SAM lines).
 Mapping quality (mapQ) is properly adjusted by the postprocessing script
 `bwa-postalt.js` using the ALT-to-reference alignment `hs38a.fa.alt`. For
 details, see the [Methods section](#methods).
-
-#### Option 2: Mapping to the collection of GRCh38, decoy and HLA genes
-
-Construct the index:
-```sh
-cat hs38a.fa bwa-hs38-bundle/hs38d4-extra.fa > hs38d4.fa
-bwa index hs38d4.fa
-cp bwa-hs38-bundle/hs38d4.fa.alt .
-```
-Perform mapping:
-```sh
-bwa mem hs38d4.fa read1.fq read2.fq \
-  | bwa-hs38-bundle/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
-  | samtools view -bS - > aln.unsrt.bam
-```
-The benefit of this option is to have a more complete reference sequence and
-to facilitate HLA typing with a 3rd-party tool (see below).
-
-***If you are not interested in the way BWA-MEM performs ALT mapping, you can
-skip the rest of this documentation.***
 
 ## Background
 
@@ -60,8 +32,8 @@ definitions from the [GRC website][grcdef].
 
 GRCh38 ALT contigs are totaled 109Mb in length, spanning 60Mbp genomic regions.
 However, sequences that are highly diverged from the primary assembly only
-contribute a few million bp. Most subsequences of ALT contigs are highly similar
-or identical to the primary assembly. If we align sequence reads to GRCh38+ALT
+contribute a few million bp. Most subsequences of ALT contigs are nearly
+identical to the primary assembly. If we align sequence reads to GRCh38+ALT
 treating ALT equal to the primary assembly, we will get many reads with zero
 mapping quality and lose variants on them. It is crucial to make the mapper
 aware of ALTs.
@@ -88,8 +60,8 @@ the ALT-to-ref alignment, and labels a potential hit as *ALT* or *non-ALT*,
 depending on whether the hit lands on an ALT contig or not. BWA-MEM then reports
 alignments and assigns mapQ following these two rules:
 
-1. The original mapQ of a non-ALT hit is computed across non-ALT hits only.
-   The reported mapQ of an ALT hit is computed across all hits.
+1. The mapQ of a non-ALT hit is computed across non-ALT hits only. The mapQ of
+   an ALT hit is computed across all hits.
 
 2. If there are no non-ALT hits, the best ALT hit is outputted as the primary
    alignment. If there are both ALT and non-ALT hits, non-ALT hits will be
@@ -100,7 +72,7 @@ In theory, non-ALT alignments from step 1 should be identical to alignments
 against a reference genome with ALT contigs. In practice, the two types of
 alignments may differ in rare cases due to seeding heuristics. When an ALT hit
 is significantly better than non-ALT hits, BWA-MEM may miss seeds on the
-non-ALT hits. This happens more often for contig mapping.
+non-ALT hits.
 
 If we don't care about ALT hits, we may skip postprocessing (step 2).
 Nonetheless, postprocessing is recommended as it improves mapQ and gives more
@@ -110,18 +82,12 @@ information about ALT hits.
 
 Postprocessing is done with a separate script `bwa-postalt.js`. It reads all
 potential hits reported in the XA tag, lifts ALT hits to the chromosomal
-positions using the ALT-to-ref alignment, groups them after lifting and then
-reassigns mapQ based on the best scoring hit in each group with all the hits in
-a group get the same mapQ. Being aware of the ALT-to-ref alignment, this script
-can greatly improve mapQ of ALT hits and occasionally improve mapQ of non-ALT
-hits.
-
-The script also measures the presence of each ALT contig. For a group of
-overlapping ALT contigs c_1, ..., c_m, the weight for c_k equals `\frac{\sum_j
-P(c_k|r_j)}{\sum_j\max_i P(c_i|r_j)}`, where `P(c_k|r)=\frac{pow(4,s_k)}{\sum_i
-pow(4,s_i)}` is the posterior of c_k given a read r mapped to it with a
-Smith-Waterman score s_k. This weight is reported in `postinfo.ctw` in the
-option 2 above.
+positions using the ALT-to-ref alignment, groups them based on overlaps between
+their lifted positions, and then re-estimates mapQ across the best scoring hit
+in each group. Being aware of the ALT-to-ref alignment, this script can greatly
+improve mapQ of ALT hits and occasionally improve mapQ of non-ALT hits. It also
+writes each hit overlapping the reported hit into a separate SAM line. This
+enables variant calling on each ALT contig independent of others.
 
 ### On the completeness of GRCh38+ALT
 
@@ -129,10 +95,10 @@ While GRCh38 is much more complete than GRCh37, it is still missing some true
 human sequences. To make sure every piece of sequence in the reference assembly
 is correct, the [Genome Reference Consortium][grc] (GRC) require each ALT contig
 to have enough support from multiple sources before considering to add it to the
-reference assembly. This careful procedure has left out some sequences, one of
-which is [this example][novel], a 10kb contig assembled from CHM1 short
-reads and present also in NA12878. You can try [BLAT][blat] or [BLAST][blast] to
-see where it maps.
+reference assembly. This careful and sophisticated procedure has left out some
+sequences, one of which is [this example][novel], a 10kb contig assembled from
+CHM1 short reads and present also in NA12878. You can try [BLAT][blat] or
+[BLAST][blast] to see where it maps.
 
 For a more complete reference genome, we compiled a new set of decoy sequences
 from GenBank clones and the de novo assembly of 254 public [SGDP][sgdp] samples.
@@ -146,12 +112,11 @@ not to high resolution for now.
 
 ### More on HLA typing
 
-It is [well known][hlalink] that HLA genes are associated with many autoimmune
-diseases as well as some others not directly related to the immune system.
-However, many HLA alleles are highly diverged from the reference genome. If we
-map whole-genome shotgun (WGS) reads to the reference only, many
-allele-informative will get lost. As a result, the vast majority of WGS projects
-have ignored these important genes.
+It is [well known][hlalink] that HLA genes are associated with many autoimmunity
+infectious diseases and drug responses. However, many HLA alleles are highly
+diverged from the reference genome. If we map whole-genome shotgun (WGS) reads
+to the reference only, many allele-informative will get lost. As a result, the
+vast majority of WGS projects have ignored these important genes.
 
 We recommend to include the genomic regions of classical HLA genes in the BWA
 index. This way we will be able to get a more complete collection of reads
@@ -159,13 +124,6 @@ mapped to HLA. We can then isolate these reads with little computational cost
 and type HLA genes with another program, such as [Warren et al (2012)][hla4],
 [Liu et al (2013)][hla2], [Bai et al (2014)][hla3], [Dilthey et al (2014)][hla1]
 or others from [this list][hlatools].
-
-If the postprocessing script `bwa-postalt.js` is invoked with `-p prefix`, it
-will also write the top three alleles to file `prefix.hla`. However, as most HLA
-alleles from IMGT/HLA don't have intronic sequences and thus are not included in
-the BWA index from option 2, we are unable to type HLA genes to high resolution
-with the BWA-MEM mapping alone. A dedicated tool is recommended for accurate
-typing.
 
 ### Evaluating ALT Mapping
 
