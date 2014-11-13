@@ -178,7 +178,7 @@ function parse_hit(s, opt)
 	return h;
 }
 
-function print_buffer(buf2, fp_hla, hla)
+function print_buffer(buf2, fp_hla, hla) // output alignments
 {
 	if (buf2.length == 0) return;
 	for (var i = 0; i < buf2.length; ++i)
@@ -192,21 +192,34 @@ function print_buffer(buf2, fp_hla, hla)
 	}
 }
 
+function collect_hla_hits(idx, ctg, start, end, hla) // collect reads hit to HLA genes
+{
+	var m, ofunc = idx[ctg];
+	if (ofunc == null) return;
+	var ovlp_alt = ofunc(start, end);
+	for (var i = 0; i < ovlp_alt.length; ++i)
+		if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(ovlp_alt[i][2])) != null)
+			hla[m[1]] = true;
+}
+
 function bwa_postalt(args)
 {
+	var version = "r985";
 	var c, opt = { a:1, b:4, o:6, e:1, min_mapq:10, min_sc:90, max_nm_sc:10, min_pa_ratio:1 };
 
-	while ((c = getopt(args, 'p:r:')) != null) {
+	while ((c = getopt(args, 'vp:r:')) != null) {
 		if (c == 'p') opt.pre = getopt.arg;
 		else if (c == 'r') opt.min_pa_ratio = parseFloat(getopt.arg);
+		else if (c == 'v') { print(version); exit(0); }
 	}
 	if (opt.min_pa_ratio > 1.) opt.min_pa_ratio = 1.;
 
 	if (args.length == getopt.ind) {
 		print("");
 		print("Usage:   k8 bwa-postalt.js [options] <alt.sam> [aln.sam]\n");
-		print("Options: -p STR     prefix of files matching HLA genes [null]");
+		print("Options: -p STR     prefix of output files containting sequences matching HLA genes [null]");
 		print("         -r FLOAT   reduce mapQ to 0 if not overlapping lifted best and pa<FLOAT ["+opt.min_pa_ratio+"]");
+		print("         -v         show version number");
 		print("");
 		print("Note: This script extracts the XA tag, lifts the mapping positions of ALT hits to");
 		print("      the primary assembly, groups them and then estimates mapQ across groups. If");
@@ -222,7 +235,7 @@ function bwa_postalt(args)
 	var buf = new Bytes(); // line reading buffer
 
 	// read ALT-to-REF alignment
-	var intv_alt = {}, intv_pri = {}, hla_ctg = {}, is_alt = {};
+	var intv_alt = {}, intv_pri = {}, hla_ctg = {}, is_alt = {}, hla_chr = null;
 	var file = new File(args[getopt.ind]);
 	while (file.readline(buf) >= 0) {
 		var line = buf.toString();
@@ -237,6 +250,7 @@ function bwa_postalt(args)
 		if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(t[0])) != null) { // read HLA contigs
 			if (hla_ctg[m[1]] == null) hla_ctg[m[1]] = 0;
 			++hla_ctg[m[1]];
+			hla_chr = t[2];
 		}
 		while ((m = re_cigar.exec(t[5])) != null) {
 			var l = parseInt(m[1]);
@@ -296,6 +310,8 @@ function bwa_postalt(args)
 		var NM = (m = /\tNM:i:(\d+)/.exec(line)) == null? '0' : m[1];
 		var flag = t[1];
 		var h = parse_hit([t[2], ((flag&16)?'-':'+') + t[3], t[5], NM], opt);
+		if (t[2] == hla_chr) collect_hla_hits(idx_pri, h.ctg, h.start, h.end, hla);
+
 		if (h.hard) { // the following does not work with hard clipped alignments
 			buf2.push(t);
 			continue;
@@ -407,8 +423,7 @@ function bwa_postalt(args)
 		} else mapQ = t[4];
 
 		// find out whether the read is overlapping HLA genes
-		var pri_ofunc = idx_pri[hits[reported_i].pctg];
-		if (pri_ofunc != null) {
+		if (hits[reported_i].pctg == hla_chr) {
 			var rpt_start = 1<<30, rpt_end = 0;
 			for (var i = 0; i < hits.length; ++i) {
 				var h = hits[i];
@@ -417,10 +432,7 @@ function bwa_postalt(args)
 					rpt_end   = rpt_end   > h.pend  ? rpt_end   : h.pend;
 				}
 			}
-			var ovlp_alt = pri_ofunc(rpt_start, rpt_end);
-			for (var i = 0; i < ovlp_alt.length; ++i)
-				if ((m = /^(HLA-[^\s\*]+)\*\d+/.exec(ovlp_alt[i][2])) != null)
-					hla[m[1]] = true;
+			collect_hla_hits(idx_pri, hla_chr, rpt_start, rpt_end, hla);
 		}
 
 		// adjust the mapQ of the primary hits
