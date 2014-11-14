@@ -13,7 +13,7 @@ wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit-0.7.11_x64-linux.t
 bwa.kit/run-gen-hs38d6       # download GRCh38 and write hs38d6.fa
 bwa.kit/bwa index hs38d6.fa  # create BWA index
 # mapping
-bwa.kit/run-bwamem hs38d6.fa read1.fq read2.fq
+bwa.kit/run-bwamem hs38d6.fa read1.fq read2.fq | sh
 ```
 
 In the final alignment, a read may be placed on the [primary assembly][grcdef]
