@@ -1,9 +1,0 @@
-#!/bin/bash
-
-root=`dirname $0`
-
-(wget -O- ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_full_analysis_set.fna.gz \
-  | gzip -dc; cat $root/data/hs38d6-extra.fa) > hs38d6.fa
-
-[ ! -f hs38d6.fa.alt ] && cp $root/resource-GRCh38/hs38d6.fa.alt .
-[ ! -f hs38d6.fa.bwt ] && echo -e "\nPlease run 'bwa index hs38d6.fa'...\n"
