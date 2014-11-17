@@ -104,17 +104,17 @@
 
 \f0\fs24 \cf2       Read: A\cf0 TCAGCATC\
 \cf2 \
- ALT ctg 1:       \cf3  TGA\cf3 AA---CGAATGCAAATCA
+ ALT ctg 1:       \cf3  TGA\cf3 AA---CGAATGCAAATGGTCA
 \f1\b \cf4 ATCAGCATC
 \f0\b0 \cf3 GAACTAGTCACAT\cf2 \
-           \cf3         |||||\cf5  (high div) \cf3 |||\cf5  (novel ins)\cf3  ||||||||||\cf2 \
+           \cf3         |||||\cf5  (high div) \cf3 ||||||\cf5  (novel ins)\cf3  ||||||||||\cf2 \
 Chromosome:\cf3  GCGTACATGATACGA
 \f1\b \cf6 ATCgGCATC
-\f0\b0 \cf3 ATC-------------CTAGTCACATCGTAATCGA\
-\cf2            \cf3         |||||||||||| |||||||\cf5  (novel ins) \cf3 ||||||||||\
+\f0\b0 \cf3 ATGGTC-------------CTAGTCACATCGTAATC\
+\cf2            \cf3         |||||||||||| ||||||||||\cf5  (novel ins) \cf3 ||||||||||\
 \cf2  ALT ctg 2:\cf3         TGATACGA
 \f1\b \cf7 ATCgcCATC
-\f0\b0 \cf3 ATCA
+\f0\b0 \cf3 ATGGTCA
 \f1\b \cf8 ATCgcCAgC
 \f0\b0 \cf3 GAACTAGTCACAT\
 \
@@ -140,7 +140,9 @@ Chromosome:\cf3  GCGTACATGATACGA
 \cf0 Hits considered in mapQ: 
 \f1\b \cf4 ATCAGCATC
 \f0\b0 \cf0  and 
-\f1\b \cf6 ATCgGCATC\
+\f1\b \cf6 ATCgGCATC
+\f0\b0 \cf2  (best from each group)
+\f1\b \cf6 \
 \pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural
 
 \f0\b0 \cf3 \
@@ -217,7 +219,7 @@ Chromosome:\cf3  GCGTACATGATACGA
 	<key>MasterSheets</key>
 	<array/>
 	<key>ModificationDate</key>
-	<string>2014-11-17 18:01:49 +0000</string>
+	<string>2014-11-17 18:28:10 +0000</string>
 	<key>Modifier</key>
 	<string>Heng Li</string>
 	<key>NotesVisible</key>

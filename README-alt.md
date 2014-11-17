@@ -135,6 +135,31 @@ other programs for typing such as [Warren et al (2012)][hla4], [Liu et al
 (2013)][hla2], [Bai et al (2014)][hla3] and [Dilthey et al (2014)][hla1], though
 most of them are distributed under restrictive licenses.
 
+## Preliminary Evaluation
+
+To check whether GRCh38 is better than GRCh37, we mapped the CHM1 and NA12878
+unitigs to GRCh37 primary (hs37), GRCh38 primary (hs38) and GRCh38+ALT+decoy
+(hs38d6), and called small variants from the alignment. CHM1 is haploid.
+Ideally, heterozygous calls are false positives (FP). NA12878 is diploid. The
+true positive (TP) heterozygous calls from NA12878 are approximately equal
+to the difference between NA12878 and CHM1 heterozygous calls. A better assembly
+should yield higher TP and lower FP. The following table shows the numbers for
+these assemblies:
+
+|Assembly|hs37   |hs38   |hs38d6|CHM1_1.1|  huref|
+|:------:|------:|------:|------:|------:|------:|
+|FP      | 255706| 168068| 142516|307172 | 575634|
+|TP      |2142260|2163113|2150844|2167235|2137053|
+
+With this measurement, hs38 is clearly better than hs37. Genome hs38d6 reduces
+FP by ~25k but also reduces TP by ~12k. We manually inspected variants called
+from hs38 only and found the majority of them are associated with excessive read
+depth, clustered variants or weak alignment. We believe most hs38-only calls are
+problematic. In addition, if we compare two NA12878 replicates from HiSeq X10
+with nearly identical library construction, the difference is ~140k, an order
+of magnitude higher than the difference between hs38 and hs38d6. ALT contigs,
+decoy and HLA genes in hs38d6 improve variant calling at little cost.
+
 ## Problems and Future Development
 
 There are some uncertainties about ALT mappings - we are not sure whether they
