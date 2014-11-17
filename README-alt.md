@@ -158,7 +158,8 @@ depth, clustered variants or weak alignment. We believe most hs38-only calls are
 problematic. In addition, if we compare two NA12878 replicates from HiSeq X10
 with nearly identical library construction, the difference is ~140k, an order
 of magnitude higher than the difference between hs38 and hs38d6. ALT contigs,
-decoy and HLA genes in hs38d6 improve variant calling at little cost.
+decoy and HLA genes in hs38d6 improve variant calling and enable the analyses of
+ALT contigs and HLA typing at little cost.
 
 ## Problems and Future Development
 
