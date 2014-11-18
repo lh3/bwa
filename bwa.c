@@ -7,6 +7,7 @@
 #include "ksw.h"
 #include "utils.h"
 #include "kstring.h"
+#include "kvec.h"
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -55,10 +56,12 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 		}
 		trim_readno(&ks->name);
 		kseq2bseq1(ks, &seqs[n]);
+		seqs[n].id = n;
 		size += seqs[n++].l_seq;
 		if (ks2) {
 			trim_readno(&ks2->name);
 			kseq2bseq1(ks2, &seqs[n]);
+			seqs[n].id = n;
 			size += seqs[n++].l_seq;
 		}
 		if (size >= chunk_size && (n&1) == 0) break;
@@ -69,6 +72,24 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 	}
 	*n_ = n;
 	return seqs;
+}
+
+void bseq_classify(int n, bseq1_t *seqs, int m[2], bseq1_t *sep[2])
+{
+	int i, has_last;
+	kvec_t(bseq1_t) a[2] = {{0,0,0}, {0,0,0}};
+	for (i = 1, has_last = 1; i < n; ++i) {
+		if (has_last) {
+			if (strcmp(seqs[i].name, seqs[i-1].name) == 0) {
+				kv_push(bseq1_t, a[1], seqs[i-1]);
+				kv_push(bseq1_t, a[1], seqs[i]);
+				has_last = 0;
+			} else kv_push(bseq1_t, a[0], seqs[i-1]);
+		} else has_last = 1;
+	}
+	if (has_last) kv_push(bseq1_t, a[0], seqs[i-1]);
+	sep[0] = a[0].a, m[0] = a[0].n;
+	sep[1] = a[1].a, m[1] = a[1].n;
 }
 
 /*****************

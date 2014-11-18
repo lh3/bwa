@@ -1,29 +1,17 @@
-Release 0.7.11 (XX September, 2014)
+Release 0.7.11 (XX November, 2014)
 -----------------------------------
 
-A major change to BWA-MEM is the support of mapping to ALT contigs. To use this
-feature, users need to manually create a file `indexbase.alt` with each line
-giving the name of an ALT contig. During alignment, BWA-MEM will be able to
-classify potential hits to ALT and non-ALT hits. It reports alignments and
-assigns mapping quality (mapQ) loosely following these rules:
+A major change to BWA-MEM is the support of mapping to ALT contigs in addition
+to the primary assembly. Part of the ALT mapping strategy is implemented in
+BWA-MEM and the rest in a postprocessing script for now. Due to the extra
+layer of complexity on generating the reference genome and on the two-step
+mapping, we start to provide a wrapper script and precompiled binaries since
+this release. Please check README-alt.md for details.
 
- 1. The original mapQ of a non-ALT hit is computed across non-ALT hits only.
-    The reported mapQ of an ALT hit is always computed across all hits.
-
- 2. An ALT hit is only reported if its score is strictly better than all
-    overlapping non-ALT hits. A reported ALT hit is flagged with 0x800
-    (supplementary) unless there are no non-ALT hits.
-
- 3. The mapQ of a non-ALT hit is reduced to zero if its score is less than 80%
-    (controlled by option `-g`) of the score of an overlapping ALT hit. In this
-    case, the original mapQ is moved to the `om` tag.
-
-This way, non-ALT alignments are only affected by ALT contigs if there are
-significantly better ALT alignments. BWA-MEM is carefully engineered such that
-ALT contigs do not interfere with the alignments to the primary assembly.
-
-Users may consider to use ALT contigs from GRCh38. I am also constructing a
-non-redundant and more complete set of sequences missing from GRCh38.
+Another major addition to BWA-MEM is HLA typing, which made possible with the
+new ALT mapping strategy. Necessary data and programs are also included in
+the binary release. The wrapper script also performs HLA typing when HLA genes
+are also included in the reference genome as additional ALT contigs.
 
 Other notable changes to BWA-MEM:
 
@@ -42,7 +30,9 @@ Other notable changes to BWA-MEM:
  * Added new pre-setting for Oxford Nanopore 2D reads. For small genomes,
    though, LAST is still more sensitive.
 
-(0.7.11: XX September 2014, rXXX)
+ * Added LAST-like seeding. This improves the accuracy for longer reads.
+
+(0.7.11: XX November 2014, rXXX)
 
 
 
