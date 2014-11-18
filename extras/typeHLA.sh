@@ -20,7 +20,7 @@ if [ $is_ctg -eq 0 ]; then
 	echo "** De novo assembling..." >&2
 	len=`$root/seqtk comp $pre.fq | awk '{++x;y+=$2}END{printf("%.0f\n", y/x)}'`
 	$root/fermi2.pl unitig -f $root/fermi2 -r $root/ropebwt2 -t2 -l$len -p $pre.tmp $pre.fq > $pre.tmp.mak
-	make -f $pre.tmp.mak
+	make -f $pre.tmp.mak >&2
 	cp $pre.tmp.mag.gz $pre.mag.gz
 else
 	rm -f $pre.tmp.mag.gz

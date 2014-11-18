@@ -9,9 +9,9 @@ mapping, we start to provide a wrapper script and precompiled binaries since
 this release. Please check README-alt.md for details.
 
 Another major addition to BWA-MEM is HLA typing, which made possible with the
-new ALT mapping strategy. Necessary data and programs are also included in
-the binary release. The wrapper script also performs HLA typing when HLA genes
-are also included in the reference genome as additional ALT contigs.
+new ALT mapping strategy. Necessary data and programs are included in the
+binary release. The wrapper script also performs HLA typing when HLA genes are
+also included in the reference genome as additional ALT contigs.
 
 Other notable changes to BWA-MEM:
 
