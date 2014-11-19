@@ -16,6 +16,11 @@ preres="resource-human-HLA"
 root=`dirname $0`
 pre=$1.$2
 
+if [ ! -s $pre.fq ]; then
+	echo '** Empty input file. Abort!' >&2
+	exit 0
+fi
+
 if [ $is_ctg -eq 0 ]; then
 	echo "** De novo assembling..." >&2
 	len=`$root/seqtk comp $pre.fq | awk '{++x;y+=$2}END{printf("%.0f\n", y/x)}'`

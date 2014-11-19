@@ -13,7 +13,7 @@ bwa.kit/run-bwamem -o out hs38d6.fa read1.fq read2.fq | sh  # skip "|sh" to show
 
 This will generate the following files:
 
-* `out.aln.sam.gz`: unsorted alignments with ALT-aware mapping quality. In this
+* `out.aln.bam`: unsorted alignments with ALT-aware mapping quality. In this
   file, one read may be placed on multiple overlapping ALT contigs at the same
   time even if the read is mapped better to some contigs than others. This makes
   it possible to analyze each contig independent of others.
