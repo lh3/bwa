@@ -32,6 +32,11 @@ SourceForge. After you acquire the source code, simply use `make` to compile
 and copy the single executable `bwa` to the destination you want. The only
 dependency required to build BWA is [zlib][14].
 
+Since 0.7.11, precompiled binary for x86\_64-linux is available in [bwakit][17].
+In addition to BWA, this self-consistent package also comes with bwa-associated
+and 3rd-party tools for proper BAM-to-FASTQ conversion, mapping to ALT contigs,
+adapter triming, duplicate marking, HLA typing and associated data files.
+
 ##Seeking helps
 
 The detailed usage is described in the man page available together with the
@@ -146,3 +151,4 @@ as well. BWA-MEM does not have this problem.
 [14]: http://zlib.net/
 [15]: https://github.com/lh3/bwa/tree/mem
 [16]: ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/
+[17]: http://sourceforge.net/projects/bio-bwa/files/bwakit/
