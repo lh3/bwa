@@ -1,6 +1,6 @@
 Bwakit is a self-consistent installation-free package of scripts and precompiled
-binaries which provide an end-to-end solution to read mapping. In addition to
-the basic mapping functionality implemented in bwa, bwakit is able to generate
+binaries, providing an end-to-end solution to read mapping. In addition to the
+basic mapping functionality implemented in bwa, bwakit is able to generate
 proper human reference genome and to take advantage of ALT contigs, if present,
 to improve read mapping and to perform HLA typing for high-coverage human data.
 It can remap name- or coordinate-sorted BAM with read group and barcode
