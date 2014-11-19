@@ -55,6 +55,7 @@ my $idx = $ARGV[0];
 
 my $exepath = $0 =~/^\S+\/[^\/\s]+/? $0 : &which($0);
 my $root = $0 =~/^(\S+)\/[^\/\s]+/? $1 : undef;
+$root = $exepath =~/^(\S+)\/[^\/\s]+/? $1 : undef if !defined($root);
 die "ERROR: failed to locate the 'bwa.kit' directory\n" if !defined($root);
 
 die("ERROR: failed to locate the BWA index. Please run '$root/bwa index -p $idx ref.fa'.\n")
