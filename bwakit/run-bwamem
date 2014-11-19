@@ -31,16 +31,16 @@ Examples:
 
      run-bwamem -o prefix -t8 -R"@RG\tID:foo\tSM:bar" hs38d6.fa read1.fq.gz read2.fq.gz
 
- * Remap coordinate-sorted BAM, trim Illumina PE adapters and sort the output. The BAM
-   may contain single-end or paired-end reads, or a mixture of the two types. Read groups
-   are not transferred to the output BAM, though.
+ * Remap coordinate-sorted BAM, transfer read groups tags, trim Illumina PE adapters and
+   sort the output. The BAM may contain single-end or paired-end reads, or a mixture of
+   the two types. Specifying -R stops read group transfer.
 
      run-bwamem -sao prefix hs38d6.fa old-srt.bam
 
  * Remap name-grouped BAM and mark duplicates. Note that in this case, all reads from
    a single library should be aligned at the same time. Paired-end only.
 
-      run-bwamem -Sdo prefix hs38d6.fa old-unsrt.bam
+     run-bwamem -Sdo prefix hs38d6.fa old-unsrt.bam
 
 Output files:
 
@@ -50,8 +50,6 @@ Output files:
   {-o}.log.*   - log files
 
 ') if @ARGV < 2;
-
-warn("WARNING: many programs require read groups. Please specify with -R if you can.\n") unless defined($opts{R});
 
 my $idx = $ARGV[0];
 
@@ -82,7 +80,7 @@ if (defined $opts{o}) {
 		last if substr($ARGV[1], $i, 1) ne substr($ARGV[2], $i, 1)
 	}
 	$prefix = substr($ARGV[1], 0, $i) if $i > 0;
-} elsif ($ARGV[1] =~ /^(\S+)\.(fastq|fq|fasta|fa|mag|sam|sam\.gz|mag\.gz|fasta\.gz|fa\.gz|fastq\.gz|fq\.gz|bam)$/) {
+} elsif ($ARGV[1] =~ /^(\S+)\.(fastq|fq|fasta|fa|mag|mag\.gz|fasta\.gz|fa\.gz|fastq\.gz|fq\.gz|bam)$/) {
 	$prefix = $1;
 }
 die("ERROR: failed to identify the prefix for output. Please specify -p.\n") unless defined($prefix);
@@ -98,19 +96,36 @@ for my $f (@ARGV[1..$#ARGV]) {
 }
 
 my $is_pe = (defined($opts{p}) || @ARGV >= 3)? 1 : 0;
-my $is_sam = $ARGV[1] =~ /\.(sam|sam\.gz)$/? 1 : 0;
 my $is_bam = $ARGV[1] =~ /\.bam$/? 1 : 0;
 
 if (defined($opts{x})) {
 	delete($opts{d}); delete($opts{a}); delete $opts{p};
 }
 
+# for BAM input, find @RG header lines
+my @RG_lines = ();
+if ($is_bam && !defined($opts{R})) {
+	my $fh;
+	open($fh, "$root/samtools view -H $ARGV[1] |") || die;
+	while (<$fh>) {
+		chomp;
+		if (/^\@RG\t/) {
+			s/\t/\\t/g;
+			push(@RG_lines, "-H'$_'");
+		}
+	}
+	close($fh);
+}
+
+warn("WARNING: many programs require read groups. Please specify with -R if you can.\n") if !defined($opts{R}) && @RG_lines == 0;
+
 my $cmd = '';
-if ($is_sam || $is_bam) {
-	my $cmd_sam2bam = $is_sam? "$root/htsbox samview -uS $ARGV[1] \\\n" : "cat $ARGV[1] \\\n";
+if ($is_bam) {
+	my $cmd_sam2bam = "cat $ARGV[1] \\\n";
 	my $ntmps = int($size / 4e9) + 1;
-	my $cmd_shuf = ($is_bam || $is_sam) && !defined($opts{S})? "  | $root/htsbox bamshuf -uOn$ntmps - $prefix.shuf \\\n" : "";
-	my $cmd_bam2fq = "  | $root/htsbox bam2fq -O - \\\n";
+	my $cmd_shuf = !defined($opts{S})? "  | $root/htsbox bamshuf -uOn$ntmps - $prefix.shuf \\\n" : "";
+	my $bam2fq_opt = @RG_lines > 0? " -t" : "";
+	my $cmd_bam2fq = "  | $root/htsbox bam2fq -O$bam2fq_opt - \\\n";
 	$cmd = $cmd_sam2bam . $cmd_shuf . $cmd_bam2fq;
 } elsif (@ARGV >= 3) {
 	$cmd = "$root/seqtk mergepe $ARGV[1] $ARGV[2] \\\n";
@@ -119,6 +134,7 @@ if ($is_sam || $is_bam) {
 }
 
 my $bwa_opts = "-p " . ($opts{t} > 1? "-t$opts{t} " : "") . (defined($opts{x})? "-x $opts{x} " : "") . (defined($opts{R})? "-R'$opts{R}' " : "");
+$bwa_opts .= join(" ", @RG_lines) . " -C " if @RG_lines > 0;
 
 $cmd .= "  | $root/trimadap 2> $prefix.log.trim \\\n" if defined($opts{a});
 $cmd .= "  | $root/bwa mem $bwa_opts$ARGV[0] - 2> $prefix.log.bwamem \\\n";

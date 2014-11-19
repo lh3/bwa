@@ -44,7 +44,7 @@ int main_mem(int argc, char *argv[])
 	kseq_t *ks, *ks2 = 0;
 	bseq1_t *seqs;
 	bwaidx_t *idx;
-	char *p, *rg_line = 0;
+	char *p, *rg_line = 0, *hdr_line = 0;
 	const char *mode = 0;
 	void *ko = 0, *ko2 = 0;
 	int64_t n_processed = 0;
@@ -55,7 +55,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -115,6 +115,8 @@ int main_mem(int argc, char *argv[])
 				opt->pen_clip3 = strtol(p+1, &p, 10);
 		} else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
+		} else if (c == 'H') {
+			hdr_line = bwa_insert_header(optarg, hdr_line);
 		} else if (c == 'I') { // specify the insert size distribution
 			pes0 = pes;
 			pes[1].failed = 0;
@@ -135,6 +137,12 @@ int main_mem(int argc, char *argv[])
 		}
 		else return 1;
 	}
+
+	if (rg_line) {
+		hdr_line = bwa_insert_header(rg_line, hdr_line);
+		free(rg_line);
+	}
+
 	if (opt->n_threads < 1) opt->n_threads = 1;
 	if (optind + 1 >= argc || optind + 3 < argc) {
 		fprintf(stderr, "\n");
@@ -169,6 +177,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            smart pairing (ignoring in2.fq)\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
+		fprintf(stderr, "       -H STR        insert an arbitrary header line [null]\n");
 		fprintf(stderr, "       -j            ignore ALT contigs\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
@@ -261,7 +270,7 @@ int main_mem(int argc, char *argv[])
 		}
 	}
 	if (!(opt->flag & MEM_F_ALN_REG))
-		bwa_print_sam_hdr(idx->bns, rg_line);
+		bwa_print_sam_hdr(idx->bns, hdr_line);
 	actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
 	while ((seqs = bseq_read(actual_chunk_size, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
@@ -301,6 +310,7 @@ int main_mem(int argc, char *argv[])
 		free(seqs);
 	}
 
+	free(hdr_line);
 	free(opt);
 	bwa_idx_destroy(idx);
 	kseq_destroy(ks);

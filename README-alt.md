@@ -1,7 +1,7 @@
-## Getting Started
+## For the Impatient
 
 ```sh
-# Download the bwa-0.7.11 binary package
+# Download the bwa-0.7.11 binary package (download link may change)
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
@@ -11,22 +11,9 @@ bwa.kit/bwa index hs38d6.fa  # create BWA index
 bwa.kit/run-bwamem -o out hs38d6.fa read1.fq read2.fq | sh  # skip "|sh" to show command lines
 ```
 
-This will generate the following files:
-
-* `out.aln.bam`: unsorted alignments with ALT-aware mapping quality. In this
-  file, one read may be placed on multiple overlapping ALT contigs at the same
-  time even if the read is mapped better to some contigs than others. This makes
-  it possible to analyze each contig independent of others.
-
-* `out.hla.top`: best genotypes for HLA-A, -B, -C, -DQA1, -DQB1 and -DRB1 genes.
-
-* `out.hla.all`: other possible genotypes on the six HLA genes.
-
-* `out.log.*`: bwa-mem, samblaster and HLA typing log files.
-
-Note that `run-bwamem` only prints command lines but doesn't execute them. It
-is advised to have a look at the command lines before passing them to `sh` for
-actual execution.
+This generates `out.aln.bam` as the final alignment, `out.hla.top` for best HLA
+genotypes on each gene and `out.hla.all` for other possible HLA genotypes.
+Please check out [bwa/bwakit/README.md][kithelp] for details.
 
 ## Background
 
@@ -57,7 +44,7 @@ postprocessing. The `bwa.kit/run-bwamem` script performs the two steps when ALT
 contigs are present. The following picture shows an example about how BWA-MEM
 infers mapping quality and reports alignment after step 2:
 
-![](https://raw.githubusercontent.com/lh3/bwa/dev/extras/alt-demo.png)
+![](http://lh3lh3.users.sourceforge.net/images/alt-demo.png)
 
 #### Step 1: BWA-MEM mapping
 
@@ -189,3 +176,4 @@ can even get rid of ALT contigs for good.
 [hla2]: http://nar.oxfordjournals.org/content/41/14/e142.full.pdf+html
 [hla3]: http://www.biomedcentral.com/1471-2164/15/325
 [hla4]: http://genomemedicine.com/content/4/12/95
+[kithelp]: https://github.com/lh3/bwa/tree/master/bwakit
