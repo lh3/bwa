@@ -367,13 +367,13 @@ int bwa_idx2mem(bwaidx_t *idx)
  * SAM header routines *
  ***********************/
 
-void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
+void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 {
 	int i;
 	extern char *bwa_pg;
 	for (i = 0; i < bns->n_seqs; ++i)
 		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
-	if (rg_line) err_printf("%s\n", rg_line);
+	if (hdr_line) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }
 
@@ -422,3 +422,16 @@ err_set_rg:
 	return 0;
 }
 
+char *bwa_insert_header(const char *s, char *hdr)
+{
+	int len = 0;
+	if (s == 0 || s[0] != '@') return hdr;
+	if (hdr) {
+		len = strlen(hdr);
+		hdr = realloc(hdr, len + strlen(s) + 2);
+		hdr[len++] = '\n';
+		strcpy(hdr + len, s);
+	} else hdr = strdup(s);
+	bwa_escape(hdr + len);
+	return hdr;
+}
