@@ -43,7 +43,7 @@ scripts in the package are available in the [bwa/bwakit][kit] directory.
 Packaging is done manually for now.
 
 
-[res]: https://sourceforge.net/projects/bio-bwa/files/
+[res]: https://sourceforge.net/projects/bio-bwa/files/bwakit
 [sb]: https://github.com/GregoryFaust/samblaster
 [ta]: https://github.com/lh3/seqtk/blob/master/trimadap.c
 [smtl]: http://www.htslib.org
