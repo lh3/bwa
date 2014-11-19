@@ -1,6 +1,6 @@
 Bwakit is a self-consistent installation-free package of scripts and precompiled
-binaries which provide an end-to-end solution to read mapping. In addition to
-the basic mapping functionality implemented in bwa, bwakit is able to generate
+binaries, providing an end-to-end solution to read mapping. In addition to the
+basic mapping functionality implemented in bwa, bwakit is able to generate
 proper human reference genome and to take advantage of ALT contigs, if present,
 to improve read mapping and to perform HLA typing for high-coverage human data.
 It can remap name- or coordinate-sorted BAM with read group and barcode
@@ -43,7 +43,7 @@ scripts in the package are available in the [bwa/bwakit][kit] directory.
 Packaging is done manually for now.
 
 
-[res]: https://sourceforge.net/projects/bio-bwa/files/
+[res]: https://sourceforge.net/projects/bio-bwa/files/bwakit
 [sb]: https://github.com/GregoryFaust/samblaster
 [ta]: https://github.com/lh3/seqtk/blob/master/trimadap.c
 [smtl]: http://www.htslib.org
