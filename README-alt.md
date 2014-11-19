@@ -1,85 +1,63 @@
 ## Getting Started
 
-Since version 0.7.11, BWA-MEM supports read mapping against a reference genome
-with long alternative haplotypes present in separate ALT contigs. To use the
-ALT-aware mode, users need to provide pairwise ALT-to-reference alignment in the
-SAM format and rename the file to "*idxbase*.alt". For GRCh38, this alignment
-is available from the [BWA resource bundle for GRCh38][res].
-
-#### Option 1: Mapping to the official GRCh38 with ALT contigs
-
-Construct the index:
 ```sh
-wget ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
-gzip -d GCA_000001405.15_GRCh38_full_analysis_set.fna.gz
-mv GCA_000001405.15_GRCh38_full_analysis_set.fna hs38a.fa
-bwa index hs38a.fa
-cp bwa-hs38-bundle/hs38d4.fa.alt hs38a.fa.alt
+# Download the bwa-0.7.11 binary package
+wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit-0.7.11_x64-linux.tar.bz2/download \
+  | gzip -dc | tar xf -
+# Generate the GRCh38+ALT+decoy+HLA and create the BWA index
+bwa.kit/run-gen-ref hs38d6   # download GRCh38 and write hs38d6.fa
+bwa.kit/bwa index hs38d6.fa  # create BWA index
+# mapping
+bwa.kit/run-bwamem -o out hs38d6.fa read1.fq read2.fq | sh  # skip "|sh" to show command lines
 ```
 
-Perform mapping:
-```sh
-bwa mem hs38a.fa read1.fq read2.fq \
-  | bwa-hs38-bundle/k8-linux bwa-postalt.js hs38a.fa.alt \
-  | samtools view -bS - > aln.unsrt.bam
-```
+This will generate the following files:
 
-In the final alignment, a read may be placed on the [primary assembly][grcdef]
-and multiple overlapping ALT contigs at the same time (on multiple SAM lines).
-Mapping quality (mapQ) is properly adjusted by the postprocessing script
-`bwa-postalt.js` using the ALT-to-reference alignment `hs38a.fa.alt`. For
-details, see the [Methods section](#methods).
+* `out.aln.bam`: unsorted alignments with ALT-aware mapping quality. In this
+  file, one read may be placed on multiple overlapping ALT contigs at the same
+  time even if the read is mapped better to some contigs than others. This makes
+  it possible to analyze each contig independent of others.
 
-#### Option 2: Mapping to the collection of GRCh38, decoy and HLA genes
+* `out.hla.top`: best genotypes for HLA-A, -B, -C, -DQA1, -DQB1 and -DRB1 genes.
 
-Construct the index:
-```sh
-cat hs38a.fa bwa-hs38-bundle/hs38d4-extra.fa > hs38d4.fa
-bwa index hs38d4.fa
-cp bwa-hs38-bundle/hs38d4.fa.alt .
-```
-Perform mapping:
-```sh
-bwa mem hs38d4.fa read1.fq read2.fq \
-  | bwa-hs38-bundle/k8-linux bwa-postalt.js -p postinfo hs38d4.fa.alt \
-  | samtools view -bS - > aln.unsrt.bam
-```
-The benefit of this option is to have a more complete reference sequence and
-to facilitate HLA typing with a 3rd-party tool (see below).
+* `out.hla.all`: other possible genotypes on the six HLA genes.
 
-***If you are not interested in the way BWA-MEM performs ALT mapping, you can
-skip the rest of this documentation.***
+* `out.log.*`: bwa-mem, samblaster and HLA typing log files.
+
+Note that `run-bwamem` only prints command lines but doesn't execute them. It
+is advised to have a look at the command lines before passing them to `sh` for
+actual execution.
 
 ## Background
 
 GRCh38 consists of several components: chromosomal assembly, unlocalized contigs
 (chromosome known but location unknown), unplaced contigs (chromosome unknown)
 and ALT contigs (long clustered variations). The combination of the first three
-components is called the *primary assembly*. You can find the more exact
-definitions from the [GRC website][grcdef].
+components is called the *primary assembly*. It is recommended to use the
+complete primary assembly for all analyses. Using ALT contigs in read mapping is
+tricky.
 
-GRCh38 ALT contigs are totaled 109Mb in length, spanning 60Mbp genomic regions.
-However, sequences that are highly diverged from the primary assembly only
-contribute a few million bp. Most subsequences of ALT contigs are highly similar
-or identical to the primary assembly. If we align sequence reads to GRCh38+ALT
-treating ALT equal to the primary assembly, we will get many reads with zero
-mapping quality and lose variants on them. It is crucial to make the mapper
-aware of ALTs.
+GRCh38 ALT contigs are totaled 109Mb in length, spanning 60Mbp of the primary
+assembly. However, sequences that are highly diverged from the primary assembly
+only contribute a few million bp. Most subsequences of ALT contigs are nearly
+identical to the primary assembly. If we align sequence reads to GRCh38+ALT
+blindly, we will get many additional reads with zero mapping quality and miss
+variants on them. It is crucial to make mappers aware of ALTs.
 
-BWA-MEM is designed to minimize the interference of ALT contigs such that on the
-primary assembly, the ALT-aware alignment is highly similar to the alignment
-without using ALT contigs in the index. This design choice makes it almost
-always safe to map reads to GRCh38+ALT. Although we don't know yet how much
-variations on ALT contigs contribute to phenotypes, we would not get the answer
-without mapping large cohorts to these extra sequences. We hope our current
-implementation encourages researchers to use ALT contigs soon and often.
+BWA-MEM is ALT-aware. It essentially computes mapping quality across the
+non-redundant content of the primary assembly plus the ALT contigs and is free
+of the problem above.
 
 ## Methods
 
 ### Sequence alignment
 
 As of now, ALT mapping is done in two separate steps: BWA-MEM mapping and
-postprocessing.
+postprocessing. The `bwa.kit/run-bwamem` script performs the two steps when ALT
+contigs are present. The following picture shows an example about how BWA-MEM
+infers mapping quality and reports alignment after step 2:
+
+![](https://raw.githubusercontent.com/lh3/bwa/dev/extras/alt-demo.png)
 
 #### Step 1: BWA-MEM mapping
 
@@ -88,19 +66,19 @@ the ALT-to-ref alignment, and labels a potential hit as *ALT* or *non-ALT*,
 depending on whether the hit lands on an ALT contig or not. BWA-MEM then reports
 alignments and assigns mapQ following these two rules:
 
-1. The original mapQ of a non-ALT hit is computed across non-ALT hits only.
-   The reported mapQ of an ALT hit is computed across all hits.
+1. The mapQ of a non-ALT hit is computed across non-ALT hits only. The mapQ of
+   an ALT hit is computed across all hits.
 
 2. If there are no non-ALT hits, the best ALT hit is outputted as the primary
    alignment. If there are both ALT and non-ALT hits, non-ALT hits will be
-   primary. ALT hits are reported as supplementary alignments (flag 0x800) only
-   if they are better than all overlapping non-ALT hits.
+   primary and ALT hits be supplementary (SAM flag 0x800) if ALT hits are better
+   than the best overlapping non-ALT hits.
 
 In theory, non-ALT alignments from step 1 should be identical to alignments
-against a reference genome with ALT contigs. In practice, the two types of
+against the reference genome with ALT contigs. In practice, the two types of
 alignments may differ in rare cases due to seeding heuristics. When an ALT hit
 is significantly better than non-ALT hits, BWA-MEM may miss seeds on the
-non-ALT hits. This happens more often for contig mapping.
+non-ALT hits.
 
 If we don't care about ALT hits, we may skip postprocessing (step 2).
 Nonetheless, postprocessing is recommended as it improves mapQ and gives more
@@ -110,18 +88,12 @@ information about ALT hits.
 
 Postprocessing is done with a separate script `bwa-postalt.js`. It reads all
 potential hits reported in the XA tag, lifts ALT hits to the chromosomal
-positions using the ALT-to-ref alignment, groups them after lifting and then
-reassigns mapQ based on the best scoring hit in each group with all the hits in
-a group get the same mapQ. Being aware of the ALT-to-ref alignment, this script
-can greatly improve mapQ of ALT hits and occasionally improve mapQ of non-ALT
-hits.
-
-The script also measures the presence of each ALT contig. For a group of
-overlapping ALT contigs c_1, ..., c_m, the weight for c_k equals `\frac{\sum_j
-P(c_k|r_j)}{\sum_j\max_i P(c_i|r_j)}`, where `P(c_k|r)=\frac{pow(4,s_k)}{\sum_i
-pow(4,s_i)}` is the posterior of c_k given a read r mapped to it with a
-Smith-Waterman score s_k. This weight is reported in `postinfo.ctw` in the
-option 2 above.
+positions using the ALT-to-ref alignment, groups them based on overlaps between
+their lifted positions, and then re-estimates mapQ across the best scoring hit
+in each group. Being aware of the ALT-to-ref alignment, this script can greatly
+improve mapQ of ALT hits and occasionally improve mapQ of non-ALT hits. It also
+writes each hit overlapping the reported hit into a separate SAM line. This
+enables variant calling on each ALT contig independent of others.
 
 ### On the completeness of GRCh38+ALT
 
@@ -129,47 +101,65 @@ While GRCh38 is much more complete than GRCh37, it is still missing some true
 human sequences. To make sure every piece of sequence in the reference assembly
 is correct, the [Genome Reference Consortium][grc] (GRC) require each ALT contig
 to have enough support from multiple sources before considering to add it to the
-reference assembly. This careful procedure has left out some sequences, one of
-which is [this example][novel], a 10kb contig assembled from CHM1 short
-reads and present also in NA12878. You can try [BLAT][blat] or [BLAST][blast] to
-see where it maps.
+reference assembly. This careful and sophisticated procedure has left out some
+sequences, one of which is [this example][novel], a 10kb contig assembled from
+CHM1 short reads and present also in NA12878. You can try [BLAT][blat] or
+[BLAST][blast] to see where it maps.
 
 For a more complete reference genome, we compiled a new set of decoy sequences
 from GenBank clones and the de novo assembly of 254 public [SGDP][sgdp] samples.
-The sequences are included in `hs38d4-extra.fa` from the [BWA resource bundle
-for GRCh38][res].
+The sequences are included in `hs38d6-extra.fa` from the [BWA binary
+package][res].
 
 In addition to decoy, we also put multiple alleles of HLA genes in
-`hs38d4-extra.fa`. These genomic sequences were acquired from [IMGT/HLA][hladb],
-version 3.18.0. Script `bwa-postalt.js` also helps to genotype HLA genes, though
-not to high resolution for now.
+`hs38d6-extra.fa`. These genomic sequences were acquired from [IMGT/HLA][hladb],
+version 3.18.0 and are used to collect reads sequenced from these genes.
 
-### More on HLA typing
+### HLA typing
 
-It is [well known][hlalink] that HLA genes are associated with many autoimmune
-diseases as well as some others not directly related to the immune system.
-However, many HLA alleles are highly diverged from the reference genome. If we
-map whole-genome shotgun (WGS) reads to the reference only, many
-allele-informative will get lost. As a result, the vast majority of WGS projects
-have ignored these important genes.
+HLA genes are known to be associated with many autoimmune diseases, infectious
+diseases and drug responses. They are among the most important genes but are
+rarely studied by WGS projects due to the high sequence divergence between
+HLA genes and the reference genome in these regions.
 
-We recommend to include the genomic regions of classical HLA genes in the BWA
-index. This way we will be able to get a more complete collection of reads
-mapped to HLA. We can then isolate these reads with little computational cost
-and type HLA genes with another program, such as [Warren et al (2012)][hla4],
-[Liu et al (2013)][hla2], [Bai et al (2014)][hla3], [Dilthey et al (2014)][hla1]
-or others from [this list][hlatools].
+By including the HLA gene regions in the reference assembly as ALT contigs, we
+are able to effectively identify reads coming from these genes. We also provide
+a pipeline, which is included in the [BWA binary package][res], to type the
+several classic HLA genes. The pipeline is conceptually simple. It de novo
+assembles sequence reads mapped to each gene, aligns exon sequences of each
+allele to the assembled contigs and then finds the pairs of alleles that best
+explain the contigs. In practice, however, the completeness of IMGT/HLA and
+copy-number changes related to these genes are not so straightforward to
+resolve. HLA typing may not always be successful. Users may also consider to use
+other programs for typing such as [Warren et al (2012)][hla4], [Liu et al
+(2013)][hla2], [Bai et al (2014)][hla3] and [Dilthey et al (2014)][hla1], though
+most of them are distributed under restrictive licenses.
 
-If the postprocessing script `bwa-postalt.js` is invoked with `-p prefix`, it
-will also write the top three alleles to file `prefix.hla`. However, as most HLA
-alleles from IMGT/HLA don't have intronic sequences and thus are not included in
-the BWA index from option 2, we are unable to type HLA genes to high resolution
-with the BWA-MEM mapping alone. A dedicated tool is recommended for accurate
-typing.
+## Preliminary Evaluation
 
-### Evaluating ALT Mapping
+To check whether GRCh38 is better than GRCh37, we mapped the CHM1 and NA12878
+unitigs to GRCh37 primary (hs37), GRCh38 primary (hs38) and GRCh38+ALT+decoy
+(hs38d6), and called small variants from the alignment. CHM1 is haploid.
+Ideally, heterozygous calls are false positives (FP). NA12878 is diploid. The
+true positive (TP) heterozygous calls from NA12878 are approximately equal
+to the difference between NA12878 and CHM1 heterozygous calls. A better assembly
+should yield higher TP and lower FP. The following table shows the numbers for
+these assemblies:
 
-(Coming soon...)
+|Assembly|hs37   |hs38   |hs38d6|CHM1_1.1|  huref|
+|:------:|------:|------:|------:|------:|------:|
+|FP      | 255706| 168068| 142516|307172 | 575634|
+|TP      |2142260|2163113|2150844|2167235|2137053|
+
+With this measurement, hs38 is clearly better than hs37. Genome hs38d6 reduces
+FP by ~25k but also reduces TP by ~12k. We manually inspected variants called
+from hs38 only and found the majority of them are associated with excessive read
+depth, clustered variants or weak alignment. We believe most hs38-only calls are
+problematic. In addition, if we compare two NA12878 replicates from HiSeq X10
+with nearly identical library construction, the difference is ~140k, an order
+of magnitude higher than the difference between hs38 and hs38d6. ALT contigs,
+decoy and HLA genes in hs38d6 improve variant calling and enable the analyses of
+ALT contigs and HLA typing at little cost.
 
 ## Problems and Future Development
 

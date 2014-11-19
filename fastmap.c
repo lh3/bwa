@@ -55,7 +55,7 @@ int main_mem(int argc, char *argv[])
 
 	opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "epaFMCSPHVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:")) >= 0) {
+	while ((c = getopt(argc, argv, "epaFMCSPHVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -66,7 +66,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 't') opt->n_threads = atoi(optarg), opt->n_threads = opt->n_threads > 1? opt->n_threads : 1;
 		else if (c == 'P') opt->flag |= MEM_F_NOPAIRING;
 		else if (c == 'a') opt->flag |= MEM_F_ALL;
-		else if (c == 'p') opt->flag |= MEM_F_PE;
+		else if (c == 'p') opt->flag |= MEM_F_PE | MEM_F_SMARTPE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
 		else if (c == 'e') opt->flag |= MEM_F_SELF_OVLP;
@@ -87,6 +87,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'y') opt->max_mem_intv = atol(optarg), opt0.max_mem_intv = 1;
 		else if (c == 'C') copy_comment = 1;
 		else if (c == 'K') fixed_chunk_size = atoi(optarg);
+		else if (c == 'X') opt->mask_level = atof(optarg);
 		else if (c == 'h') {
 			opt0.max_XA_hits = opt0.max_XA_hits_alt = 1;
 			opt->max_XA_hits = opt->max_XA_hits_alt = strtol(optarg, &p, 10);
@@ -166,7 +167,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     intractg: -B9 -O16 -L5  (intra-species contigs to ref)\n");
 //		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A1 -B1 -O1 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
-		fprintf(stderr, "       -p            first query file consists of interleaved paired-end sequences\n");
+		fprintf(stderr, "       -p            smart pairing (ignoring in2.fq)\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "       -j            ignore ALT contigs\n");
 		fprintf(stderr, "\n");
@@ -247,7 +248,7 @@ int main_mem(int argc, char *argv[])
 	if (optind + 2 < argc) {
 		if (opt->flag&MEM_F_PE) {
 			if (bwa_verbose >= 2)
-				fprintf(stderr, "[W::%s] when '-p' is in use, the second query file will be ignored.\n", __func__);
+				fprintf(stderr, "[W::%s] when '-p' is in use, the second query file is ignored.\n", __func__);
 		} else {
 			ko2 = kopen(argv[optind + 2], &fd2);
 			if (ko2 == 0) {
@@ -264,11 +265,6 @@ int main_mem(int argc, char *argv[])
 	actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
 	while ((seqs = bseq_read(actual_chunk_size, &n, ks, ks2)) != 0) {
 		int64_t size = 0;
-		if ((opt->flag & MEM_F_PE) && (n&1) == 1) {
-			if (bwa_verbose >= 2)
-				fprintf(stderr, "[W::%s] odd number of reads in the PE mode; last read dropped\n", __func__);
-			n = n>>1<<1;
-		}
 		if (!copy_comment)
 			for (i = 0; i < n; ++i) {
 				free(seqs[i].comment); seqs[i].comment = 0;
@@ -276,7 +272,27 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < n; ++i) size += seqs[i].l_seq;
 		if (bwa_verbose >= 3)
 			fprintf(stderr, "[M::%s] read %d sequences (%ld bp)...\n", __func__, n, (long)size);
-		mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
+		if (opt->flag & MEM_F_SMARTPE) {
+			bseq1_t *sep[2];
+			int i, n_sep[2];
+			mem_opt_t tmp_opt = *opt;
+			bseq_classify(n, seqs, n_sep, sep);
+			if (bwa_verbose >= 3)
+				fprintf(stderr, "[M::%s] %d single-end sequences; %d paired-end sequences\n", __func__, n_sep[0], n_sep[1]);
+			if (n_sep[0]) {
+				tmp_opt.flag &= ~MEM_F_PE;
+				mem_process_seqs(&tmp_opt, idx->bwt, idx->bns, idx->pac, n_processed, n_sep[0], sep[0], 0);
+				for (i = 0; i < n_sep[0]; ++i)
+					seqs[sep[0][i].id].sam = sep[0][i].sam;
+			}
+			if (n_sep[1]) {
+				tmp_opt.flag |= MEM_F_PE;
+				mem_process_seqs(&tmp_opt, idx->bwt, idx->bns, idx->pac, n_processed + n_sep[0], n_sep[1], sep[1], pes0);
+				for (i = 0; i < n_sep[1]; ++i)
+					seqs[sep[1][i].id].sam = sep[1][i].sam;
+			}
+			free(sep[0]); free(sep[1]);
+		} else mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, n_processed, n, seqs, pes0);
 		n_processed += n;
 		for (i = 0; i < n; ++i) {
 			if (seqs[i].sam) err_fputs(seqs[i].sam, stdout);

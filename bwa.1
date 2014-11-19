@@ -1,4 +1,4 @@
-.TH bwa 1 "19 May 2014" "bwa-0.7.9-r783" "Bioinformatics tools"
+.TH bwa 1 "18 November 2014" "bwa-0.7.11-r999" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -233,8 +233,9 @@ more aggressive read pair. [17]
 .B INPUT/OUTPUT OPTIONS:
 .TP
 .B -p
-Assume the first input query file is interleaved paired-end FASTA/Q. See the
-command description for details.
+Smart pairing. If two adjacent reads have the same name, they are considered
+to form a read pair. This way, paired-end and single-end reads can be mixed
+in a single FASTA/Q stream.
 .TP
 .BI -R \ STR
 Complete read group header line. '\\t' can be used in
