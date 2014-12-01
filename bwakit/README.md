@@ -17,7 +17,7 @@ other programs or use data in `bwa.kit`. The following shows an example about
 how to use bwakit:
 
 ```sh
-# Download the bwa-0.7.11 binary package (download link may change)
+# Download bwakit (or from <http://sourceforge.net/projects/bio-bwa/files/bwakit/> manually)
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
@@ -50,7 +50,7 @@ bwa.kit
 |-- README.md                  This README file.
 |-- run-bwamem                 *Entry script* for the entire mapping pipeline.
 |-- bwa                        *BWA binary*
-|-- k8                         Interpretor for *.js scripts.
+|-- k8                         Interpreter for *.js scripts.
 |-- bwa-postalt.js             Post-process alignments to ALT contigs/decoys/HLA genes.
 |-- htsbox                     Used by run-bwamem for shuffling BAMs and BAM=>FASTQ.
 |-- samblaster                 MarkDuplicates for reads from the same library. v0.1.20

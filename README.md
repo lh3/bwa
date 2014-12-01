@@ -70,6 +70,7 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 3. [Does BWA work on reference sequences longer than 4GB in total?](#4gb)
 4. [Why can one read in a pair has high mapping quality but the other has zero?](#pe0)
 5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](#endref)
+6. [Does BWA work with ALT contigs in the GRCh38 release?](#altctg)
 
 ####<a name="type"></a>1. What types of data does BWA work with?
 
@@ -133,6 +134,9 @@ case, BWA-backtrack will flag the read as unmapped (0x4), but you will see
 position, CIGAR and all the tags. A similar issue may occur to BWA-SW alignment
 as well. BWA-MEM does not have this problem.
 
+####<a name="altctg"></a>6. Does BWA work with ALT contigs in the GRCh38 release?
+
+Yes, since 0.7.11. Please see [README-alt.md][18] for details.
 
 
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
@@ -152,3 +156,4 @@ as well. BWA-MEM does not have this problem.
 [15]: https://github.com/lh3/bwa/tree/mem
 [16]: ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/
 [17]: http://sourceforge.net/projects/bio-bwa/files/bwakit/
+[18]: https://github.com/lh3/bwa/blob/master/README-alt.md

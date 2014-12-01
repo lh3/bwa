@@ -1,7 +1,7 @@
 ## For the Impatient
 
 ```sh
-# Download the bwa-0.7.11 binary package (download link may change)
+# Download bwakit (or from <http://sourceforge.net/projects/bio-bwa/files/bwakit/> manually)
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
@@ -13,8 +13,7 @@ bwa.kit/run-bwamem -o out hs38d6.fa read1.fq read2.fq | sh  # skip "|sh" to show
 
 This generates `out.aln.bam` as the final alignment, `out.hla.top` for best HLA
 genotypes on each gene and `out.hla.all` for other possible HLA genotypes.
-Please check out [bwa/bwakit/README.md][kithelp] for details. If the download
-link above does not work, please acquire the binary package [here][res].
+Please check out [bwa/bwakit/README.md][kithelp] for details.
 
 ## Background
 
