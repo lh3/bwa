@@ -71,6 +71,7 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 4. [Why can one read in a pair has high mapping quality but the other has zero?](#pe0)
 5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](#endref)
 6. [Does BWA work with ALT contigs in the GRCh38 release?](#altctg)
+7. [Can I just run BWA-MEM against GRCh38+ALT without post-processing?](#postalt)
 
 ####<a name="type"></a>1. What types of data does BWA work with?
 
@@ -136,7 +137,21 @@ as well. BWA-MEM does not have this problem.
 
 ####<a name="altctg"></a>6. Does BWA work with ALT contigs in the GRCh38 release?
 
-Yes, since 0.7.11. Please see [README-alt.md][18] for details.
+Yes, since 0.7.11, BWA-MEM officially supports mapping to GRCh38+ALT.
+BWA-backtrack and BWA-SW don't properly support ALT mapping as of now. Please
+see [README-alt.md][18] for details. Briefly, it is recommended to use
+[bwakit][17], the binary release of BWA, for generating the reference genome
+and for mapping.
+
+####<a name="postalt"></a>7. Can I just run BWA-MEM against GRCh38+ALT without post-processing?
+
+If you are not interested in hits to ALT contigs, it is okay to run BWA-MEM
+without post-processing. The alignments produced this way are very close to
+alignments against GRCh38 without ALT contigs. Nonetheless, applying
+post-processing helps to reduce false mappings caused by reads from the
+diverged part of ALT contigs and also enables HLA typing. It is recommended to
+run the post-processing script.
+
 
 
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
