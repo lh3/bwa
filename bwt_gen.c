@@ -338,6 +338,7 @@ BWT *BWTCreate(const bgint_t textLength, unsigned int *decodeTable)
 		bwt->decodeTable = (unsigned*)calloc(DNA_OCC_CNT_TABLE_SIZE_IN_WORD, sizeof(unsigned int));
 		GenerateDNAOccCountTable(bwt->decodeTable);
 	} else {
+		// FIXME Prevent BWTFree() from freeing decodeTable in this case
 		bwt->decodeTable = decodeTable;
 	}
 
@@ -1538,6 +1539,8 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 					(long)bwtInc->numberOfIterationDone, (long)processedTextLength);
 		}
 	}
+
+	fclose(packedFile);
 	return bwtInc;
 }
 
@@ -1545,8 +1548,6 @@ void BWTFree(BWT *bwt)
 {
 	if (bwt == 0) return;
 	free(bwt->cumulativeFreq);
-	free(bwt->bwtCode);
-	free(bwt->occValue);
 	free(bwt->occValueMajor);
 	free(bwt->decodeTable);
 	free(bwt);
@@ -1555,8 +1556,10 @@ void BWTFree(BWT *bwt)
 void BWTIncFree(BWTInc *bwtInc)
 {
 	if (bwtInc == 0) return;
-	free(bwtInc->bwt);
+	BWTFree(bwtInc->bwt);
 	free(bwtInc->workingMemory);
+	free(bwtInc->cumulativeCountInCurrentBuild);
+	free(bwtInc->packedShift);
 	free(bwtInc);
 }
 
