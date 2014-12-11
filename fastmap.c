@@ -192,7 +192,21 @@ int main_mem(int argc, char *argv[])
 		} else if (c == 'R') {
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1; // FIXME: memory leak
 		} else if (c == 'H') {
-			hdr_line = bwa_insert_header(optarg, hdr_line);
+			if (optarg[0] != '@') {
+				FILE *fp;
+				if ((fp = fopen(optarg, "r")) != 0) {
+					char *buf;
+					buf = calloc(1, 0x10000);
+					while (fgets(buf, 0xffff, fp)) {
+						i = strlen(buf);
+						assert(buf[i-1] == '\n'); // a long line
+						buf[i-1] = 0;
+						hdr_line = bwa_insert_header(buf, hdr_line);
+					}
+					free(buf);
+					fclose(fp);
+				}
+			} else hdr_line = bwa_insert_header(optarg, hdr_line);
 		} else if (c == 'I') { // specify the insert size distribution
 			aux.pes0 = pes;
 			pes[1].failed = 0;
@@ -253,7 +267,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            smart pairing (ignoring in2.fq)\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
-		fprintf(stderr, "       -H STR        insert an arbitrary header line [null]\n");
+		fprintf(stderr, "       -H STR/FILE   insert STR to header if it starts with @; or insert lines in FILE [null]\n");
 		fprintf(stderr, "       -j            ignore ALT contigs\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbose level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
