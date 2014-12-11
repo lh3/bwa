@@ -27,10 +27,22 @@ Other notable changes to BWA-MEM:
    finding the best hit, not all hits. Option `-x pbread` is still available,
    but hidden on the command line.
 
- * Added new pre-setting for Oxford Nanopore 2D reads. For small genomes,
-   though, LAST is still more sensitive.
+ * Added a new pre-setting for Oxford Nanopore 2D reads. LAST is still a little
+   more sensitive on bacterial data, but bwa-mem is times faster on human data.
 
  * Added LAST-like seeding. This improves the accuracy for longer reads.
+
+ * Added option `-H` to insert arbitrary header lines.
+
+ * Smarter option `-p`. Given an interleaved FASTQ stream, old bwa-mem identifies
+   the 2i-th and (2i+1)-th reads as a read pair. The new verion identifies
+   adjacent reads with the same read name as a read pair. It is possible to mix
+   single-end and paired-end reads in one FASTQ.
+
+ * Improved parallelization. Old bwa-mem waits for I/O. The new version puts
+   I/O on a separate thread. It performs mapping while reading FASTQ and
+   writing SAM. This saves significant wall-clock time when reading from
+   or writing to a slow Unix pipe.
 
 (0.7.11: XX November 2014, rXXX)
 
