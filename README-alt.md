@@ -58,8 +58,7 @@ alignments and assigns mapQ following these two rules:
 
 2. If there are no non-ALT hits, the best ALT hit is outputted as the primary
    alignment. If there are both ALT and non-ALT hits, non-ALT hits will be
-   primary and ALT hits be supplementary (SAM flag 0x800) if ALT hits are better
-   than the best overlapping non-ALT hits.
+   primary and ALT hits be supplementary (SAM flag 0x800).
 
 In theory, non-ALT alignments from step 1 should be identical to alignments
 against the reference genome with ALT contigs. In practice, the two types of
