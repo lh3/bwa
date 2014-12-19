@@ -370,11 +370,13 @@ int bwa_idx2mem(bwaidx_t *idx)
 void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 {
 	int i, n_SQ = 0;
-	const char *p = hdr_line;
 	extern char *bwa_pg;
-	while ((p = strstr(p, "@SQ\t")) != 0) {
-		if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
-		p += 4;
+	if (hdr_line) {
+		const char *p = hdr_line;
+		while ((p = strstr(p, "@SQ\t")) != 0) {
+			if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
+			p += 4;
+		}
 	}
 	if (n_SQ == 0) {
 		for (i = 0; i < bns->n_seqs; ++i)
