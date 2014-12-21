@@ -11,25 +11,27 @@ For general uses, the single BWA binary still works like the old way.
 
 Another major addition to BWA-MEM is HLA typing, which made possible with the
 new ALT mapping strategy. Necessary data and programs are included in the
-binary release. The wrapper script also performs HLA typing when HLA genes are
-included in the reference genome as additional ALT contigs.
+binary release. The wrapper script also optionally performs HLA typing when HLA
+genes are included in the reference genome as additional ALT contigs.
 
 Other notable changes to BWA-MEM:
 
  * Added option `-b` to `bwa index`. This option tunes the batch size used in
    the construction of BWT. It is advised to use large `-b` for huge reference
-   sequences such as the *nt* database.
+   sequences such as the BLAST *nt* database.
 
- * Optimized for PacBio data. This includes a change to the scoring based on a
-   mini-study done by Aaron Quinlan and a heuristic speedup. Further speedup is
+ * Optimized for PacBio data. This includes a change to scoring based on a
+   study done by Aaron Quinlan and a heuristic speedup. Further speedup is
    possible, but needs more careful investigation.
 
- * Dropped PacBio read-to-read alignment for now. BWA-MEM is only good at
-   finding the best hit, not all hits. Option `-x pbread` is still available,
-   but hidden on the command line.
+ * Dropped PacBio read-to-read alignment for now. BWA-MEM is good for finding
+   the best hit, but is not very sensitive to suboptimal hits. Option `-x pbread`
+   is still available, but hidden on the command line. This may be removed in
+   future releases.
 
  * Added a new pre-setting for Oxford Nanopore 2D reads. LAST is still a little
-   more sensitive on bacterial data, but bwa-mem is times faster on human data.
+   more sensitive on older bacterial data, but bwa-mem is as good on more
+   recent data and is times faster for mapping against mammalian genomes.
 
  * Added LAST-like seeding. This improves the accuracy for longer reads.
 
