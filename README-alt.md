@@ -5,10 +5,10 @@
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
-bwa.kit/run-gen-ref hs38d6   # download GRCh38 and write hs38d6.fa
-bwa.kit/bwa index hs38d6.fa  # create BWA index
+bwa.kit/run-gen-ref hs38D1   # download GRCh38 and write hs38D1.fa
+bwa.kit/bwa index hs38D1.fa  # create BWA index
 # mapping
-bwa.kit/run-bwamem -o out hs38d6.fa read1.fq read2.fq | sh  # skip "|sh" to show command lines
+bwa.kit/run-bwamem -o out -H hs38D1.fa read1.fq read2.fq | sh  # skip "|sh" to show command lines
 ```
 
 This generates `out.aln.bam` as the final alignment, `out.hla.top` for best HLA
@@ -94,11 +94,11 @@ CHM1 short reads and present also in NA12878. You can try [BLAT][blat] or
 
 For a more complete reference genome, we compiled a new set of decoy sequences
 from GenBank clones and the de novo assembly of 254 public [SGDP][sgdp] samples.
-The sequences are included in `hs38d6-extra.fa` from the [BWA binary
+The sequences are included in `hs38D1-extra.fa` from the [BWA binary
 package][res].
 
 In addition to decoy, we also put multiple alleles of HLA genes in
-`hs38d6-extra.fa`. These genomic sequences were acquired from [IMGT/HLA][hladb],
+`hs38D1-extra.fa`. These genomic sequences were acquired from [IMGT/HLA][hladb],
 version 3.18.0 and are used to collect reads sequenced from these genes.
 
 ### HLA typing
@@ -125,26 +125,26 @@ most of them are distributed under restrictive licenses.
 
 To check whether GRCh38 is better than GRCh37, we mapped the CHM1 and NA12878
 unitigs to GRCh37 primary (hs37), GRCh38 primary (hs38) and GRCh38+ALT+decoy
-(hs38d6), and called small variants from the alignment. CHM1 is haploid.
+(hs38D1), and called small variants from the alignment. CHM1 is haploid.
 Ideally, heterozygous calls are false positives (FP). NA12878 is diploid. The
 true positive (TP) heterozygous calls from NA12878 are approximately equal
 to the difference between NA12878 and CHM1 heterozygous calls. A better assembly
 should yield higher TP and lower FP. The following table shows the numbers for
 these assemblies:
 
-|Assembly|hs37   |hs38   |hs38d6|CHM1_1.1|  huref|
+|Assembly|hs37   |hs38   |hs38D1|CHM1_1.1|  huref|
 |:------:|------:|------:|------:|------:|------:|
 |FP      | 255706| 168068| 142516|307172 | 575634|
 |TP      |2142260|2163113|2150844|2167235|2137053|
 
-With this measurement, hs38 is clearly better than hs37. Genome hs38d6 reduces
+With this measurement, hs38 is clearly better than hs37. Genome hs38D1 reduces
 FP by ~25k but also reduces TP by ~12k. We manually inspected variants called
 from hs38 only and found the majority of them are associated with excessive read
 depth, clustered variants or weak alignment. We believe most hs38-only calls are
 problematic. In addition, if we compare two NA12878 replicates from HiSeq X10
 with nearly identical library construction, the difference is ~140k, an order
-of magnitude higher than the difference between hs38 and hs38d6. ALT contigs,
-decoy and HLA genes in hs38d6 improve variant calling and enable the analyses of
+of magnitude higher than the difference between hs38 and hs38D1. ALT contigs,
+decoy and HLA genes in hs38D1 improve variant calling and enable the analyses of
 ALT contigs and HLA typing at little cost.
 
 ## Problems and Future Development

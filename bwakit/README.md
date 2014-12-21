@@ -21,10 +21,10 @@ how to use bwakit:
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
-bwa.kit/run-gen-ref hs38d6   # download GRCh38 and write hs38d6.fa
-bwa.kit/bwa index hs38d6.fa  # create BWA index
+bwa.kit/run-gen-ref hs38D1   # download GRCh38 and write hs38D1.fa
+bwa.kit/bwa index hs38D1.fa  # create BWA index
 # mapping
-bwa.kit/run-bwamem -o out hs38d6.fa read1.fq read2.fq | sh
+bwa.kit/run-bwamem -o out -H hs38D1.fa read1.fq read2.fq | sh
 ```
 
 The last mapping command line will generate the following files:
@@ -44,7 +44,31 @@ Bwakit can be [downloaded here][res]. It is only available to x86_64-linux. The
 scripts in the package are available in the [bwa/bwakit][kit] directory.
 Packaging is done manually for now.
 
-## Contents
+## Limitations
+
+* HLA typing only works for high-coverage human data. The typing accuracy can
+  still be improved. We encourage researchers to develop better HLA typing tools
+  based on the intermediate output of bwakit (for each HLA gene included in the
+  index, bwakit writes all reads matching it in a separate file).
+
+* Duplicate marking only works when all reads from a single paired-end library
+  are provided as the input. This limitation is the necessary tradeoff of fast
+  MarkDuplicate provided by samblaster.
+
+* The adapter trimmer is chosen as it is fast, pipe friendly and does not
+  discard reads. However, it is conservative and suboptimal. If this is a
+  concern, it is recommended to preprocess input reads with a more sophisticated
+  adapter trimmer. We also hope existing trimmers can be modified to operate on
+  an interleaved FASTQ stream. We will replace trimadap once a better trimmer
+  meets our needs.
+
+* Bwakit can be memory demanding depends on the functionality invoked. For 30X
+  human data, bwa-mem takes about 6GB RAM, samblaster uses close to 10GB and BAM
+  shuffling (if the input is sorted BAM) uses several GB. In the current
+  setting, sorting uses about 10GB.
+
+
+## Package Contents  
 ```
 bwa.kit
 |-- README.md                  This README file.

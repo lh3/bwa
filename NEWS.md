@@ -1,17 +1,18 @@
-Release 0.7.11 (XX November, 2014)
------------------------------------
+Release 0.7.11 (XX December, 2014)
+----------------------------------
 
 A major change to BWA-MEM is the support of mapping to ALT contigs in addition
 to the primary assembly. Part of the ALT mapping strategy is implemented in
 BWA-MEM and the rest in a postprocessing script for now. Due to the extra
 layer of complexity on generating the reference genome and on the two-step
 mapping, we start to provide a wrapper script and precompiled binaries since
-this release. Please check README-alt.md for details.
+this release. The package may be more convenient to some specific use cases.
+For general uses, the single BWA binary still works like the old way.
 
 Another major addition to BWA-MEM is HLA typing, which made possible with the
 new ALT mapping strategy. Necessary data and programs are included in the
 binary release. The wrapper script also performs HLA typing when HLA genes are
-also included in the reference genome as additional ALT contigs.
+included in the reference genome as additional ALT contigs.
 
 Other notable changes to BWA-MEM:
 
@@ -44,7 +45,7 @@ Other notable changes to BWA-MEM:
    writing SAM. This saves significant wall-clock time when reading from
    or writing to a slow Unix pipe.
 
-(0.7.11: XX November 2014, rXXX)
+(0.7.11: XX December 2014, r10XX)
 
 
 
