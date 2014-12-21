@@ -17,7 +17,7 @@ other programs or use data in `bwa.kit`. The following shows an example about
 how to use bwakit:
 
 ```sh
-# Download bwakit (or from <http://sourceforge.net/projects/bio-bwa/files/bwakit/> manually)
+# Download the bwa-0.7.11 binary package (download link may change)
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
@@ -50,7 +50,7 @@ bwa.kit
 |-- README.md                  This README file.
 |-- run-bwamem                 *Entry script* for the entire mapping pipeline.
 |-- bwa                        *BWA binary*
-|-- k8                         Interpreter for *.js scripts.
+|-- k8                         Interpretor for *.js scripts.
 |-- bwa-postalt.js             Post-process alignments to ALT contigs/decoys/HLA genes.
 |-- htsbox                     Used by run-bwamem for shuffling BAMs and BAM=>FASTQ.
 |-- samblaster                 MarkDuplicates for reads from the same library. v0.1.20
@@ -60,10 +60,8 @@ bwa.kit
 |
 |-- run-gen-ref                *Entry script* for generating human reference genomes.
 |-- resource-GRCh38            Resources for generating GRCh38
-|   |-- hs38d6-decoy.nt.anno   Top decoy-to-nt hits. Not used by any scripts.
-|   |-- hs38d6-decoy.rm.out    RepeatMasker report. Not used.
-|   |-- hs38d6-extra.fa        Decoy and HLA gene sequences. Used by run-gen-ref.
-|   `-- hs38d6.fa.alt          ALT-to-GRCh38 alignment. Used by run-gen-ref.
+|   |-- hs38D1-extra.fa        Decoy and HLA gene sequences. Used by run-gen-ref.
+|   `-- hs38D1.fa.alt          ALT-to-GRCh38 alignment. Used by run-gen-ref.
 |
 |-- run-HLA                    HLA typing for sequences extracted by bwa-postalt.js.
 |-- typeHLA.sh                 Type one HLA-gene. Called by run-HLA.
