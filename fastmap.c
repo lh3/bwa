@@ -130,10 +130,11 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "1epaFMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:")) >= 0) {
+	while ((c = getopt(argc, argv, "1epaFMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:z:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
+		else if (c == 'z') opt->use_mmap = 1;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
 		else if (c == 'A') opt->a = atoi(optarg), opt0.a = 1;
 		else if (c == 'B') opt->b = atoi(optarg), opt0.b = 1;
@@ -282,6 +283,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
 		fprintf(stderr, "                     FR orientation only. [inferred]\n");
+		fprintf(stderr, "       -z            Use MMAP to access reference structures\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Note: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
