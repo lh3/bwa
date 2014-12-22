@@ -47,7 +47,7 @@ typedef struct {
 	bwtint_t primary; // S^{-1}(0), or the primary index of BWT
 	bwtint_t L2[5]; // C(), cumulative count
 	bwtint_t seq_len; // sequence length
-	bwtint_t bwt_size; // size of bwt, about seq_len/4
+	bwtint_t bwt_size; // number of elements in bwt, about seq_len/4
 	uint32_t *bwt; // BWT
 	// occurance array, separated to two parts
 	uint32_t cnt_table[256];
@@ -55,6 +55,7 @@ typedef struct {
 	int sa_intv;
 	bwtint_t n_sa;
 	bwtint_t *sa;
+	void *bwt_mmap;
 } bwt_t;
 
 typedef struct {
@@ -86,7 +87,7 @@ extern "C" {
 	void bwt_dump_bwt(const char *fn, const bwt_t *bwt);
 	void bwt_dump_sa(const char *fn, const bwt_t *bwt);
 
-	bwt_t *bwt_restore_bwt(const char *fn);
+	bwt_t *bwt_restore_bwt(const char *fn, int use_mmap);
 	void bwt_restore_sa(const char *fn, bwt_t *bwt);
 
 	void bwt_destroy(bwt_t *bwt);

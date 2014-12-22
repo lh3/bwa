@@ -231,7 +231,7 @@ char *bwa_idx_infer_prefix(const char *hint)
 	}
 }
 
-bwt_t *bwa_idx_load_bwt(const char *hint)
+bwt_t *bwa_idx_load_bwt(const char *hint, int use_mmap)
 {
 	char *tmp, *prefix;
 	bwt_t *bwt;
@@ -242,14 +242,14 @@ bwt_t *bwa_idx_load_bwt(const char *hint)
 	}
 	tmp = calloc(strlen(prefix) + 5, 1);
 	strcat(strcpy(tmp, prefix), ".bwt"); // FM-index
-	bwt = bwt_restore_bwt(tmp);
+	bwt = bwt_restore_bwt(tmp, use_mmap);
 	strcat(strcpy(tmp, prefix), ".sa");  // partial suffix array (SA)
 	bwt_restore_sa(tmp, bwt);
 	free(tmp); free(prefix);
 	return bwt;
 }
 
-bwaidx_t *bwa_idx_load_from_disk(const char *hint, int which)
+bwaidx_t *bwa_idx_load_from_disk(const char *hint, int which, int use_mmap)
 {
 	bwaidx_t *idx;
 	char *prefix;
@@ -259,7 +259,7 @@ bwaidx_t *bwa_idx_load_from_disk(const char *hint, int which)
 		return 0;
 	}
 	idx = calloc(1, sizeof(bwaidx_t));
-	if (which & BWA_IDX_BWT) idx->bwt = bwa_idx_load_bwt(hint);
+	if (which & BWA_IDX_BWT) idx->bwt = bwa_idx_load_bwt(hint, use_mmap);
 	if (which & BWA_IDX_BNS) {
 		int i, c;
 		idx->bns = bns_restore(prefix);
@@ -278,9 +278,9 @@ bwaidx_t *bwa_idx_load_from_disk(const char *hint, int which)
 	return idx;
 }
 
-bwaidx_t *bwa_idx_load(const char *hint, int which)
+bwaidx_t *bwa_idx_load(const char *hint, int which, int use_mmap)
 {
-	return bwa_idx_load_from_disk(hint, which);
+	return bwa_idx_load_from_disk(hint, which, use_mmap);
 }
 
 void bwa_idx_destroy(bwaidx_t *idx)

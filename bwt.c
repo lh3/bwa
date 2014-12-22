@@ -39,6 +39,12 @@
 #  include "malloc_wrap.h"
 #endif
 
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+//#include <unistd.h>
+
 void bwt_gen_cnt_table(bwt_t *bwt)
 {
 	int i, j;
@@ -382,6 +388,52 @@ int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int m
  * Read/write BWT and SA *
  *************************/
 
+/*
+ * Create a read-only memory mapping of file fn that is locked in memory.
+ * If size > 0, then the file will be mapped only up to `size`; else the
+ * entire file will be mapped.
+ *
+ * \return Pointer to memory map; aborts in case of error.
+ */
+void* bwt_ro_mmap_file(const char *fn, size_t size) {
+	int fd = open(fn, O_RDONLY);
+	xassert(fd > -1, "Cannot open file");
+
+	struct stat buf;
+	int s = fstat(fd, &buf);
+	xassert(s > -1, "cannot stat file");
+
+	off_t st_size = buf.st_size;
+	if (size > 0) {
+		xassert(st_size >= size, "bad file size");
+		st_size = size;
+	}
+
+	// mmap flags:
+	// MAP_PRIVATE: copy-on-write mapping. Writes not propagated to file. Our mapping is read-only,
+	//              so this setting seems natural.
+	// MAP_POPULATE: prefault page tables for mapping.  Use read-ahead. Only supported for MAP_PRIVATE
+	// MAP_HUGETLB: use huge pages.  Manual says it's only supported since kernel ver. 2.6.32
+	//              and requires special system configuration.
+	// MAP_NORESERVE: don't reserve swap space
+	int map_flags = MAP_PRIVATE | MAP_POPULATE | MAP_NORESERVE;
+	fprintf(stderr, "mmapping file %s (%0.1fMB)\n", fn, ((double)st_size) / (1024*1024));
+	void* m = mmap(0, st_size, PROT_READ, map_flags, fd, 0);
+	if (m == MAP_FAILED) {
+		perror(__func__);
+		err_fatal("Failed to map %s file to memory\n", fn);
+	}
+	if (mlock(m, st_size) < 0) {
+		perror("failed to lock file in memory");
+		err_fatal("Failed lock %s file to memory\n", fn);
+	}
+	fprintf(stderr, "File %s locked in memory\n", fn);
+
+	// MADV_WILLNEED:  Expect access in the near future
+	madvise(m, st_size, MADV_WILLNEED);
+	return m;
+}
+
 void bwt_dump_bwt(const char *fn, const bwt_t *bwt)
 {
 	FILE *fp;
@@ -440,7 +492,7 @@ void bwt_restore_sa(const char *fn, bwt_t *bwt)
 	err_fclose(fp);
 }
 
-bwt_t *bwt_restore_bwt(const char *fn)
+static bwt_t *bwt_restore_bwt_std(const char *fn)
 {
 	bwt_t *bwt;
 	FILE *fp;
@@ -461,9 +513,52 @@ bwt_t *bwt_restore_bwt(const char *fn)
 	return bwt;
 }
 
+static bwt_t *bwt_restore_bwt_mmap(const char* fn)
+{
+	bwt_t *bwt;
+	bwt = (bwt_t*)calloc(1, sizeof(bwt_t));
+
+	void* m = bwt_ro_mmap_file(fn, 0);
+
+	struct stat buf;
+	int s = stat(fn, &buf);
+	xassert(s > -1, "cannot stat file");
+
+	bwt->bwt_mmap = m;
+	bwt->bwt_size = (buf.st_size - sizeof(bwtint_t)*5) >> 2;
+	bwt->primary = ((bwtint_t*)m)[0];
+	int i;
+	for(i = 1; i < 5; ++i) {
+	  bwt->L2[i] = ((bwtint_t*)m)[i];
+	}
+	bwt->bwt = (uint32_t*) ((bwtint_t*)m + 5);
+	bwt->seq_len = bwt->L2[4];
+	bwt_gen_cnt_table(bwt);
+
+	return bwt;
+}
+
+bwt_t *bwt_restore_bwt(const char *fn, int use_mmap)
+{
+	if (use_mmap)
+		return bwt_restore_bwt_mmap(fn);
+	else
+		return bwt_restore_bwt_std(fn);
+}
+
 void bwt_destroy(bwt_t *bwt)
 {
 	if (bwt == 0) return;
-	free(bwt->sa); free(bwt->bwt);
+
+	munlockall();
+	if (bwt->bwt_mmap) {
+		fprintf(stderr, "Unmapping bwt->bwt_mmap\n");
+		munmap(bwt->bwt_mmap, bwt->bwt_size * sizeof(bwt->bwt[0]));
+	}
+	else {
+		free(bwt->bwt);
+	}
+
+	free(bwt->sa);
 	free(bwt);
 }

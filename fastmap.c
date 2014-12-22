@@ -332,7 +332,7 @@ int main_mem(int argc, char *argv[])
 
 	aux.idx = bwa_idx_load_from_shm(argv[optind]);
 	if (aux.idx == 0) {
-		if ((aux.idx = bwa_idx_load(argv[optind], BWA_IDX_ALL)) == 0) return 1; // FIXME: memory leak
+		if ((aux.idx = bwa_idx_load(argv[optind], BWA_IDX_ALL, opt->use_mmap)) == 0) return 1; // FIXME: memory leak
 	} else if (bwa_verbose >= 3)
 		fprintf(stderr, "[M::%s] load the bwa index from shared memory\n", __func__);
 	if (ignore_alt)
@@ -413,7 +413,7 @@ int main_fastmap(int argc, char *argv[])
 
 	fp = xzopen(argv[optind + 1], "r");
 	seq = kseq_init(fp);
-	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS)) == 0) return 1;
+	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS, 0)) == 0) return 1;
 	itr = smem_itr_init(idx->bwt);
 	smem_config(itr, min_intv, max_len, max_intv);
 	while (kseq_read(seq) >= 0) {

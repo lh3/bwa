@@ -146,7 +146,7 @@ void bwa_cal_pac_pos(const bntseq_t *bns, const char *prefix, int n_seqs, bwa_se
 	char str[1024];
 	bwt_t *bwt;
 	// load forward SA
-	strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
+	strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str, 0);
 	strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *p = &seqs[i];
