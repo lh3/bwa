@@ -124,6 +124,28 @@ extern "C" {
 
 	int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_len, int max_intv, bwtintv_t *mem);
 
+
+	/**
+	 * mmap a file, either the entire thing or up to `size`.
+	 *
+	 * This function maps the file in private, read-only mode.  It also asks the OS
+	 * to populate the mapped region, reading the entire file into memory and locking
+	 * it there.  For the operation to work the machine has to have sufficient physical
+	 * memory.
+	 *
+	 * In case of error the function aborts.
+	 *
+	 * \param fn:  path to file to mmap.
+	 * \param size: If `size <= 0` map the entire file; else map up to `size`.
+	 * \return pointer to start of mmapped region, as returned by mmap.
+	 */
+	void* bwt_ro_mmap_file(const char *fn, size_t size);
+
+	/**
+	 * Unmap a file previously mapped with `bwt_ro_mmap_file`.
+	 */
+	void bwt_unmap_file(void* map, size_t map_size);
+
 #ifdef __cplusplus
 }
 #endif

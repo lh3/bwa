@@ -20,6 +20,8 @@ typedef struct {
 	int    is_shm;
 	int64_t l_mem;
 	uint8_t  *mem;
+
+	void     *pac_mmap; // ptr to memory-mapped pac file (if mmap is being used)
 } bwaidx_t;
 
 typedef struct {
