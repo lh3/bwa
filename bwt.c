@@ -416,18 +416,16 @@ void* bwt_ro_mmap_file(const char *fn, size_t size) {
 	// MAP_HUGETLB: use huge pages.  Manual says it's only supported since kernel ver. 2.6.32
 	//              and requires special system configuration.
 	// MAP_NORESERVE: don't reserve swap space
-	int map_flags = MAP_PRIVATE | MAP_POPULATE | MAP_NORESERVE;
+	// MAP_LOCKED:  Lock the pages of the mapped region into memory in the manner of mlock(2)
+	int map_flags = MAP_PRIVATE | MAP_POPULATE | MAP_NORESERVE | MAP_LOCKED;
 	fprintf(stderr, "mmapping file %s (%0.1fMB)\n", fn, ((double)st_size) / (1024*1024));
 	void* m = mmap(0, st_size, PROT_READ, map_flags, fd, 0);
 	if (m == MAP_FAILED) {
 		perror(__func__);
 		err_fatal("Failed to map %s file to memory\n", fn);
 	}
-	if (mlock(m, st_size) < 0) {
-		perror("failed to lock file in memory");
-		err_fatal("Failed lock %s file to memory\n", fn);
-	}
 	fprintf(stderr, "File %s locked in memory\n", fn);
+	close(fd);
 
 	// MADV_WILLNEED:  Expect access in the near future
 	madvise(m, st_size, MADV_WILLNEED);
