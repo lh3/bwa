@@ -245,7 +245,7 @@ bwt_t *bwa_idx_load_bwt(const char *hint, int use_mmap)
 	strcat(strcpy(tmp, prefix), ".bwt"); // FM-index
 	bwt = bwt_restore_bwt(tmp, use_mmap);
 	strcat(strcpy(tmp, prefix), ".sa");  // partial suffix array (SA)
-	bwt_restore_sa(tmp, bwt);
+	bwt_restore_sa(tmp, bwt, use_mmap);
 	free(tmp); free(prefix);
 	return bwt;
 }

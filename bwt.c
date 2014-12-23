@@ -474,7 +474,7 @@ static bwtint_t fread_fix(FILE *fp, bwtint_t size, void *a)
 	return offset;
 }
 
-void bwt_restore_sa(const char *fn, bwt_t *bwt)
+void bwt_restore_sa(const char *fn, bwt_t *bwt, int use_mmap)
 {
 	char skipped[256];
 	FILE *fp;
