@@ -432,6 +432,12 @@ void* bwt_ro_mmap_file(const char *fn, size_t size) {
 	return m;
 }
 
+void bwt_unmap_file(void* map, size_t map_size)
+{
+	if (munmap(map, map_size) < 0)
+		perror(__func__);
+}
+
 void bwt_dump_bwt(const char *fn, const bwt_t *bwt)
 {
 	FILE *fp;
@@ -548,14 +554,15 @@ void bwt_destroy(bwt_t *bwt)
 {
 	if (bwt == 0) return;
 
-	munlockall();
 	if (bwt->bwt_mmap) {
 		fprintf(stderr, "Unmapping bwt->bwt_mmap\n");
-		munmap(bwt->bwt_mmap, bwt->bwt_size * sizeof(bwt->bwt[0]));
+		bwt_unmap_file(bwt->bwt_mmap, bwt->bwt_size * sizeof(bwt->bwt[0]));
 	}
 	else {
 		free(bwt->bwt);
 	}
+
+	bwt->bwt = NULL;
 
 	free(bwt->sa);
 	free(bwt);
