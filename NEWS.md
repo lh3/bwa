@@ -1,4 +1,4 @@
-Release 0.7.11 (XX December, 2014)
+Release 0.7.11 (23 December, 2014)
 ----------------------------------
 
 A major change to BWA-MEM is the support of mapping to ALT contigs in addition
@@ -47,7 +47,16 @@ Other notable changes to BWA-MEM:
    writing SAM. This saves significant wall-clock time when reading from
    or writing to a slow Unix pipe.
 
-(0.7.11: XX December 2014, r10XX)
+With the new release, the recommended way to map Illumina reads to GRCh38 is to
+use the bwakit binary package:
+
+    bwa.kit/run-gen-ref hs38DH
+    bwa.kit/bwa index hs38DH.fa
+    bwa.kit/run-bwamem -t8 -H -o out-prefix hs38DH.fa read1.fq.gz read2.fq.gz | sh
+
+Please check bwa.kit/README.md for details and command line options.
+
+(0.7.11: 23 December 2014, r1034)
 
 
 

@@ -1,4 +1,4 @@
-.TH bwa 1 "21 December 2014" "bwa-0.7.11-r1032" "Bioinformatics tools"
+.TH bwa 1 "23 December 2014" "bwa-0.7.11-r1034" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -614,6 +614,7 @@ R	0x0020	strand of the mate
 s	0x0100	the alignment is not primary
 f	0x0200	QC failure
 d	0x0400	optical or PCR duplicate
+S	0x0800	supplementary alignment
 .TE
 
 .PP
@@ -647,8 +648,6 @@ _
 XS	Suboptimal alignment score
 XF	Support from forward/reverse alignment
 XE	Number of supporting seeds
-_
-XP	Alt primary hits; format: /(chr,pos,CIGAR,mapQ,NM;)+/
 .TE
 
 .PP
