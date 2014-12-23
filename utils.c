@@ -87,13 +87,19 @@ gzFile err_xzopen_core(const char *func, const char *fn, const char *mode)
 	return fp;
 }
 
+void verr_fatal(const char *header, const char *fmt, va_list args)
+{
+	fprintf(stderr, "[%s] ", header);
+	vfprintf(stderr, fmt, args);
+	fprintf(stderr, "\n");
+	exit(EXIT_FAILURE);
+}
+
 void err_fatal(const char *header, const char *fmt, ...)
 {
 	va_list args;
 	va_start(args, fmt);
-	fprintf(stderr, "[%s] ", header);
-	vfprintf(stderr, fmt, args);
-	fprintf(stderr, "\n");
+	verr_fatal(header, fmt, args);
 	va_end(args);
 	exit(EXIT_FAILURE);
 }
