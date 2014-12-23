@@ -85,6 +85,8 @@ extern "C" {
 	int err_fclose(FILE *stream);
 	int err_gzclose(gzFile file);
 
+	void perror_fatal(const char *header, const char *fmt, ...) ATTRIBUTE((noreturn));
+
 	double cputime();
 	double realtime();
 

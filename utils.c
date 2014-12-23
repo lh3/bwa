@@ -104,6 +104,17 @@ void err_fatal(const char *header, const char *fmt, ...)
 	exit(EXIT_FAILURE);
 }
 
+void perror_fatal(const char *header, const char *fmt, ...)
+{
+	perror(header);
+
+	va_list args;
+	va_start(args, fmt);
+	verr_fatal(header, fmt, args);
+	va_end(args);
+	exit(EXIT_FAILURE);
+}
+
 void err_fatal_core(const char *header, const char *fmt, ...)
 {
 	va_list args;
