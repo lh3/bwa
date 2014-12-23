@@ -15,6 +15,7 @@ fi
 preres="resource-human-HLA"
 root=`dirname $0`
 pre=$1.$2
+touch $pre.gt
 
 if [ ! -s $pre.fq ]; then
 	echo '** Empty input file. Abort!' >&2

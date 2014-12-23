@@ -1,34 +1,37 @@
-Release 0.7.11 (XX November, 2014)
------------------------------------
+Release 0.7.11 (23 December, 2014)
+----------------------------------
 
 A major change to BWA-MEM is the support of mapping to ALT contigs in addition
 to the primary assembly. Part of the ALT mapping strategy is implemented in
 BWA-MEM and the rest in a postprocessing script for now. Due to the extra
 layer of complexity on generating the reference genome and on the two-step
 mapping, we start to provide a wrapper script and precompiled binaries since
-this release. Please check README-alt.md for details.
+this release. The package may be more convenient to some specific use cases.
+For general uses, the single BWA binary still works like the old way.
 
 Another major addition to BWA-MEM is HLA typing, which made possible with the
 new ALT mapping strategy. Necessary data and programs are included in the
-binary release. The wrapper script also performs HLA typing when HLA genes are
-also included in the reference genome as additional ALT contigs.
+binary release. The wrapper script also optionally performs HLA typing when HLA
+genes are included in the reference genome as additional ALT contigs.
 
 Other notable changes to BWA-MEM:
 
  * Added option `-b` to `bwa index`. This option tunes the batch size used in
    the construction of BWT. It is advised to use large `-b` for huge reference
-   sequences such as the *nt* database.
+   sequences such as the BLAST *nt* database.
 
- * Optimized for PacBio data. This includes a change to the scoring based on a
-   mini-study done by Aaron Quinlan and a heuristic speedup. Further speedup is
+ * Optimized for PacBio data. This includes a change to scoring based on a
+   study done by Aaron Quinlan and a heuristic speedup. Further speedup is
    possible, but needs more careful investigation.
 
- * Dropped PacBio read-to-read alignment for now. BWA-MEM is only good at
-   finding the best hit, not all hits. Option `-x pbread` is still available,
-   but hidden on the command line.
+ * Dropped PacBio read-to-read alignment for now. BWA-MEM is good for finding
+   the best hit, but is not very sensitive to suboptimal hits. Option `-x pbread`
+   is still available, but hidden on the command line. This may be removed in
+   future releases.
 
  * Added a new pre-setting for Oxford Nanopore 2D reads. LAST is still a little
-   more sensitive on bacterial data, but bwa-mem is times faster on human data.
+   more sensitive on older bacterial data, but bwa-mem is as good on more
+   recent data and is times faster for mapping against mammalian genomes.
 
  * Added LAST-like seeding. This improves the accuracy for longer reads.
 
@@ -44,7 +47,16 @@ Other notable changes to BWA-MEM:
    writing SAM. This saves significant wall-clock time when reading from
    or writing to a slow Unix pipe.
 
-(0.7.11: XX November 2014, rXXX)
+With the new release, the recommended way to map Illumina reads to GRCh38 is to
+use the bwakit binary package:
+
+    bwa.kit/run-gen-ref hs38DH
+    bwa.kit/bwa index hs38DH.fa
+    bwa.kit/run-bwamem -t8 -H -o out-prefix hs38DH.fa read1.fq.gz read2.fq.gz | sh
+
+Please check bwa.kit/README.md for details and command line options.
+
+(0.7.11: 23 December 2014, r1034)
 
 
 
