@@ -410,13 +410,16 @@ void* bwt_ro_mmap_file(const char *fn, size_t size) {
 	}
 
 	// mmap flags:
-	// MAP_PRIVATE: copy-on-write mapping. Writes not propagated to file. Our mapping is read-only,
-	//              so this setting seems natural.
+	// MAP_PRIVATE: copy-on-write mapping. Writes not propagated to file.
 	// MAP_POPULATE: prefault page tables for mapping.  Use read-ahead. Only supported for MAP_PRIVATE
 	// MAP_HUGETLB: use huge pages.  Manual says it's only supported since kernel ver. 2.6.32
 	//              and requires special system configuration.
 	// MAP_NORESERVE: don't reserve swap space
 	// MAP_LOCKED:  Lock the pages of the mapped region into memory in the manner of mlock(2)
+	//              Because we try to lock the pages in memory, this call will fail if the system
+	//              doesn't have sufficient physical memory.  However, without locking, if the
+	//              system can't quite fit the reference the call to mmap will succeed but aligning
+	//              will take forever as parts of the reference are evicted and/or reloaded from disk.
 	int map_flags = MAP_PRIVATE | MAP_POPULATE | MAP_NORESERVE | MAP_LOCKED;
 	fprintf(stderr, "mmapping file %s (%0.1fMB)\n", fn, ((double)st_size) / (1024*1024));
 	void* m = mmap(0, st_size, PROT_READ, map_flags, fd, 0);
@@ -474,7 +477,7 @@ static bwtint_t fread_fix(FILE *fp, bwtint_t size, void *a)
 	return offset;
 }
 
-void bwt_restore_sa(const char *fn, bwt_t *bwt, int use_mmap)
+void bwt_restore_sa_std(const char *fn, bwt_t *bwt)
 {
 	char skipped[256];
 	FILE *fp;
@@ -494,6 +497,49 @@ void bwt_restore_sa(const char *fn, bwt_t *bwt, int use_mmap)
 
 	fread_fix(fp, sizeof(bwtint_t) * (bwt->n_sa - 1), bwt->sa + 1);
 	err_fclose(fp);
+}
+
+void bwt_restore_sa_mmap(const char *fn, bwt_t *bwt)
+{
+	/***************
+	 * File layout:
+	 *     primary:  bwtint_t
+	 *     skipped:  4*bwtint_t
+	 *     sa_intv:  bwtint_t
+	 *     seq_len:  bwtint_t
+	 *     suffix_array: bwtint_t[]
+	 */
+	bwt->sa_mmap = bwt_ro_mmap_file(fn, 0);
+
+	bwtint_t* array = (bwtint_t*)bwt->sa_mmap;
+
+	bwtint_t tmp;
+	tmp = array[0];
+	xassert(tmp == bwt->primary, "SA-BWT inconsistency: primary is not the same.");
+
+	bwt->sa_intv = array[5];
+	tmp = array[6];
+	xassert(tmp == bwt->seq_len, "SA-BWT inconsistency: seq_len is not the same.");
+
+	bwt->n_sa = (bwt->seq_len + bwt->sa_intv) / bwt->sa_intv;
+	bwt->sa = array + 6;
+
+	// Allow write permission. Note that the mapping is private so we won't ever
+	// propagate any changes to the actual file.
+	size_t protected_length = (void*)bwt->sa + 1 - bwt->sa_mmap;
+	if (mprotect(bwt->sa_mmap, protected_length, PROT_READ | PROT_WRITE) < 0)
+		perror_fatal(__func__, "Failed to allow write access to mmaped area\n");
+	bwt->sa[0] = -1;
+	// Remove write permission to the memory map
+	mprotect(bwt->sa_mmap, protected_length, PROT_READ);
+}
+
+void bwt_restore_sa(const char *fn, bwt_t *bwt, int use_mmap)
+{
+	if (use_mmap)
+		bwt_restore_sa_mmap(fn, bwt);
+	else
+		bwt_restore_sa_std(fn, bwt);
 }
 
 static bwt_t *bwt_restore_bwt_std(const char *fn)
