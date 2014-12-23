@@ -429,7 +429,6 @@ void* bwt_ro_mmap_file(const char *fn, size_t size) {
 	}
 	fprintf(stderr, "File %s locked in memory\n", fn);
 	close(fd);
-
 	// MADV_WILLNEED:  Expect access in the near future
 	madvise(m, st_size, MADV_WILLNEED);
 	return m;
