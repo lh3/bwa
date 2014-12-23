@@ -21,10 +21,10 @@ how to use bwakit:
 wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
-bwa.kit/run-gen-ref hs38D1   # download GRCh38 and write hs38D1.fa
-bwa.kit/bwa index hs38D1.fa  # create BWA index
+bwa.kit/run-gen-ref hs38DH   # download GRCh38 and write hs38DH.fa
+bwa.kit/bwa index hs38DH.fa  # create BWA index
 # mapping
-bwa.kit/run-bwamem -o out -H hs38D1.fa read1.fq read2.fq | sh
+bwa.kit/run-bwamem -o out -H hs38DH.fa read1.fq read2.fq | sh
 ```
 
 The last mapping command line will generate the following files:
@@ -63,9 +63,9 @@ Packaging is done manually for now.
   meets our needs.
 
 * Bwakit can be memory demanding depends on the functionality invoked. For 30X
-  human data, bwa-mem takes about 6GB RAM, samblaster uses close to 10GB and BAM
-  shuffling (if the input is sorted BAM) uses several GB. In the current
-  setting, sorting uses about 10GB.
+  human data, bwa-mem takes about 11GB RAM with 32 threads, samblaster uses
+  close to 10GB and BAM shuffling (if the input is sorted BAM) uses several GB.
+  In the current setting, sorting uses about 10GB.
 
 
 ## Package Contents  
@@ -84,8 +84,8 @@ bwa.kit
 |
 |-- run-gen-ref                *Entry script* for generating human reference genomes.
 |-- resource-GRCh38            Resources for generating GRCh38
-|   |-- hs38D1-extra.fa        Decoy and HLA gene sequences. Used by run-gen-ref.
-|   `-- hs38D1.fa.alt          ALT-to-GRCh38 alignment. Used by run-gen-ref.
+|   |-- hs38DH-extra.fa        Decoy and HLA gene sequences. Used by run-gen-ref.
+|   `-- hs38DH.fa.alt          ALT-to-GRCh38 alignment. Used by run-gen-ref.
 |
 |-- run-HLA                    HLA typing for sequences extracted by bwa-postalt.js.
 |-- typeHLA.sh                 Type one HLA-gene. Called by run-HLA.

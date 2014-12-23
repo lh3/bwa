@@ -29,7 +29,7 @@ Examples:
 
  * Map paired-end reads to GRCh38+ALT+decoy+HLA and perform HLA typing:
 
-     run-bwamem -o prefix -t8 -HR"@RG\tID:foo\tSM:bar" hs38D1.fa read1.fq.gz read2.fq.gz
+     run-bwamem -o prefix -t8 -HR"@RG\tID:foo\tSM:bar" hs38DH.fa read1.fq.gz read2.fq.gz
 
    Note: HLA typing is only effective for high-coverage data. The typing accuracy varies
    with the quality of input. It is only intended for research purpose, not for diagnostic.
@@ -38,7 +38,7 @@ Examples:
    sort the output. The BAM may contain single-end or paired-end reads, or a mixture of
    the two types. Specifying -R stops read group transfer.
 
-     run-bwamem -sao prefix hs38D1.fa old-srt.bam
+     run-bwamem -sao prefix hs38DH.fa old-srt.bam
 
    Note: the adaptor trimmer included in bwa.kit is chosen because it fits the current
    mapping pipeline better. It is conservative and suboptimal. A more sophisticated
@@ -46,7 +46,7 @@ Examples:
 
  * Remap name-grouped BAM and mark duplicates:
  
-     run-bwamem -Sdo prefix hs38D1.fa old-unsrt.bam
+     run-bwamem -Sdo prefix hs38DH.fa old-unsrt.bam
 
    Note: streamed duplicate marking requires all reads from a single paired-end library
    to be aligned at the same time.
@@ -93,7 +93,7 @@ if (defined $opts{o}) {
 } elsif ($ARGV[1] =~ /^(\S+)\.(fastq|fq|fasta|fa|mag|mag\.gz|fasta\.gz|fa\.gz|fastq\.gz|fq\.gz|bam)$/) {
 	$prefix = $1;
 }
-die("ERROR: failed to identify the prefix for output. Please specify -p.\n") unless defined($prefix);
+die("ERROR: failed to identify the prefix for output. Please specify -o.\n") unless defined($prefix);
 
 my $size = 0;
 my $comp_ratio = 3.;
@@ -167,7 +167,7 @@ $cmd .= defined($opts{s})? "  | $root/samtools sort -@ $t_sort -m1G - $prefix.al
 
 if ($has_hla && defined($opts{H}) && (!defined($opts{x}) || $opts{x} eq 'intractg')) {
 	$cmd .= "$root/run-HLA ". (defined($opts{x}) && $opts{x} eq 'intractg'? "-A " : "") . "$prefix.hla > $prefix.hla.top 2> $prefix.log.hla;\n";
-	$cmd .= "cat $prefix.hla.HLA*.gt | grep ^GT | cut -f2- > $prefix.hla.all;\n";
+	$cmd .= "touch $prefix.hla.HLA-dummy.gt; cat $prefix.hla.HLA*.gt | grep ^GT | cut -f2- > $prefix.hla.all;\n";
 	$cmd .= "rm -f $prefix.hla.HLA*;\n" unless defined($opts{k});
 }
 
