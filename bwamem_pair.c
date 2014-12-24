@@ -338,8 +338,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			h[i].XA = XA[i]? XA[i][z[i]] : 0;
 			aa[i][n_aa[i]++] = h[i];
 			if (n_pri[i] < a[i].n) { // the read has ALT hits
-				g[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[n_pri[i]]);
-				g[i].flag |= 0x40<<i | extra_flag;
+				mem_alnreg_t *p = &a[i].a[n_pri[i]];
+				if (p->score < opt->T || p->secondary >= 0 || !p->is_alt) continue;
+				g[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, p);
+				g[i].flag |= 0x800 | 0x40<<i | extra_flag;
 				g[i].XA = XA[i]? XA[i][n_pri[i]] : 0;
 				aa[i][n_aa[i]++] = g[i];
 			}
