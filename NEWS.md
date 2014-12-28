@@ -1,3 +1,13 @@
+Release 0.7.12 (28 December 2014)
+---------------------------------
+
+This release fixed a bug in the pair-end mode when ALT contigs are present. It
+leads to undercalling in regions overlapping ALT contigs.
+
+(0.7.12: 28 December 2014, r1039)
+
+
+
 Release 0.7.11 (23 December, 2014)
 ----------------------------------
 
