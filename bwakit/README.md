@@ -18,7 +18,7 @@ how to use bwakit:
 
 ```sh
 # Download the bwa-0.7.11 binary package (download link may change)
-wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.11_x64-linux.tar.bz2/download \
+wget -O- http://sourceforge.net/projects/bio-bwa/files/bwakit/bwakit-0.7.12_x64-linux.tar.bz2/download \
   | gzip -dc | tar xf -
 # Generate the GRCh38+ALT+decoy+HLA and create the BWA index
 bwa.kit/run-gen-ref hs38DH   # download GRCh38 and write hs38DH.fa
