@@ -602,13 +602,20 @@ void bwt_destroy(bwt_t *bwt)
 	if (bwt->bwt_mmap) {
 		fprintf(stderr, "Unmapping bwt->bwt_mmap\n");
 		bwt_unmap_file(bwt->bwt_mmap, bwt->bwt_size * sizeof(bwt->bwt[0]));
+		fprintf(stderr, "done\n");
 	}
 	else {
 		free(bwt->bwt);
 	}
 
-	bwt->bwt = NULL;
+	if (bwt->sa_mmap) {
+		fprintf(stderr, "Unmapping bwt->sa_mmap\n");
+		bwt_unmap_file(bwt->sa_mmap, (bwt->seq_len + bwt->sa_intv) / bwt->sa_intv);
+		fprintf(stderr, "done\n");
+	}
+	else {
+		free(bwt->sa);
+	}
 
-	free(bwt->sa);
 	free(bwt);
 }

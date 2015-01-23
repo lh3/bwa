@@ -130,7 +130,7 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "1epaFMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:z:")) >= 0) {
+	while ((c = getopt(argc, argv, "1epaFMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:z")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
@@ -330,7 +330,8 @@ int main_mem(int argc, char *argv[])
 	} else update_a(opt, &opt0);
 	bwa_fill_scmat(opt->a, opt->b, opt->mat);
 
-	aux.idx = bwa_idx_load_from_shm(argv[optind]);
+	if (!opt->use_mmap)
+		aux.idx = bwa_idx_load_from_shm(argv[optind]);
 	if (aux.idx == 0) {
 		if ((aux.idx = bwa_idx_load(argv[optind], BWA_IDX_ALL, opt->use_mmap)) == 0) return 1; // FIXME: memory leak
 	} else if (bwa_verbose >= 3)
