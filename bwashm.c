@@ -199,7 +199,7 @@ int main_shm(int argc, char *argv[])
 	if (optind < argc) {
 		if (bwa_shm_test(argv[optind]) == 0) {
 			bwaidx_t *idx;
-			idx = bwa_idx_load_from_disk(argv[optind], BWA_IDX_ALL);
+			idx = bwa_idx_load_from_disk(argv[optind], BWA_IDX_ALL, 0);
 			if (bwa_shm_stage(idx, argv[optind], tmpfn) < 0) {
 				fprintf(stderr, "[E::%s] failed to stage the index in shared memory\n", __func__);
 				ret = 1;
