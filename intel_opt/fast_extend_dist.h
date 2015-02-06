@@ -6,52 +6,18 @@ The above copyright notice and this permission notice shall be included in all c
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
-#ifndef ED_INTRAV_H
-#define ED_INTRAV_H
+#ifndef _FAST_EXTEND_DIST_H
+#define _FAST_EXTEND_DIST_H
 
-#include "ed_intravED.h"
-
-const int costMatrixRowCnt = 5 ;
-const int8_t costMatrix[] = {
-  1, -4, -4, -4, -1,
-  -4, 1, -4, -4, -1,
-  -4, -4, 1, -4, -1,
-  -4, -4, -4, 1, -1,
-  -1, -1, -1, -1, -1 
-} ;
-
-const int gapo = 6 ;
-const int gape = 1 ; 
-
-int run_ksw_extend(uint8_t* refSeq, int refLen, uint8_t* querySeq, int queryLen,
-		   int bandW, int initScore, int endBonus, int zdrop, int costMatrixRowCnt,
-		   const int8_t* costMatrix, int gapo, int gape,
-		   int& alignedQLen, int& alignedRLen) ;
-
-struct SWFeedback {
-  int maxQLen ;
-  int maxRLen ;
-  int maxBand ;
-
-  SWFeedback():maxQLen(0), maxRLen(0), maxBand(0) {} ;
-
-  SWFeedback(int qlen, int rlen, int band): maxQLen(qlen), maxRLen(rlen), maxBand(band) {}
-  void updateMax(int qlen, int rlen, int band) {
-    maxQLen = std::max(maxQLen, qlen) ;
-    maxRLen = std::max(maxRLen, rlen) ;
-    maxBand = std::max(maxBand, band) ;
-  }
-} ;
-
-inline ostream& operator<<(ostream& os, const SWFeedback& swfb) {
-  os << "{" << swfb.maxQLen << " " << swfb.maxRLen << " " << swfb.maxBand << "}" ;
-  return os ;
-}
-
+//
+// This class handles the distance computations by reading the probes at BitVec, and
+// storing the computed distance values in EDVec.
+//
 template<class BitVec, class EDVec>
 class DistVec {
 
   EDVec dist_, mask_ ;
+  BitVec probeShiftCnt_ ;
   int queryLen_, msWordIndex_, probeOffset_ ;
   
  public: 
@@ -60,6 +26,7 @@ class DistVec {
   queryLen_(queryLen), msWordIndex_(EDVec::getLastWordIndexFor(queryLen)),
     probeOffset_(EDVec::getProbeOffsetFor(queryLen)) {
 
+    probeShiftCnt_.setAll64BitWords(probeOffset_+1) ;
     mask_.setWordsAsMask() ;
   }
 
@@ -72,27 +39,14 @@ class DistVec {
   }
 
   void addDist (const BitVec& LP0, const BitVec& LP1) {
-
-    /*
-    cout << std::hex << "+++++" << LP0 << " " << LP1 << " " << std::dec << probeOffset_ << endl
-	 << std::hex << (EDVec(LP0.shiftProbesRight(probeOffset_))) << " "
-	 << ((EDVec(LP0.shiftProbesRight(probeOffset_))) & mask_) << endl 
-	 << std::hex << (EDVec(LP1.shiftProbesRight(probeOffset_))) << " "
-	 << ((EDVec(LP1.shiftProbesRight(probeOffset_))) & mask_)
-	 << std::dec << endl ;
-    cout << "Dist before: " << dist_ << endl ;
-    */
-
-    dist_ += (EDVec(LP0.shiftProbesRight(probeOffset_)) & mask_) ;
-    dist_ -= (EDVec(LP1.shiftProbesRight(probeOffset_)) & mask_) ;
-
-    //cout << "Dist after: " << dist_ << endl ;
-
+ 
+    dist_ += (EDVec(LP0.shiftProbesRight(probeOffset_, probeShiftCnt_)) & mask_) ;
+    dist_ -= (EDVec(LP1.shiftProbesRight(probeOffset_, probeShiftCnt_)) & mask_) ;
   }
 
   EDVec getDeltaDistVec(const BitVec& LP0, const BitVec& LP1) {
-    EDVec r = EDVec(LP0.shiftProbesRight(probeOffset_)) & mask_ ;
-    r -= EDVec(LP1.shiftProbesRight(probeOffset_)) & mask_ ;
+    EDVec r = EDVec(LP0.shiftProbesRight(probeOffset_, probeShiftCnt_)) & mask_ ;
+    r -= EDVec(LP1.shiftProbesRight(probeOffset_,probeShiftCnt_)) & mask_ ;
 
     return r ;
   }
@@ -128,4 +82,5 @@ class DistVec {
 
 } ;
 
-#endif // #ifndef ED_INTRAV_H
+
+#endif // #ifndef _FAST_EXTEND_DIST_H
