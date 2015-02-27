@@ -1,4 +1,4 @@
-.TH bwa 1 "19 May 2014" "bwa-0.7.9-r783" "Bioinformatics tools"
+.TH bwa 1 "23 December 2014" "bwa-0.7.12-r1034" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -75,7 +75,7 @@ appropriate algorithm will be chosen automatically.
 .TP
 .B mem
 .B bwa mem
-.RB [ -aCHMpP ]
+.RB [ -aCHjMpP ]
 .RB [ -t
 .IR nThreads ]
 .RB [ -k
@@ -88,6 +88,12 @@ appropriate algorithm will be chosen automatically.
 .IR seedSplitRatio ]
 .RB [ -c
 .IR maxOcc ]
+.RB [ -D
+.IR chainShadow ]
+.RB [ -m
+.IR maxMateSW ]
+.RB [ -W
+.IR minSeedMatch ]
 .RB [ -A
 .IR matchScore ]
 .RB [ -B
@@ -102,6 +108,8 @@ appropriate algorithm will be chosen automatically.
 .IR unpairPen ]
 .RB [ -R
 .IR RGline ]
+.RB [ -H
+.IR HDlines ]
 .RB [ -v
 .IR verboseLevel ]
 .I db.prefix
@@ -193,9 +201,28 @@ Discard a MEM if it has more than
 .I INT
 occurence in the genome. This is an insensitive parameter. [500]
 .TP
+.BI -D \ INT
+Drop chains shorter than
+.I FLOAT
+fraction of the longest overlapping chain [0.5]
+.TP
+.BI -m \ INT
+Perform at most
+.I INT
+rounds of mate-SW [50]
+.TP
+.BI -W \ INT
+Drop a chain if the number of bases in seeds is smaller than
+.IR INT .
+This option is primarily used for longer contigs/reads. When positive, it also
+affects seed filtering. [0]
+.TP
 .B -P
 In the paired-end mode, perform SW to rescue missing hits only but do not try to find
 hits that fit a proper pair.
+
+.TP
+.B SCORING OPTIONS:
 .TP
 .BI -A \ INT
 Matching score. [1]
@@ -233,8 +260,9 @@ more aggressive read pair. [17]
 .B INPUT/OUTPUT OPTIONS:
 .TP
 .B -p
-Assume the first input query file is interleaved paired-end FASTA/Q. See the
-command description for details.
+Smart pairing. If two adjacent reads have the same name, they are considered
+to form a read pair. This way, paired-end and single-end reads can be mixed
+in a single FASTA/Q stream.
 .TP
 .BI -R \ STR
 Complete read group header line. '\\t' can be used in
@@ -243,15 +271,30 @@ and will be converted to a TAB in the output SAM. The read group ID will be
 attached to every read in the output. An example is '@RG\\tID:foo\\tSM:bar'.
 [null]
 .TP
+.BI -H \ ARG
+If ARG starts with @, it is interpreted as a string and gets inserted into the
+output SAM header; otherwise, ARG is interpreted as a file with all lines
+starting with @ in the file inserted into the SAM header. [null]
+.TP
 .BI -T \ INT
 Don't output alignment with score lower than
 .IR INT .
 This option affects output and occasionally SAM flag 2. [30]
 .TP
-.BI -h \ INT
+.BI -j
+Treat ALT contigs as part of the primary assembly (i.e. ignore the
+.I db.prefix.alt
+file).
+.TP
+.BI -h \ INT[,INT2]
 If a query has not more than
 .I INT
-hits with score higher than 80% of the best hit, output them all in the XA tag [5]
+hits with score higher than 80% of the best hit, output them all in the XA tag.
+If
+.I INT2
+is specified, BWA-MEM outputs up to
+.I INT2
+hits if the list contains a hit to an ALT contig. [5,200]
 .TP
 .B -a
 Output all found alignments for single-end or unpaired paired-end reads. These
@@ -571,6 +614,7 @@ R	0x0020	strand of the mate
 s	0x0100	the alignment is not primary
 f	0x0200	QC failure
 d	0x0400	optical or PCR duplicate
+S	0x0800	supplementary alignment
 .TE
 
 .PP
@@ -604,8 +648,6 @@ _
 XS	Suboptimal alignment score
 XF	Support from forward/reverse alignment
 XE	Number of supporting seeds
-_
-XP	Alt primary hits; format: /(chr,pos,CIGAR,mapQ,NM;)+/
 .TE
 
 .PP

@@ -179,17 +179,25 @@ bntseq_t *bns_restore(const char *prefix)
 	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
 		char str[1024];
 		khash_t(str) *h;
-		int i, absent;
+		int c, i, absent;
 		khint_t k;
 		h = kh_init(str);
 		for (i = 0; i < bns->n_seqs; ++i) {
 			k = kh_put(str, h, bns->anns[i].name, &absent);
 			kh_val(h, k) = i;
 		}
-		while (fscanf(fp, "%s", str) == 1) {
-			k = kh_get(str, h, str);
-			if (k != kh_end(h))
-				bns->anns[kh_val(h, k)].is_alt = 1;
+		i = 0;
+		while ((c = fgetc(fp)) != EOF) {
+			if (c == '\t' || c == '\n' || c == '\r') {
+				str[i] = 0;
+				if (str[0] != '@') {
+					k = kh_get(str, h, str);
+					if (k != kh_end(h))
+						bns->anns[kh_val(h, k)].is_alt = 1;
+				}
+				while (c != '\n' && c != EOF) c = fgetc(fp);
+				i = 0;
+			} else str[i++] = c; // FIXME: potential segfault here
 		}
 		kh_destroy(str, h);
 		fclose(fp);
@@ -226,7 +234,7 @@ static uint8_t *add1(const kseq_t *seq, bntseq_t *bns, uint8_t *pac, int64_t *m_
 	}
 	p = bns->anns + bns->n_seqs;
 	p->name = strdup((char*)seq->name.s);
-	p->anno = seq->comment.s? strdup((char*)seq->comment.s) : strdup("(null)");
+	p->anno = seq->comment.l > 0? strdup((char*)seq->comment.s) : strdup("(null)");
 	p->gi = 0; p->len = seq->seq.l;
 	p->offset = (bns->n_seqs == 0)? 0 : (p-1)->offset + (p-1)->len;
 	p->n_ambs = 0;
@@ -358,8 +366,9 @@ int bns_intv2rid(const bntseq_t *bns, int64_t rb, int64_t re)
 {
 	int is_rev, rid_b, rid_e;
 	if (rb < bns->l_pac && re > bns->l_pac) return -2;
+	assert(rb <= re);
 	rid_b = bns_pos2rid(bns, bns_depos(bns, rb, &is_rev));
-	rid_e = bns_pos2rid(bns, bns_depos(bns, re, &is_rev) - 1);
+	rid_e = rb < re? bns_pos2rid(bns, bns_depos(bns, re - 1, &is_rev)) : rid_b;
 	return rid_b == rid_e? rid_b : -1;
 }
 

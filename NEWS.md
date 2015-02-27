@@ -1,48 +1,72 @@
-Release 0.7.11 (XX September, 2014)
------------------------------------
+Release 0.7.12 (28 December 2014)
+---------------------------------
 
-A major change to BWA-MEM is the support of mapping to ALT contigs. To use this
-feature, users need to manually create a file `indexbase.alt` with each line
-giving the name of an ALT contig. During alignment, BWA-MEM will be able to
-classify potential hits to ALT and non-ALT hits. It reports alignments and
-assigns mapping quality (mapQ) loosely following these rules:
+This release fixed a bug in the pair-end mode when ALT contigs are present. It
+leads to undercalling in regions overlapping ALT contigs.
 
- 1. The original mapQ of a non-ALT hit is computed across non-ALT hits only.
-    The reported mapQ of an ALT hit is always computed across all hits.
+(0.7.12: 28 December 2014, r1039)
 
- 2. An ALT hit is only reported if its score is strictly better than all
-    overlapping non-ALT hits. A reported ALT hit is flagged with 0x800
-    (supplementary) unless there are no non-ALT hits.
 
- 3. The mapQ of a non-ALT hit is reduced to zero if its score is less than 80%
-    (controlled by option `-g`) of the score of an overlapping ALT hit. In this
-    case, the original mapQ is moved to the `om` tag.
 
-This way, non-ALT alignments are only affected by ALT contigs if there are
-significantly better ALT alignments. BWA-MEM is carefully engineered such that
-ALT contigs do not interfere with the alignments to the primary assembly.
+Release 0.7.11 (23 December, 2014)
+----------------------------------
 
-Users may consider to use ALT contigs from GRCh38. I am also constructing a
-non-redundant and more complete set of sequences missing from GRCh38.
+A major change to BWA-MEM is the support of mapping to ALT contigs in addition
+to the primary assembly. Part of the ALT mapping strategy is implemented in
+BWA-MEM and the rest in a postprocessing script for now. Due to the extra
+layer of complexity on generating the reference genome and on the two-step
+mapping, we start to provide a wrapper script and precompiled binaries since
+this release. The package may be more convenient to some specific use cases.
+For general uses, the single BWA binary still works like the old way.
+
+Another major addition to BWA-MEM is HLA typing, which made possible with the
+new ALT mapping strategy. Necessary data and programs are included in the
+binary release. The wrapper script also optionally performs HLA typing when HLA
+genes are included in the reference genome as additional ALT contigs.
 
 Other notable changes to BWA-MEM:
 
  * Added option `-b` to `bwa index`. This option tunes the batch size used in
    the construction of BWT. It is advised to use large `-b` for huge reference
-   sequences such as the *nt* database.
+   sequences such as the BLAST *nt* database.
 
- * Optimized for PacBio data. This includes a change to the scoring based on a
-   mini-study done by Aaron Quinlan and a heuristic speedup. Further speedup is
+ * Optimized for PacBio data. This includes a change to scoring based on a
+   study done by Aaron Quinlan and a heuristic speedup. Further speedup is
    possible, but needs more careful investigation.
 
- * Dropped PacBio read-to-read alignment for now. BWA-MEM is only good at
-   finding the best hit, not all hits. Option `-x pbread` is still available,
-   but hidden on the command line.
+ * Dropped PacBio read-to-read alignment for now. BWA-MEM is good for finding
+   the best hit, but is not very sensitive to suboptimal hits. Option `-x pbread`
+   is still available, but hidden on the command line. This may be removed in
+   future releases.
 
- * Added new pre-setting for Oxford Nanopore 2D reads. For small genomes,
-   though, LAST is still more sensitive.
+ * Added a new pre-setting for Oxford Nanopore 2D reads. LAST is still a little
+   more sensitive on older bacterial data, but bwa-mem is as good on more
+   recent data and is times faster for mapping against mammalian genomes.
 
-(0.7.11: XX September 2014, rXXX)
+ * Added LAST-like seeding. This improves the accuracy for longer reads.
+
+ * Added option `-H` to insert arbitrary header lines.
+
+ * Smarter option `-p`. Given an interleaved FASTQ stream, old bwa-mem identifies
+   the 2i-th and (2i+1)-th reads as a read pair. The new verion identifies
+   adjacent reads with the same read name as a read pair. It is possible to mix
+   single-end and paired-end reads in one FASTQ.
+
+ * Improved parallelization. Old bwa-mem waits for I/O. The new version puts
+   I/O on a separate thread. It performs mapping while reading FASTQ and
+   writing SAM. This saves significant wall-clock time when reading from
+   or writing to a slow Unix pipe.
+
+With the new release, the recommended way to map Illumina reads to GRCh38 is to
+use the bwakit binary package:
+
+    bwa.kit/run-gen-ref hs38DH
+    bwa.kit/bwa index hs38DH.fa
+    bwa.kit/run-bwamem -t8 -H -o out-prefix hs38DH.fa read1.fq.gz read2.fq.gz | sh
+
+Please check bwa.kit/README.md for details and command line options.
+
+(0.7.11: 23 December 2014, r1034)
 
 
 

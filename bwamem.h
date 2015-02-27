@@ -20,6 +20,7 @@ typedef struct __smem_i smem_i;
 #define MEM_F_ALN_REG   0x80
 #define MEM_F_REF_HDR	0x100
 #define MEM_F_SOFTCLIP  0x200
+#define MEM_F_SMARTPE   0x400
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
@@ -48,7 +49,6 @@ typedef struct {
 	float XA_drop_ratio;    // when counting hits for the XA tag, ignore alignments with score < XA_drop_ratio * max_score; only effective for the XA tag
 	float mask_level_redun;
 	float mapQ_coef_len;
-	float min_pa_ratio;
 	int mapQ_coef_fac;
 	int max_ins;            // when estimating insert size distribution, skip pairs with insert longer than this value
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
@@ -69,7 +69,7 @@ typedef struct {
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
-	int secondary_alt;
+	int secondary_all;
 	int seedlen0;   // length of the starting seed
 	int n_comp:30, is_alt:2; // number of sub-alignments chained together
 	float frac_rep;

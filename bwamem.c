@@ -59,7 +59,7 @@ mem_opt_t *mem_opt_init()
 	o->pen_unpaired = 17;
 	o->pen_clip5 = o->pen_clip3 = 5;
 
-	o->max_mem_intv = 0;
+	o->max_mem_intv = 20;
 
 	o->min_seed_len = 19;
 	o->split_width = 10;
@@ -73,13 +73,12 @@ mem_opt_t *mem_opt_init()
 	o->chunk_size = 10000000;
 	o->n_threads = 1;
 	o->max_XA_hits = 5;
-	o->max_XA_hits_alt = 50;
+	o->max_XA_hits_alt = 200;
 	o->max_matesw = 50;
 	o->mask_level_redun = 0.95;
 	o->min_chain_weight = 0;
 	o->max_chain_extend = 1<<30;
 	o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
-	o->min_pa_ratio = 0.8;
 	bwa_fill_scmat(o->a, o->b, o->mat);
 	return o;
 }
@@ -121,7 +120,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 	// first pass: find all SMEMs
 	while (x < len) {
 		if (seq[x] < 4) {
-			x = bwt_smem1a(bwt, len, seq, x, start_width, split_len, opt->max_mem_intv, &a->mem1, a->tmpv);
+			x = bwt_smem1(bwt, len, seq, x, start_width, &a->mem1, a->tmpv);
 			for (i = 0; i < a->mem1.n; ++i) {
 				bwtintv_t *p = &a->mem1.a[i];
 				int slen = (uint32_t)p->info - (p->info>>32); // seed length
@@ -131,7 +130,6 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 		} else ++x;
 	}
 	// second pass: find MEMs inside a long SMEM
-	if (opt->max_mem_intv > 0) goto sort_intv;
 	old_n = a->mem.n;
 	for (k = 0; k < old_n; ++k) {
 		bwtintv_t *p = &a->mem.a[k];
@@ -142,8 +140,24 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 			if ((uint32_t)a->mem1.a[i].info - (a->mem1.a[i].info>>32) >= opt->min_seed_len)
 				kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
 	}
+	// third pass: LAST-like
+	if (opt->max_mem_intv > 0) {
+		x = 0;
+		while (x < len) {
+			if (seq[x] < 4) {
+				if (1) {
+					bwtintv_t m;
+					x = bwt_seed_strategy1(bwt, len, seq, x, opt->min_seed_len, opt->max_mem_intv, &m);
+					if (m.x[2] > 0) kv_push(bwtintv_t, a->mem, m);
+				} else { // for now, we never come to this block which is slower
+					x = bwt_smem1a(bwt, len, seq, x, start_width, opt->max_mem_intv, &a->mem1, a->tmpv);
+					for (i = 0; i < a->mem1.n; ++i)
+						kv_push(bwtintv_t, a->mem, a->mem1.a[i]);
+				}
+			} else ++x;
+		}
+	}
 	// sort
-sort_intv:
 	ks_introsort(mem_intv, a->mem.n, a->mem.a);
 }
 
@@ -260,7 +274,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 		bwtintv_t *p = &aux->mem.a[i];
 		int step, count, slen = (uint32_t)p->info - (p->info>>32); // seed length
 		int64_t k;
-		if (slen < opt->min_seed_len) continue; // ignore if too short or too repetitive
+		// if (slen < opt->min_seed_len) continue; // ignore if too short or too repetitive
 		step = p->x[2] > opt->max_occ? p->x[2] / opt->max_occ : 1;
 		for (k = count = 0; k < p->x[2] && count < opt->max_occ; k += step, ++count) {
 			mem_chain_t tmp, *lower, *upper;
@@ -500,7 +514,8 @@ static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *
 				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].sub == 0) a[j].sub = a[i].score;
-					if (a[j].score - a[i].score <= tmp) ++a[j].sub_n;
+					if (a[j].score - a[i].score <= tmp && (a[j].is_alt || !a[i].is_alt))
+						++a[j].sub_n;
 					break;
 				}
 			}
@@ -512,38 +527,38 @@ static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *
 
 int mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id)
 {
-	int i, j, n_pri;
+	int i, n_pri;
 	int_v z = {0,0,0};
 	if (n == 0) return 0;
 	for (i = n_pri = 0; i < n; ++i) {
-		a[i].sub = a[i].alt_sc = 0, a[i].secondary = a[i].secondary_alt = -1, a[i].hash = hash_64(id+i);
+		a[i].sub = a[i].alt_sc = 0, a[i].secondary = a[i].secondary_all = -1, a[i].hash = hash_64(id+i);
 		if (!a[i].is_alt) ++n_pri;
 	}
 	ks_introsort(mem_ars_hash, n, a);
 	mem_mark_primary_se_core(opt, n, a, &z);
 	for (i = 0; i < n; ++i) {
 		mem_alnreg_t *p = &a[i];
-		p->secondary_alt = i; // keep the rank in the first round
+		p->secondary_all = i; // keep the rank in the first round
 		if (!p->is_alt && p->secondary >= 0 && a[p->secondary].is_alt)
 			p->alt_sc = a[p->secondary].score;
 	}
 	if (n_pri >= 0 && n_pri < n) {
 		kv_resize(int, z, n);
 		if (n_pri > 0) ks_introsort(mem_ars_hash2, n, a);
-		for (i = 0; i < n; ++i) z.a[a[i].secondary_alt] = i;
+		for (i = 0; i < n; ++i) z.a[a[i].secondary_all] = i;
 		for (i = 0; i < n; ++i) {
-			if (a[i].secondary < 0) {
-				a[i].secondary_alt = -1;
-				continue;
-			}
-			j = z.a[a[i].secondary];
-			a[i].secondary_alt = a[j].is_alt? j : -1;
-			if (a[i].is_alt) a[i].secondary = INT_MAX;
+			if (a[i].secondary >= 0) {
+				a[i].secondary_all = z.a[a[i].secondary];
+				if (a[i].is_alt) a[i].secondary = INT_MAX;
+			} else a[i].secondary_all = -1;
 		}
 		if (n_pri > 0) { // mark primary for hits to the primary assembly only
 			for (i = 0; i < n_pri; ++i) a[i].sub = 0, a[i].secondary = -1;
 			mem_mark_primary_se_core(opt, n_pri, a, &z);
 		}
+	} else {
+		for (i = 0; i < n; ++i)
+			a[i].secondary_all = a[i].secondary;
 	}
 	free(z.a);
 	return n_pri;
@@ -826,7 +841,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 	if (p->rid >= 0) { // with coordinate
 		kputs(bns->anns[p->rid].name, str); kputc('\t', str); // RNAME
 		kputl(p->pos + 1, str); kputc('\t', str); // POS
-		kputw(p->score < opt->min_pa_ratio * p->alt_sc? 0 : p->mapq, str); kputc('\t', str); // MAPQ
+		kputw(p->mapq, str); kputc('\t', str); // MAPQ
 		if (p->n_cigar) { // aligned
 			for (i = 0; i < p->n_cigar; ++i) {
 				int c = p->cigar[i]&0xf;
@@ -916,8 +931,6 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		}
 		if (p->alt_sc > 0)
 			ksprintf(str, "\tpa:f:%.3f", (double)p->score / p->alt_sc);
-		if (p->score < opt->min_pa_ratio * p->alt_sc)
-			ksprintf(str, "\tom:i:%d", p->mapq);
 	}
 	if (p->XA) { kputsn("\tXA:Z:", 6, str); kputs(p->XA, str); }
 	if (s->comment) { kputc('\t', str); kputs(s->comment, str); }
@@ -968,14 +981,14 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, mem_alnreg_v *a, int l_query, const char *query);
 	kstring_t str;
 	kvec_t(mem_aln_t) aa;
-	int k;
+	int k, l;
 	char **XA = 0;
 
 	if (!(opt->flag & MEM_F_ALL))
 		XA = mem_gen_alt(opt, bns, pac, a, s->l_seq, s->seq);
 	kv_init(aa);
 	str.l = str.m = 0; str.s = 0;
-	for (k = 0; k < a->n; ++k) {
+	for (k = l = 0; k < a->n; ++k) {
 		mem_alnreg_t *p = &a->a[k];
 		mem_aln_t *q;
 		if (p->score < opt->T) continue;
@@ -987,9 +1000,10 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		q->XA = XA? XA[k] : 0;
 		q->flag |= extra_flag; // flag secondary
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
-		if (k && p->secondary < 0) // if supplementary
+		if (l && p->secondary < 0) // if supplementary
 			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
-		if (k && !p->is_alt && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		if (l && !p->is_alt && q->mapq > aa.a[0].mapq) q->mapq = aa.a[0].mapq;
+		++l;
 	}
 	if (aa.n == 0) { // no alignments good enough; then write an unaligned record
 		mem_aln_t t;

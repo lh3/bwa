@@ -119,9 +119,9 @@ extern "C" {
 	 * Return the end of the longest exact match starting from _x_.
 	 */
 	int bwt_smem1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
-	int bwt_smem1a(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, int max_len, uint64_t max_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
+	int bwt_smem1a(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, uint64_t max_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
-	// SMEM iterator interface
+	int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_len, int max_intv, bwtintv_t *mem);
 
 #ifdef __cplusplus
 }
