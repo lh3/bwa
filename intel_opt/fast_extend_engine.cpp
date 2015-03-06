@@ -593,7 +593,7 @@ void fast_extend(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int
   // The flagMask has 2 bits per word, because of SSE limitations.
   uint32_t flagMask = (uint32_t) ((((uint64_t)1) << (2*(EDVec::getLastWordIndexFor(queryLen)+1))) - 1) ;
 
-  int firstProbeOffset = accumDist.getProbeColumn(0) ;
+  int firstProbeOffset = min(refLen-1, accumDist.getProbeColumn(0)) ;
   int numFullIters ;
   
   int ci = 0 ;
@@ -643,7 +643,8 @@ void fast_extend(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int
 #endif
   CHECK_TERMINATION(ci-1) ;
 
-  numFullIters = (min(queryLen, refLen)-ci+1) /EDVec::PERIOD() ;
+
+	numFullIters = (min(queryLen, refLen)-ci) /EDVec::PERIOD() ;
   for (int iterIndex = 0; iterIndex < numFullIters; ++iterIndex) {
 
     for (int subIterIndex=0; subIterIndex < EDVec::PERIOD()-1; ++subIterIndex, ++ci) {
@@ -876,6 +877,13 @@ void fast_extend(const uint8_t* refSeq, int refLen, const uint8_t* querySeq, int
     swfb.maxQLen = min(queryLen, swfb.maxQLen + EDVec::PERIOD()-1) ;
 
   swfb.maxRLen = max(swfb.maxRLen, min(refLen, swfb.maxQLen + swfb.maxBand)) ;
+
+  if (swfb.maxQLen < swfb.minQLen)
+    std::swap(swfb.maxQLen, swfb.minQLen) ;
+  
+  if (swfb.maxRLen < swfb.minRLen)
+    std::swap(swfb.maxRLen, swfb.minRLen) ;
+
 
   if (abs(swfb.minQLen-swfb.minRLen) > 8) { 
     // We don't have high confidence for the long gaps. To be conservative, start ksw_extend from 
@@ -1187,6 +1195,8 @@ void fast_filter_and_extend(const uint8_t* refSeq, int refLen, const uint8_t* qu
   }
 #endif
 
+  assert(alignedQLen >= 0 && alignedQLen <= queryLen) ;
+  assert(alignedRLen >= 0 && alignedRLen <= refLen) ;
 }
 
 

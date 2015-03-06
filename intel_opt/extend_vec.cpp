@@ -98,10 +98,13 @@ public:
 
 #define COMPUTE_SCOREV() {						\
     SCOREV = EC::vec_blend(MISMATCHSV, MATCHSV, EC::vec_compare_eq(RV, QV)) ; \
-    SCOREV = EC::vec_blend(SCOREV, AMBIGSV,				\
-			   EC::vec_or(EC::vec_compare_eq(RV, AMBIGBV),	\
-				  EC::vec_compare_eq(QV, AMBIGBV))) ;	\
-  }
+    SCOREV = EC::vec_blend(SCOREV, AMBIGSV,															\
+													 EC::vec_or(EC::vec_compare_eq(RV, AMBIGBV),	\
+																			EC::vec_compare_eq(QV, AMBIGBV))) ;	\
+    SCOREV = EC::vec_blend(SCOREV, INVALIDSV,														\
+													 EC::vec_or(EC::vec_compare_eq(RV, INVALIDRBV),	\
+																			EC::vec_compare_eq(QV, INVALIDQBV))) ; \
+		}
 
 #define COMPUTE_B() {							\
     BH = EC::vec_max(EC::vec_add(AH, DESV), EC::vec_add(AD, DOSV)) ;	\
@@ -297,8 +300,11 @@ int extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int 
   static const typename EC::Vec IOSV = EC::vec_set1(-o_ins-e_ins) ; // insert-open+extend
   static const typename EC::Vec MATCHSV = EC::vec_set1(matchScore) ;
   static const typename EC::Vec MISMATCHSV = EC::vec_set1(mismatchScore) ;
+	static const typename EC::Vec INVALIDSV = EC::vec_set1(-o_ins-o_del-e_ins-e_del) ;
   static const typename EC::Vec AMBIGSV = EC::vec_set1(ambigScore) ;
   static const typename EC::Vec AMBIGBV = EC::vec_set1(AMBIG_BASE) ;
+  static const typename EC::Vec INVALIDRBV = EC::vec_set1(INVALID_BASE_R) ;
+  static const typename EC::Vec INVALIDQBV = EC::vec_set1(INVALID_BASE_Q) ;
 
   typename EC::Word arr[EC::MAX_VEC_LEN] ;
 
@@ -539,11 +545,17 @@ int extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int 
   int gscore = 0, lscore = 0, tle = 0, gtle = 0 ;
   if (bestQIndex+1 == qlen) { // global score is chosen over local score
     gscore = maxLocalScore - end_bonus ; // end_bonus was added to maxLocalScore before
-    gtle = bestRIndex + 1 ;
+    gtle = std::min(tlen, bestRIndex + 1) ;
+    // Because of band limitations, it's possible that max score ends up beyond ref index.
+    // This can happen when tlen < queryLen and the band that overlaps with the last query
+    // row is beyond column tlen.
   }
   else {
     lscore = maxLocalScore ;
-    tle = bestRIndex + 1 ;
+    tle = std::min(tlen, bestRIndex + 1) ;
+    // Because of band limitations, it's possible that max score ends up beyond ref index.
+    // The min operation probably is not needed in case of local alignment, but keeping it
+    // here for safety.
   }
 
 #ifdef DEBUG
@@ -554,6 +566,9 @@ int extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int 
   if (_tle) *_tle = tle ;
   if (_gtle) *_gtle = gtle ; 
   if (_gscore) *_gscore = gscore ; 
+
+	assert(*_qle <= qlen) ;
+	assert(*_tle <= tlen) ;
 
   return lscore ;
 }

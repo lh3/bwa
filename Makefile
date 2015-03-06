@@ -1,7 +1,7 @@
 CC=			gcc
 #CC=			clang --analyze
-CFLAGS=		-g -Wall -Wno-unused-function -O2 -march=native
-CXXFLAGS=	-g -Wall -Wno-unused-variable -O3 -march=native
+CFLAGS=		-g -Wall -Wno-unused-function -O2
+CXXFLAGS=	-g -Wall -Wno-unused-variable -O3
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
@@ -31,6 +31,9 @@ ifeq "$(shell expr $(COMPILER_VER) \<= 40901)" "1"
 ifeq "$(AVX2_SUPPORTED)" "Yes"
 $(info AVX2 Supported and GCC >= 4.9.1 detected, enabling AVX2.)
 DFLAGS += -DUSE_AVX2
+CXXFLAGS += -mavx2
+else
+CXXFLAGS += -msse4.2
 endif
 endif
 endif

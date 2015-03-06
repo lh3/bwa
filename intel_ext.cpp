@@ -1,21 +1,6 @@
 #include <stdio.h>
 #include "intel_ext.h"
-
-inline bool is_sse42_supported() 
-{ 
-    if(__builtin_cpu_supports("sse4.2"))
-	return true;
-    else
-	return false;
-}
-
-inline bool is_avx2_supported()
-{
-    if(__builtin_cpu_supports("avx2"))
-	return true;
-    else
-	return false;
-}
+#include "hsw.c"
 
 
 extern "C" {
@@ -40,7 +25,7 @@ void init_fast_extend();
 void intel_init()
 {
 #ifdef __x86_64
-    if (is_avx2_supported()) {
+    if (can_use_intel_core_4th_gen_features()) {
 	intel_extend = intel_filter_and_extend;
 	init_fast_extend();
 	fprintf(stderr,"Initializing Intel's filter_and_extend with AVX2\n");
