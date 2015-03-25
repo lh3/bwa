@@ -6,7 +6,7 @@ AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
 LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o bwamem_extra.o malloc_wrap.o
 AOBJS=		QSufSort.o bwt_gen.o bwashm.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
-			is.o bwtindex.o bwape.o kopen.o pemerge.o \
+			is.o bwtindex.o bwape.o kopen.o pemerge.o maxk.o \
 			bwtsw2_core.o bwtsw2_main.o bwtsw2_aux.o bwt_lite.o \
 			bwtsw2_chain.o fastmap.o bwtsw2_pair.o
 PROG=		bwa
@@ -45,7 +45,8 @@ depend:
 QSufSort.o: QSufSort.h
 bamlite.o: bamlite.h malloc_wrap.h
 bntseq.o: bntseq.h utils.h kseq.h malloc_wrap.h khash.h
-bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h kstring.h malloc_wrap.h kseq.h
+bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h kstring.h malloc_wrap.h kvec.h
+bwa.o: kseq.h
 bwamem.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h ksw.h kvec.h
 bwamem.o: ksort.h utils.h kbtree.h
 bwamem_extra.o: bwa.h bntseq.h bwt.h bwamem.h kstring.h malloc_wrap.h
@@ -79,5 +80,6 @@ kstring.o: kstring.h malloc_wrap.h
 ksw.o: ksw.h malloc_wrap.h
 main.o: kstring.h malloc_wrap.h utils.h
 malloc_wrap.o: malloc_wrap.h
+maxk.o: bwa.h bntseq.h bwt.h bwamem.h kseq.h malloc_wrap.h
 pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
 utils.o: utils.h ksort.h malloc_wrap.h kseq.h
