@@ -179,7 +179,7 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	return n;
 }
 
-int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2], int n_pri[2])
+int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2], pair64_v *zv, int n_pri[2])
 {
 	pair64_v v, u;
 	int r, i, k, y[4], ret; // y[] keeps the last hit
@@ -247,6 +247,29 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 					j,k,q,r,o);
 			}
 		}
+        
+        int prev_o = -1;
+        for(i = u.n-1; i >= 0; i--) {
+            int j = u.a[i].y >> 32; 
+			int k = u.a[i].y << 32 >> 32;
+			int q = v.a[j].y<<32>>34;
+			int r = v.a[k].y<<32>>34;
+			int o = u.a[i].x >> 32;
+			
+            if(prev_o == -1) {
+                prev_o = o;
+            } 
+            
+            if(prev_o == o) {
+                pair64_t p;
+                p.x = q;
+                p.y = r;
+                kv_push(pair64_t, *zv, p);
+                continue;
+            } else {
+                break;
+            }
+        }
 
 		i = u.a[u.n-1].y >> 32; k = u.a[u.n-1].y << 32 >> 32;
 		z[v.a[i].y&1] = v.a[i].y<<32>>34; // index of the best pair
@@ -274,9 +297,11 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query);
 
 	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1, n_pri[2], n_aa[2];
+    pair64_v zv;
 	kstring_t str;
 	mem_aln_t h[2], g[2], aa[2][2];
 
+    kv_init(zv);
 	str.l = str.m = 0; str.s = 0;
 	memset(h, 0, sizeof(mem_aln_t) * 2);
 	memset(g, 0, sizeof(mem_aln_t) * 2);
@@ -297,7 +322,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	n_pri[1] = mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1);
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
-	if (n_pri[0] && n_pri[1] && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z, n_pri)) > 0) {
+	if (n_pri[0] && n_pri[1] && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z, &zv, n_pri)) > 0) {
 		int is_multi[2], q_pe, score_un, q_se[2];
 		char **XA[2];
 		// check if an end has multiple hits even after mate-SW
@@ -311,7 +336,13 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
-		
+	
+        if(bwa_verbose >= 5) {
+            for(i = 0; i < zv.n; i++) {
+                printf(" mem_sam_pe: %d : %d : (%ld,%ld)  \n", __LINE__, i, zv.a[i].x, zv.a[i].y);
+            }
+        }
+
 		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		subo = subo > score_un? subo : score_un;
 		q_pe = raw_mapq(o - subo, opt->a);
@@ -387,8 +418,9 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			for (j = 0; j < a[i].n; ++j) free(XA[i][j]);
 			free(XA[i]);
 		}
+	    kv_destroy(zv);
 	} else goto no_pairing;
-	return n;
+    return n;
 
 no_pairing:
 	for (i = 0; i < 2; ++i) {
@@ -411,5 +443,6 @@ no_pairing:
 	mem_reg2sam(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0]);
 	if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 	free(h[0].cigar); free(h[1].cigar);
+	kv_destroy(zv);
 	return n;
 }
