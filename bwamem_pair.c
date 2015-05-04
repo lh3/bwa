@@ -184,6 +184,7 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 	pair64_v v, u;
 	int r, i, k, y[4], ret; // y[] keeps the last hit
 	int64_t l_pac = bns->l_pac;
+	
 	kv_init(v); kv_init(u);
 	for (r = 0; r < 2; ++r) { // loop through read number
 		for (i = 0; i < n_pri[r]; ++i) {
@@ -197,7 +198,10 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 	}
 	ks_introsort_128(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
-	//for (i = 0; i < v.n; ++i) printf("[%d]\t%d\t%c%ld\n", i, (int)(v.a[i].y&1)+1, "+-"[v.a[i].y>>1&1], (long)v.a[i].x);
+	
+	if(bwa_verbose >= 5)
+		for (i = 0; i < v.n; ++i) printf("[%d]\t%d\t%c%ld\n", i, (int)(v.a[i].y&1)+1, "+-"[v.a[i].y>>1&1], (long)v.a[i].x);
+	
 	for (i = 0; i < v.n; ++i) {
 		for (r = 0; r < 2; ++r) { // loop through direction
 			int dir = r<<1 | (v.a[i].y>>1&1), which;
@@ -230,9 +234,25 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 		tmp = tmp > opt->o_del + opt->e_del? tmp : opt->o_del + opt->e_del;
 		tmp = tmp > opt->o_ins + opt->e_ins? tmp : opt->o_ins + opt->e_ins;
 		ks_introsort_128(u.n, u.a);
+        
+		if(bwa_verbose >= 5) {
+			for (i = 0; i < u.n; ++i) {
+				int j = u.a[i].y >> 32; 
+				int k = u.a[i].y << 32 >> 32;
+				int q = v.a[j].y<<32>>34;
+				int r = v.a[k].y<<32>>34;
+				int o = u.a[i].x >> 32;
+				printf("[%d]\t%d\t%c%ld  (%d,%d) => (%d,%d) => %d \n", 
+					i, (int)(u.a[i].y&1)+1, "+-"[u.a[i].y>>1&1], (long)u.a[i].x,
+					j,k,q,r,o);
+			}
+		}
+
 		i = u.a[u.n-1].y >> 32; k = u.a[u.n-1].y << 32 >> 32;
 		z[v.a[i].y&1] = v.a[i].y<<32>>34; // index of the best pair
 		z[v.a[k].y&1] = v.a[k].y<<32>>34;
+		if(bwa_verbose >= 5)
+			printf(" mem_pair: %d : u.y:(%ld)  i,k:(%d,%d)  v:(%ld,%ld)  z:(%d,%d) \n", __LINE__, u.a[u.n-1].y, i, k, v.a[i].y, v.a[k].y, z[0], z[1]);
 		ret = u.a[u.n-1].x >> 32;
 		*sub = u.n > 1? u.a[u.n-2].x>>32 : 0;
 		for (i = (long)u.n - 2, *n_sub = 0; i >= 0; --i)
@@ -286,9 +306,12 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				if (a[i].a[j].secondary < 0 && a[i].a[j].score >= opt->T) break;
 			is_multi[i] = j < n_pri[i]? 1 : 0;
 		}
+		if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : pairs: n_pri:(%d,%d)  is_multi:(%d,%d)  opt->T: %d  a[i].a[j].score:(%d,%d)  z:(%d,%d)  \n", __LINE__, 
+					n_pri[0], n_pri[1], is_multi[0], is_multi[1], opt->T, a[0].a[n_pri[0]-1].score, a[1].a[n_pri[1]-1].score, z[0], z[1] );
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
+		
 		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		subo = subo > score_un? subo : score_un;
 		q_pe = raw_mapq(o - subo, opt->a);
@@ -311,6 +334,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			// cap at the tandem repeat score
 			q_se[0] = q_se[0] < raw_mapq(c[0]->score - c[0]->csub, opt->a)? q_se[0] : raw_mapq(c[0]->score - c[0]->csub, opt->a);
 			q_se[1] = q_se[1] < raw_mapq(c[1]->score - c[1]->csub, opt->a)? q_se[1] : raw_mapq(c[1]->score - c[1]->csub, opt->a);
+		
+			if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : c:(%s:%ld-%ld , %s:%ld-%ld)   \n", __LINE__, 
+						bns->anns[c[0]->rid].name, c[0]->rb-bns->anns[c[0]->rid].offset+1, c[0]->re-bns->anns[c[0]->rid].offset+1, 
+						bns->anns[c[1]->rid].name, c[1]->rb-bns->anns[c[1]->rid].offset+1, c[1]->re-bns->anns[c[1]->rid].offset+1);
 		} else { // the unpaired alignment is preferred
 			z[0] = z[1] = 0;
 			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
