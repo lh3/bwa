@@ -262,8 +262,13 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
             
             if(prev_o == o) {
                 pair64_t p;
-                p.x = q;
-                p.y = r;
+                if( v.a[j].y&1 ) {
+                    p.x = r;
+                    p.y = q;
+                } else {
+                    p.x = q;
+                    p.y = r;
+                }
                 kv_push(pair64_t, *zv, p);
                 continue;
             } else {
@@ -373,7 +378,8 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			z[0] = z[1] = 0;
             kv_resize(pair64_t, zv, 1);
             zv.a[0].x = zv.a[0].y = 0;
-			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
+			zv.n = 1;
+            q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
 			q_se[1] = mem_approx_mapq_se(opt, &a[1].a[0]);
 		}
 		
@@ -416,7 +422,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		s[1].sam = str.s;
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 	    */	
-       
+      err_fflush(stdout); 
         kstring_t strs[2];
 	    strs[0].l = strs[0].m = 0; strs[0].s = 0;
 	    strs[1].l = strs[1].m = 0; strs[1].s = 0;
@@ -424,8 +430,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
         for(zvi = 0; zvi < zv.n; zvi++) {
             pair64_t czp = zv.a[zvi];
             uint64_t *cz = (uint64_t*)&czp; 
-            
-			for (i = 0; i < 2; ++i) {
+                        
+            if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : zvi:%d  cz:(%ld,%ld) \n", __LINE__, zvi, cz[0], cz[1]);
+			
+            for (i = 0; i < 2; ++i) {
 				if (a[i].a[cz[i]].secondary >= 0) {
 					a[i].a[cz[i]].sub = a[i].a[a[i].a[cz[i]].secondary].score;
                     a[i].a[cz[i]].secondary = -2;
@@ -434,6 +442,9 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 
             for (i = 0; i < 2; ++i) {
                 int k = a[i].a[cz[i]].secondary_all;
+                if (bwa_verbose >= 5) 
+                    printf(" mem_sam_pe: %d : i:%d  cz[i]:%ld  k:%d  n_pri:%d   sec:%d \n", 
+                        __LINE__, i, cz[i], k, n_pri[i], a[i].a[k].secondary_all );
                 if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
                     assert(a[i].a[k].secondary_all < 0);
                     for (j = 0; j < a[i].n; ++j)
@@ -449,14 +460,17 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
             // write SAM
 	        n_aa[0] = n_aa[1] = 0;
             for (i = 0; i < 2; ++i) {
-                int sec = a[i].a[cz[i]].secondary;
-                a[i].a[cz[i]].secondary = -1;
+              //  int sec = a[i].a[cz[i]].secondary;
+              //  a[i].a[cz[i]].secondary = -1;
+                if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : i:%d  cz:%ld  a.n:%ld  \n", __LINE__, i, cz[i], a[i].n );
+            err_fflush(stdout); 
                 h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[cz[i]]);
-                a[i].a[cz[i]].secondary = sec;               
+              //  a[i].a[cz[i]].secondary = sec;               
                 h[i].mapq = q_se[i];
-                printf(" mem_sam_pe: %d : %d => %d => ", __LINE__, i, h[i].flag);
+                if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : %d => %d => ", __LINE__, i, h[i].flag);
                 h[i].flag |= 0x40<<i | extra_flag;
-                printf(" %d \n", h[i].flag);
+                if (bwa_verbose >= 5) printf(" %d \n", h[i].flag);
+            err_fflush(stdout); 
                 h[i].XA = XA[i]? XA[i][cz[i]] : 0;
                 aa[i][n_aa[i]++] = h[i];
                 if (n_pri[i] < a[i].n) { // the read has ALT hits
