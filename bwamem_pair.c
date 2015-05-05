@@ -371,10 +371,14 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 						bns->anns[c[1]->rid].name, c[1]->rb-bns->anns[c[1]->rid].offset+1, c[1]->re-bns->anns[c[1]->rid].offset+1);
 		} else { // the unpaired alignment is preferred
 			z[0] = z[1] = 0;
+            kv_resize(pair64_t, zv, 1);
+            zv.a[0].x = zv.a[0].y = 0;
 			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
 			q_se[1] = mem_approx_mapq_se(opt, &a[1].a[0]);
 		}
-		for (i = 0; i < 2; ++i) {
+		
+        /*
+        for (i = 0; i < 2; ++i) {
 			int k = a[i].a[z[i]].secondary_all;
 			if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
 				assert(a[i].a[k].secondary_all < 0);
@@ -411,7 +415,73 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
 		s[1].sam = str.s;
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
-		// free
+	    */	
+       
+        kstring_t strs[2];
+	    strs[0].l = strs[0].m = 0; strs[0].s = 0;
+	    strs[1].l = strs[1].m = 0; strs[1].s = 0;
+        int zvi;
+        for(zvi = 0; zvi < zv.n; zvi++) {
+            pair64_t czp = zv.a[zvi];
+            uint64_t *cz = (uint64_t*)&czp; 
+            
+			for (i = 0; i < 2; ++i) {
+				if (a[i].a[cz[i]].secondary >= 0) {
+					a[i].a[cz[i]].sub = a[i].a[a[i].a[cz[i]].secondary].score;
+                    a[i].a[cz[i]].secondary = -2;
+			    }
+            }
+
+            for (i = 0; i < 2; ++i) {
+                int k = a[i].a[cz[i]].secondary_all;
+                if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
+                    assert(a[i].a[k].secondary_all < 0);
+                    for (j = 0; j < a[i].n; ++j)
+                        if (a[i].a[j].secondary_all == k || j == k)
+                            a[i].a[j].secondary_all = cz[i];
+                    a[i].a[cz[i]].secondary_all = -1;
+                }
+            }
+            if (!(opt->flag & MEM_F_ALL)) {
+                for (i = 0; i < 2; ++i)
+                    XA[i] = mem_gen_alt(opt, bns, pac, &a[i], s[i].l_seq, s[i].seq);
+            } else XA[0] = XA[1] = 0;
+            // write SAM
+	        n_aa[0] = n_aa[1] = 0;
+            for (i = 0; i < 2; ++i) {
+                int sec = a[i].a[cz[i]].secondary;
+                a[i].a[cz[i]].secondary = -1;
+                h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[cz[i]]);
+                a[i].a[cz[i]].secondary = sec;               
+                h[i].mapq = q_se[i];
+                printf(" mem_sam_pe: %d : %d => %d => ", __LINE__, i, h[i].flag);
+                h[i].flag |= 0x40<<i | extra_flag;
+                printf(" %d \n", h[i].flag);
+                h[i].XA = XA[i]? XA[i][cz[i]] : 0;
+                aa[i][n_aa[i]++] = h[i];
+                if (n_pri[i] < a[i].n) { // the read has ALT hits
+                    mem_alnreg_t *p = &a[i].a[n_pri[i]];
+                    if (p->score < opt->T || p->secondary >= 0 || !p->is_alt) continue;
+                    g[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, p);
+                    g[i].flag |= 0x800 | 0x40<<i | extra_flag;
+                    g[i].XA = XA[i]? XA[i][n_pri[i]] : 0;
+                    aa[i][n_aa[i]++] = g[i];
+                }
+            }
+			if (bwa_verbose >= 5) 
+                printf(" mem_sam_pe: %d : cz:(%ld,%ld)  n_aa:(%d,%d)  h.flag:(%d,%d)   \n", 
+                    __LINE__, cz[0],cz[1], n_aa[0],n_aa[1], h[0].flag,h[1].flag );
+
+            for (i = 0; i < n_aa[0]; ++i)
+                mem_aln2sam(opt, bns, &strs[0], &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
+            for (i = 0; i < n_aa[1]; ++i)
+                mem_aln2sam(opt, bns, &strs[1], &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
+            if (strcmp(s[0].name, s[1].name) != 0) 
+                err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
+	    } // end zv loop
+        s[0].sam = strs[0].s;
+        s[1].sam = strs[1].s;
+        // free
 		for (i = 0; i < 2; ++i) {
 			free(h[i].cigar); free(g[i].cigar);
 			if (XA[i] == 0) continue;
