@@ -234,7 +234,7 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 		tmp = tmp > opt->o_del + opt->e_del? tmp : opt->o_del + opt->e_del;
 		tmp = tmp > opt->o_ins + opt->e_ins? tmp : opt->o_ins + opt->e_ins;
 		ks_introsort_128(u.n, u.a);
-        
+ 
 		if(bwa_verbose >= 5) {
 			for (i = 0; i < u.n; ++i) {
 				int j = u.a[i].y >> 32; 
@@ -247,34 +247,34 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 					j,k,q,r,o);
 			}
 		}
-        
-        int prev_o = -1;
-        for(i = u.n-1; i >= 0; i--) {
-            int j = u.a[i].y >> 32; 
+
+		int prev_o = -1;
+		for(i = u.n-1; i >= 0; i--) {
+			int j = u.a[i].y >> 32; 
 			int k = u.a[i].y << 32 >> 32;
 			int q = v.a[j].y<<32>>34;
 			int r = v.a[k].y<<32>>34;
 			int o = u.a[i].x >> 32;
-			
-            if(prev_o == -1) {
-                prev_o = o;
-            } 
-            
-            if(prev_o == o) {
-                pair64_t p;
-                if( v.a[j].y&1 ) {
-                    p.x = r;
-                    p.y = q;
-                } else {
-                    p.x = q;
-                    p.y = r;
-                }
-                kv_push(pair64_t, *zv, p);
-                continue;
-            } else {
-                break;
-            }
-        }
+
+			if(prev_o == -1) {
+				prev_o = o;
+			} 
+
+			if(prev_o == o) {
+				pair64_t p;
+				if( v.a[j].y&1 ) {
+					p.x = r;
+					p.y = q;
+				} else {
+					p.x = q;
+					p.y = r;
+				}
+				kv_push(pair64_t, *zv, p);
+				continue;
+			} else {
+				break;
+			}
+		}
 
 		i = u.a[u.n-1].y >> 32; k = u.a[u.n-1].y << 32 >> 32;
 		z[v.a[i].y&1] = v.a[i].y<<32>>34; // index of the best pair
@@ -302,11 +302,11 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query);
 
 	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1, n_pri[2], n_aa[2];
-    pair64_v zv;
+	pair64_v zv;
 	kstring_t str;
 	mem_aln_t h[2], g[2], aa[2][2];
 
-    kv_init(zv);
+	kv_init(zv);
 	str.l = str.m = 0; str.s = 0;
 	memset(h, 0, sizeof(mem_aln_t) * 2);
 	memset(g, 0, sizeof(mem_aln_t) * 2);
@@ -342,11 +342,11 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		// compute mapQ for the best SE hit
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
 	
-        if(bwa_verbose >= 5) {
-            for(i = 0; i < zv.n; i++) {
-                printf(" mem_sam_pe: %d : %d : (%ld,%ld)  \n", __LINE__, i, zv.a[i].x, zv.a[i].y);
-            }
-        }
+		if(bwa_verbose >= 5) {
+			for(i = 0; i < zv.n; i++) {
+				printf(" mem_sam_pe: %d : %d : (%ld,%ld)  \n", __LINE__, i, zv.a[i].x, zv.a[i].y);
+			}
+		}
 
 		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		subo = subo > score_un? subo : score_un;
@@ -376,15 +376,15 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 						bns->anns[c[1]->rid].name, c[1]->rb-bns->anns[c[1]->rid].offset+1, c[1]->re-bns->anns[c[1]->rid].offset+1);
 		} else { // the unpaired alignment is preferred
 			z[0] = z[1] = 0;
-            kv_resize(pair64_t, zv, 1);
-            zv.a[0].x = zv.a[0].y = 0;
+			kv_resize(pair64_t, zv, 1);
+			zv.a[0].x = zv.a[0].y = 0;
 			zv.n = 1;
-            q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
+			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
 			q_se[1] = mem_approx_mapq_se(opt, &a[1].a[0]);
 		}
 		
-        /*
-        for (i = 0; i < 2; ++i) {
+		/*
+		for (i = 0; i < 2; ++i) {
 			int k = a[i].a[z[i]].secondary_all;
 			if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
 				assert(a[i].a[k].secondary_all < 0);
@@ -421,90 +421,82 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
 		s[1].sam = str.s;
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
-	    */	
-      err_fflush(stdout); 
-        kstring_t strs[2];
-	    strs[0].l = strs[0].m = 0; strs[0].s = 0;
-	    strs[1].l = strs[1].m = 0; strs[1].s = 0;
-        int zvi;
-        for(zvi = 0; zvi < zv.n; zvi++) {
-            pair64_t czp = zv.a[zvi];
-            uint64_t *cz = (uint64_t*)&czp; 
-                        
-            if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : zvi:%d  cz:(%ld,%ld) \n", __LINE__, zvi, cz[0], cz[1]);
-			
-            for (i = 0; i < 2; ++i) {
+		*/	
+		kstring_t strs[2];
+		strs[0].l = strs[0].m = 0; strs[0].s = 0;
+		strs[1].l = strs[1].m = 0; strs[1].s = 0;
+		int zvi;
+		for(zvi = 0; zvi < zv.n; zvi++) {
+			pair64_t czp = zv.a[zvi];
+			uint64_t *cz = (uint64_t*)&czp; 
+
+			if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : zvi:%d  cz:(%ld,%ld) \n", __LINE__, zvi, cz[0], cz[1]);
+
+			for (i = 0; i < 2; ++i) {
 				if (a[i].a[cz[i]].secondary >= 0) {
 					a[i].a[cz[i]].sub = a[i].a[a[i].a[cz[i]].secondary].score;
-                    a[i].a[cz[i]].secondary = -2;
-			    }
-            }
+					a[i].a[cz[i]].secondary = -2;
+				}
+			}
 
-            for (i = 0; i < 2; ++i) {
-                int k = a[i].a[cz[i]].secondary_all;
-                if (bwa_verbose >= 5) 
-                    printf(" mem_sam_pe: %d : i:%d  cz[i]:%ld  k:%d  n_pri:%d   sec:%d \n", 
-                        __LINE__, i, cz[i], k, n_pri[i], a[i].a[k].secondary_all );
-                if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
-                    assert(a[i].a[k].secondary_all < 0);
-                    for (j = 0; j < a[i].n; ++j)
-                        if (a[i].a[j].secondary_all == k || j == k)
-                            a[i].a[j].secondary_all = cz[i];
-                    a[i].a[cz[i]].secondary_all = -1;
-                }
-            }
-            if (!(opt->flag & MEM_F_ALL)) {
-                for (i = 0; i < 2; ++i)
-                    XA[i] = mem_gen_alt(opt, bns, pac, &a[i], s[i].l_seq, s[i].seq);
-            } else XA[0] = XA[1] = 0;
-            // write SAM
-	        n_aa[0] = n_aa[1] = 0;
-            for (i = 0; i < 2; ++i) {
-              //  int sec = a[i].a[cz[i]].secondary;
-              //  a[i].a[cz[i]].secondary = -1;
-                if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : i:%d  cz:%ld  a.n:%ld  \n", __LINE__, i, cz[i], a[i].n );
-            err_fflush(stdout); 
-                h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[cz[i]]);
-              //  a[i].a[cz[i]].secondary = sec;               
-                h[i].mapq = q_se[i];
-                if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : %d => %d => ", __LINE__, i, h[i].flag);
-                h[i].flag |= 0x40<<i | extra_flag;
-                if (bwa_verbose >= 5) printf(" %d \n", h[i].flag);
-            err_fflush(stdout); 
-                h[i].XA = XA[i]? XA[i][cz[i]] : 0;
-                aa[i][n_aa[i]++] = h[i];
-                if (n_pri[i] < a[i].n) { // the read has ALT hits
-                    mem_alnreg_t *p = &a[i].a[n_pri[i]];
-                    if (p->score < opt->T || p->secondary >= 0 || !p->is_alt) continue;
-                    g[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, p);
-                    g[i].flag |= 0x800 | 0x40<<i | extra_flag;
-                    g[i].XA = XA[i]? XA[i][n_pri[i]] : 0;
-                    aa[i][n_aa[i]++] = g[i];
-                }
-            }
+			for (i = 0; i < 2; ++i) {
+				int k = a[i].a[cz[i]].secondary_all;
+				if (bwa_verbose >= 5)
+					printf(" mem_sam_pe: %d : i:%d  cz[i]:%ld  k:%d  n_pri:%d   sec:%d \n", 
+						__LINE__, i, cz[i], k, n_pri[i], a[i].a[k].secondary_all );
+				if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
+					assert(a[i].a[k].secondary_all < 0);
+					for (j = 0; j < a[i].n; ++j)
+						if (a[i].a[j].secondary_all == k || j == k)
+							a[i].a[j].secondary_all = cz[i];
+					a[i].a[cz[i]].secondary_all = -1;
+				}
+			}
+			if (!(opt->flag & MEM_F_ALL)) {
+				for (i = 0; i < 2; ++i)
+					XA[i] = mem_gen_alt(opt, bns, pac, &a[i], s[i].l_seq, s[i].seq);
+			} else XA[0] = XA[1] = 0;
+			// write SAM
+			n_aa[0] = n_aa[1] = 0;
+			for (i = 0; i < 2; ++i) {
+				if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : i:%d  cz:%ld  a.n:%ld  \n", __LINE__, i, cz[i], a[i].n );
+				h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[cz[i]]);
+				h[i].mapq = q_se[i];
+				h[i].flag |= 0x40<<i | extra_flag;
+				h[i].XA = XA[i]? XA[i][cz[i]] : 0;
+				aa[i][n_aa[i]++] = h[i];
+				if (n_pri[i] < a[i].n) { // the read has ALT hits
+						mem_alnreg_t *p = &a[i].a[n_pri[i]];
+						if (p->score < opt->T || p->secondary >= 0 || !p->is_alt) continue;
+						g[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, p);
+						g[i].flag |= 0x800 | 0x40<<i | extra_flag;
+						g[i].XA = XA[i]? XA[i][n_pri[i]] : 0;
+						aa[i][n_aa[i]++] = g[i];
+				}
+			}
 			if (bwa_verbose >= 5) 
-                printf(" mem_sam_pe: %d : cz:(%ld,%ld)  n_aa:(%d,%d)  h.flag:(%d,%d)   \n", 
-                    __LINE__, cz[0],cz[1], n_aa[0],n_aa[1], h[0].flag,h[1].flag );
+				printf(" mem_sam_pe: %d : cz:(%ld,%ld)  n_aa:(%d,%d)  h.flag:(%d,%d)   \n", 
+					__LINE__, cz[0],cz[1], n_aa[0],n_aa[1], h[0].flag,h[1].flag );
 
-            for (i = 0; i < n_aa[0]; ++i)
-                mem_aln2sam(opt, bns, &strs[0], &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
-            for (i = 0; i < n_aa[1]; ++i)
-                mem_aln2sam(opt, bns, &strs[1], &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
-            if (strcmp(s[0].name, s[1].name) != 0) 
-                err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
-	    } // end zv loop
-        s[0].sam = strs[0].s;
-        s[1].sam = strs[1].s;
-        // free
+			for (i = 0; i < n_aa[0]; ++i)
+				mem_aln2sam(opt, bns, &strs[0], &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
+			for (i = 0; i < n_aa[1]; ++i)
+				mem_aln2sam(opt, bns, &strs[1], &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
+			if (strcmp(s[0].name, s[1].name) != 0) 
+				err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
+		} // end zv loop
+		s[0].sam = strs[0].s;
+		s[1].sam = strs[1].s;
+		// free
 		for (i = 0; i < 2; ++i) {
 			free(h[i].cigar); free(g[i].cigar);
 			if (XA[i] == 0) continue;
 			for (j = 0; j < a[i].n; ++j) free(XA[i][j]);
 			free(XA[i]);
 		}
-	    kv_destroy(zv);
+		kv_destroy(zv);
 	} else goto no_pairing;
-    return n;
+	return n;
 
 no_pairing:
 	for (i = 0; i < 2; ++i) {
