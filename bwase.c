@@ -504,7 +504,8 @@ void bwase_initialize()
 void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ, const char *rg_line)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, n_seqs, tot_seqs = 0, m_aln;
+	int i, n_seqs, m_aln;
+	uint64_t tot_seqs = 0;
 	bwt_aln1_t *aln = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
@@ -562,7 +563,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 
 		bwa_free_read_seq(n_seqs, seqs);
-		fprintf(stderr, "[bwa_aln_core] %d sequences have been processed.\n", tot_seqs);
+		fprintf(stderr, "[bwa_aln_core] %ju sequences have been processed.\n", (uintmax_t)tot_seqs);
 	}
 
 	// destroy

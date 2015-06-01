@@ -624,7 +624,8 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt, const char *rg_line)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, j, n_seqs, tot_seqs = 0;
+	int i, j, n_seqs;
+	uint64_t tot_seqs = 0;
 	bwa_seq_t *seqs[2];
 	bwa_seqio_t *ks[2];
 	clock_t t;
@@ -711,7 +712,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 		for (j = 0; j < 2; ++j)
 			bwa_free_read_seq(n_seqs, seqs[j]);
-		fprintf(stderr, "[bwa_sai2sam_pe_core] %d sequences have been processed.\n", tot_seqs);
+		fprintf(stderr, "[bwa_sai2sam_pe_core] %ju sequences have been processed.\n", (uintmax_t)tot_seqs);
 		last_ii = ii;
 	}
 
