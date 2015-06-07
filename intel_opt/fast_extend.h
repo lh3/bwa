@@ -10,8 +10,9 @@ extern const int defaultCostMatrixRowCnt ;
 
 extern const int8_t defaultCostMatrix[] ;
 
+bool useavx2;
 // Needs to be called only once per program to set up static arrays
-void init_fast_extend() ;
+void init_fast_extend(bool avx2present) ;
 
 
 // The filtering function:

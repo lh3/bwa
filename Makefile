@@ -27,14 +27,18 @@ sed -e 's/\.\([0-9][0-9]\)/\1/g' \
 AVX2_SUPPORTED:=$(shell $(CC) check_avx2_support.c -o check_avx2_support.o ; ./check_avx2_support.o | grep Yes)
 
 ifeq "$(CC)" "gcc"
-ifeq "$(shell expr $(COMPILER_VER) \<= 40901)" "1"
 ifeq "$(AVX2_SUPPORTED)" "Yes"
-$(info AVX2 Supported and GCC >= 4.9.1 detected, enabling AVX2.)
+ifeq "$(shell expr $(COMPILER_VER) \>= 40901)" "1"
+$(info AVX2 Supported and GCC >= 4.9.1 detected, enabling Intel optimizations with AVX2.)
 DFLAGS += -DUSE_AVX2
 CXXFLAGS += -mavx2
 else
+$(info AVX2 Supported but GCC <= 4.9.1 detected, enabling Intel optimizations with SSE4.)
 CXXFLAGS += -msse4.2
 endif
+else
+$(info AVX2 Not Supported, enabling Intel optimizations with SSE4.)
+CXXFLAGS += -msse4.2
 endif
 endif
 

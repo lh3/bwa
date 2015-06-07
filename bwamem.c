@@ -731,6 +731,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
 			if (opt->flag & MEM_F_FASTEXT) {
 			    a->score = intel_extend(s->qbeg, qs, tmp, rs, 5, opt->mat, opt->o_del, opt->e_del, aw[0], opt->pen_clip5, opt->zdrop, s->len * opt->a, &qle, &tle, &gtle, &gscore, &max_off[0]);
+			    if (a->score != -1)
 				goto end_left_extend;
 			}
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
@@ -765,7 +766,8 @@ end_left_extend:
 			assert(re >= 0);
 			if (opt->flag & MEM_F_FASTEXT) {
 				a->score = intel_extend(l_query - qe, (uint8_t*)query + qe, rmax[1] - rmax[0] - re, rseq + re, 5, opt->mat, opt->o_del, opt->e_del, aw[1], opt->pen_clip3, opt->zdrop, sc0, &qle, &tle, &gtle, &gscore, &max_off[1]);
-				goto end_right_extend;
+				if (a->score != -1)
+				    goto end_right_extend;
 			}
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;

@@ -129,10 +129,10 @@ int main_mem(int argc, char *argv[])
 	memset(&aux, 0, sizeof(ktp_aux_t));
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
 	for (i = 0; i < 4; ++i) pes[i].failed = 1;
-	intel_init();
-	opt = mem_opt_init();
+
+	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "XepaFMCSPHYk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:")) >= 0) {
+	while ((c = getopt(argc, argv, "X1epaFMCSPVYjfk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
@@ -151,7 +151,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'F') opt->flag |= MEM_F_ALN_REG;
 		else if (c == 'Y') opt->flag |= MEM_F_SOFTCLIP;
 		else if (c == 'V') opt->flag |= MEM_F_REF_HDR;
-		else if (c == 'X') opt->flag |= MEM_F_FASTEXT;
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -227,8 +226,10 @@ int main_mem(int argc, char *argv[])
 			if (bwa_verbose >= 3)
 				fprintf(stderr, "[M::%s] mean insert size: %.3f, stddev: %.3f, max: %d, min: %d\n",
 						__func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);
-		}
-		else return 1;
+		} else if (c == 'f') { 
+		    opt->flag |= MEM_F_FASTEXT;
+		    intel_init();
+		} else return 1;
 	}
 
 	if (rg_line) {
@@ -255,6 +256,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -S            skip mate rescue\n");
 		fprintf(stderr, "       -P            skip pairing; mate rescue performed unless -S also in use\n");
 		fprintf(stderr, "       -e            discard full-length exact matches\n");
+		fprintf(stderr, "       -f           Use Intel's filter and extend \n");
 		fprintf(stderr, "\nScoring options:\n\n");
 		fprintf(stderr, "       -A INT        score for a sequence match, which scales options -TdBOELU unless overridden [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT        penalty for a mismatch [%d]\n", opt->b);
@@ -285,7 +287,6 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
 		fprintf(stderr, "                     FR orientation only. [inferred]\n");
-		fprintf(stderr, "       -X            Use Intel's filter and extend \n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Note: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
@@ -376,7 +377,6 @@ int main_mem(int argc, char *argv[])
 		kseq_destroy(aux.ks2);
 		err_gzclose(fp2); kclose(ko2);
 	}
-	intel_destroy();
 	return 0;
 }
 

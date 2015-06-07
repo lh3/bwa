@@ -1036,13 +1036,20 @@ void fast_extend_u256(const uint8_t* refSeq, int refLen, const uint8_t* querySeq
 		      int mismatchWt=4, int gapWt=1, int gapOpenWt=6, int ambigWt = 1) {
 
 #ifdef USE_AVX2
-  fast_extend<BitVec256, EDVec256Every16>
-#else
-    fast_extend<BitVec128x2, EDVec128x2Every16>
-#endif
+    if (useavx2) {
+	fast_extend<BitVec256, EDVec256Every16> 
     (refSeq, refLen, querySeq, queryLen, initScore, endBonus, alignedQLenLow, 
      alignedQLenHigh, alignedRLenLow, alignedRLenHigh, scoreLow, scoreHigh, swFeedback,
      mismatchWt, gapWt, gapOpenWt, ambigWt) ;
+    } else {
+#endif
+    fast_extend<BitVec128x2, EDVec128x2Every16>
+    (refSeq, refLen, querySeq, queryLen, initScore, endBonus, alignedQLenLow, 
+     alignedQLenHigh, alignedRLenLow, alignedRLenHigh, scoreLow, scoreHigh, swFeedback,
+     mismatchWt, gapWt, gapOpenWt, ambigWt) ;
+#ifdef USE_AVX2
+	}
+#endif
 
 }
 
@@ -1201,17 +1208,23 @@ void fast_filter_and_extend(const uint8_t* refSeq, int refLen, const uint8_t* qu
 
 
 
-void init_fast_extend() {
+void init_fast_extend(bool avx2present) {
 #ifdef FINE_ALIGN
   BitCount8::init_lut() ;
 #endif
   //Set ksw_extend functions
 #ifdef USE_AVX2
+  if (avx2present) {
+      useavx2 = avx2present;
       ksw_extend_16 = ksw_extend_avx2_16;
       ksw_extend_32 = ksw_extend_avx2_32;
+  } else {
 #endif
       ksw_extend_16 = ksw_extend_sse_16;
       ksw_extend_32 = ksw_extend;
+#ifdef USE_AVX2
+  }
+#endif
 }
 
 
