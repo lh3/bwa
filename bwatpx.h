@@ -27,7 +27,7 @@
 #define b128_hash(a) ((uint32_t)(a).x)
 
 typedef struct {
-        int n;
+        int64_t n;
         bwtint_t *a;
 } poslist_t;
 
