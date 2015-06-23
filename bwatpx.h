@@ -23,7 +23,7 @@
 // mck - Aug 2011 - tpx - threaded sampe
 
 typedef struct {
-        int n;
+        int64_t n;
         bwtint_t *a;
 } poslist_t;
 
