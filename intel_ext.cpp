@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include "intel_ext.h"
 #include "hsw.c"
-
+#include "utils.h"
 
 extern "C" {
 int ksw_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off);
@@ -31,17 +31,19 @@ void intel_init()
 	init_fast_extend(true);
 	fprintf(stderr,"Initializing Intel's filter_and_extend with AVX2\n");
     } else if (is_sse42_supported()) {
+	err_fatal_simple("ERROR: filter_and_extend optimizations compiled with AVX2 being run without AVX2 support, please compile for current platform\n");
+    }
 #else
     if (is_sse42_supported()) {
-#endif
 	intel_extend = intel_filter_and_extend;
 	init_fast_extend(false);
 	fprintf(stderr,"Initializing Intel's filter_and_extend with SSE4.2\n");
     } else {
-	intel_extend = no_intel_extend;
+	err_fatal_simple("ERROR: filter_and_extend optimizations compiled with SSE4.2 being run without SSE4.2 support, please compile for current platform\n");
     }
+#endif
 #else	
-    intel_extend = no_intel_extend;
+    err_fatal_simple("ERROR: Intel-optimized code enabled with -f flag on a non x86-64 platform\n");
 #endif
 
 }
@@ -101,7 +103,3 @@ int intel_filter_and_extend(int qlen, const uint8_t *query, int tlen, const uint
 	    return -1;
 }
 
-int no_intel_extend(int qlen, const uint8_t *query, int tlen, const uint8_t *target, int m, const int8_t *mat, int gapo, int gape, int w, int end_bonus, int zdrop, int h0, int *qle, int *tle, int *gtle, int *gscore, int *max_off) {
-    fprintf(stderr, "Warning running with -f flag on a platform without Intel SSE4.2 support\n");
-    return -1;
-}
