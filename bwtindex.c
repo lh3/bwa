@@ -175,7 +175,7 @@ void bwt_bwtupdate_core(bwt_t *bwt)
 int bwa_bwtupdate(int argc, char *argv[]) // the "bwtupdate" command
 {
 	bwt_t *bwt;
-	if (argc < 2) {
+	if (argc != 2) {
 		fprintf(stderr, "Usage: bwa bwtupdate <the.bwt>\n");
 		return 1;
 	}
