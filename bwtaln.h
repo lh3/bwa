@@ -108,7 +108,7 @@ typedef struct {
 	int indel_end_skip, max_del_occ, max_entries;
 	float fnr;
 	int max_diff, max_gapo, max_gape;
-	int max_seed_diff, seed_len;
+	int max_seed_diff, seed_len, seed_start;
 	int n_threads;
 	int max_top2;
 	int trim_qual;

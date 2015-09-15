@@ -369,7 +369,10 @@ Disallow an indel within INT bp towards the ends [5]
 .BI -l \ INT
 Take the first INT subsequence as seed. If INT is larger than the query
 sequence, seeding will be disabled. For long reads, this option is
-typically ranged from 25 to 35 for `-k 2'. [inf]
+typically ranged from 25 to 35 for `-k 2'. [32]
+.TP
+.BI -s \ INT
+Start the seed after position INT. [0]
 .TP
 .BI -k \ INT
 Maximum edit distance in the seed [2]
