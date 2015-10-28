@@ -66,7 +66,27 @@ int main(int argc, char *argv[])
 	kstring_t pg = {0,0,0};
 	t_real = realtime();
 	ksprintf(&pg, "@PG\tID:bwa\tPN:bwa\tVN:%s\tCL:%s", PACKAGE_VERSION, argv[0]);
-	for (i = 1; i < argc; ++i) ksprintf(&pg, " %s", argv[i]);
+	for (i = 1; i < argc; ++i) {
+
+	  /* Escape <tab> characters in argv */
+	  kputc(' ', &pg);
+
+	  char* startoff = argv[i];
+	  char* taboff = strchr(argv[i], '\t');
+
+	  while(taboff) {
+	    /* Copy up to the <tab>, followed by a '\t' escape code */
+	    kputsn(startoff, taboff - startoff, &pg);
+	    kputs("\\t", &pg);
+	    startoff = taboff + 1;
+	    taboff = strchr(startoff, '\t');
+	  }
+
+	  /* ...and the rest: */
+	  kputs(startoff, &pg);
+
+	}
+
 	bwa_pg = pg.s;
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "fa2pac") == 0) ret = bwa_fa2pac(argc-1, argv+1);
