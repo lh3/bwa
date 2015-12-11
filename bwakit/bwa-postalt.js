@@ -78,7 +78,7 @@ Bytes.prototype.revcomp = function()
 		this[this.length - i - 1] = Bytes.rctab[this[i]];
 		this[i] = Bytes.rctab[tmp];
 	}
-	if (this.length>>1)
+	if (this.length&1)
 		this[this.length>>1] = Bytes.rctab[this[this.length>>1]];
 }
 
