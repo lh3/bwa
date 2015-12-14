@@ -297,7 +297,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		if (q_pe > 60) q_pe = 60;
 		q_pe = (int)(q_pe * (1. - .5 * (a[0].a[0].frac_rep + a[1].a[0].frac_rep)) + .499);
 		// the following assumes no split hits
-		if (o > score_un) { // paired alignment is preferred
+		if (o >= score_un) { // paired alignment is preferred
 			mem_alnreg_t *c[2];
 			c[0] = &a[0].a[z[0]]; c[1] = &a[1].a[z[1]];
 			for (i = 0; i < 2; ++i) {
