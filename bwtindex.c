@@ -156,7 +156,7 @@ int bwa_bwtupdate(int argc, char *argv[]) // the "bwtupdate" command
 		fprintf(stderr, "Usage: bwa bwtupdate <the.bwt>\n");
 		return 1;
 	}
-	bwt = bwt_restore_bwt(argv[1]);
+	bwt = bwt_restore_bwt(argv[1], 0);
 	bwt_bwtupdate_core(bwt);
 	bwt_dump_bwt(argv[1], bwt);
 	bwt_destroy(bwt);
@@ -177,7 +177,7 @@ int bwa_bwt2sa(int argc, char *argv[]) // the "bwt2sa" command
 		fprintf(stderr, "Usage: bwa bwt2sa [-i %d] <in.bwt> <out.sa>\n", sa_intv);
 		return 1;
 	}
-	bwt = bwt_restore_bwt(argv[optind]);
+	bwt = bwt_restore_bwt(argv[optind], 0);
 	bwt_cal_sa(bwt, sa_intv);
 	bwt_dump_sa(argv[optind+1], bwt);
 	bwt_destroy(bwt);
@@ -262,7 +262,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(str, prefix); strcat(str, ".bwt");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Update BWT... ");
-		bwt = bwt_restore_bwt(str);
+		bwt = bwt_restore_bwt(str, 0);
 		bwt_bwtupdate_core(bwt);
 		bwt_dump_bwt(str, bwt);
 		bwt_destroy(bwt);
@@ -282,7 +282,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(str3, prefix); strcat(str3, ".sa");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Construct SA from BWT and Occ... ");
-		bwt = bwt_restore_bwt(str);
+		bwt = bwt_restore_bwt(str, 0);
 		bwt_cal_sa(bwt, 32);
 		bwt_dump_sa(str3, bwt);
 		bwt_destroy(bwt);

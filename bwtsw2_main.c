@@ -80,7 +80,7 @@ int bwa_bwtsw2(int argc, char *argv[])
 	opt->t *= opt->a;
 	opt->coef *= opt->a;
 
-	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS)) == 0) return 1;
+	if ((idx = bwa_idx_load(argv[optind], BWA_IDX_BWT|BWA_IDX_BNS, 0)) == 0) return 1;
 	bsw2_aln(opt, idx->bns, idx->bwt, argv[optind+1], optind+2 < argc? argv[optind+2] : 0);
 	bwa_idx_destroy(idx);
 	free(opt);

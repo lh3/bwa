@@ -47,7 +47,7 @@ typedef struct {
 	bwtint_t primary; // S^{-1}(0), or the primary index of BWT
 	bwtint_t L2[5]; // C(), cumulative count
 	bwtint_t seq_len; // sequence length
-	bwtint_t bwt_size; // size of bwt, about seq_len/4
+	bwtint_t bwt_size; // number of elements in bwt, about seq_len/4
 	uint32_t *bwt; // BWT
 	// occurance array, separated to two parts
 	uint32_t cnt_table[256];
@@ -55,6 +55,8 @@ typedef struct {
 	int sa_intv;
 	bwtint_t n_sa;
 	bwtint_t *sa;
+	void *bwt_mmap;
+	void *sa_mmap;
 } bwt_t;
 
 typedef struct {
@@ -86,8 +88,8 @@ extern "C" {
 	void bwt_dump_bwt(const char *fn, const bwt_t *bwt);
 	void bwt_dump_sa(const char *fn, const bwt_t *bwt);
 
-	bwt_t *bwt_restore_bwt(const char *fn);
-	void bwt_restore_sa(const char *fn, bwt_t *bwt);
+	bwt_t *bwt_restore_bwt(const char *fn, int use_mmap);
+	void bwt_restore_sa(const char *fn, bwt_t *bwt, int use_mmap);
 
 	void bwt_destroy(bwt_t *bwt);
 
@@ -122,6 +124,28 @@ extern "C" {
 	int bwt_smem1a(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_intv, uint64_t max_intv, bwtintv_v *mem, bwtintv_v *tmpvec[2]);
 
 	int bwt_seed_strategy1(const bwt_t *bwt, int len, const uint8_t *q, int x, int min_len, int max_intv, bwtintv_t *mem);
+
+
+	/**
+	 * mmap a file, either the entire thing or up to `size`.
+	 *
+	 * This function maps the file in private, read-only mode.  It also asks the OS
+	 * to populate the mapped region, reading the entire file into memory and locking
+	 * it there.  For the operation to work the machine has to have sufficient physical
+	 * memory.
+	 *
+	 * In case of error the function aborts.
+	 *
+	 * \param fn:  path to file to mmap.
+	 * \param size: If `size <= 0` map the entire file; else map up to `size`.
+	 * \return pointer to start of mmapped region, as returned by mmap.
+	 */
+	void* bwt_ro_mmap_file(const char *fn, size_t size);
+
+	/**
+	 * Unmap a file previously mapped with `bwt_ro_mmap_file`.
+	 */
+	void bwt_unmap_file(void* map, size_t map_size);
 
 #ifdef __cplusplus
 }

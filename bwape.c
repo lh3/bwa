@@ -271,8 +271,8 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 	buf[1] = (aln_buf_t*)calloc(n_seqs, sizeof(aln_buf_t));
 
 	if (_bwt == 0) { // load forward SA
-		strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
-		strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
+		strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str, 0);
+		strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt, 0);
 	} else bwt = _bwt;
 
 	// SE
@@ -661,8 +661,8 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	ks[1] = bwa_open_reads(opt.mode, fn_fa[1]);
 	{ // for Illumina alignment only
 		if (popt->is_preload) {
-			strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str);
-			strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt);
+			strcpy(str, prefix); strcat(str, ".bwt");  bwt = bwt_restore_bwt(str, 0);
+			strcpy(str, prefix); strcat(str, ".sa"); bwt_restore_sa(str, bwt, 0);
 			pac = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
 			err_rewind(bns->fp_pac);
 			err_fread_noeof(pac, 1, bns->l_pac/4+1, bns->fp_pac);
