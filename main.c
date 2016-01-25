@@ -46,7 +46,6 @@ static int usage()
 	fprintf(stderr, "         shm           manage indices in shared memory\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
 	fprintf(stderr, "         pac2bwt       generate BWT from PAC\n");
-	fprintf(stderr, "         pac2bwtgen    alternative algorithm for generating BWT\n");
 	fprintf(stderr, "         bwtupdate     update .bwt to the new format\n");
 	fprintf(stderr, "         bwt2sa        generate SA from BWT and Occ\n");
 	fprintf(stderr, "\n");
@@ -71,7 +70,6 @@ int main(int argc, char *argv[])
 	if (argc < 2) return usage();
 	if (strcmp(argv[1], "fa2pac") == 0) ret = bwa_fa2pac(argc-1, argv+1);
 	else if (strcmp(argv[1], "pac2bwt") == 0) ret = bwa_pac2bwt(argc-1, argv+1);
-	else if (strcmp(argv[1], "pac2bwtgen") == 0) ret = bwt_bwtgen_main(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwtupdate") == 0) ret = bwa_bwtupdate(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwt2sa") == 0) ret = bwa_bwt2sa(argc-1, argv+1);
 	else if (strcmp(argv[1], "index") == 0) ret = bwa_index(argc-1, argv+1);

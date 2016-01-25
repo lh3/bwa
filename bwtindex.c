@@ -248,8 +248,10 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(str2, prefix); strcat(str2, ".bwt");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Construct BWT for the packed sequence...\n");
-		if (algo_type == 2) bwt_bwtgen2(str, str2, block_size);
-		else if (algo_type == 1 || algo_type == 3) {
+		if (algo_type == 2) {
+			fprintf(stderr, "ERROR: this version of BWA can't construct the FM-index with the BWT-SW algorithm. Abort!\n");
+			abort();
+		} else if (algo_type == 1 || algo_type == 3) {
 			bwt_t *bwt;
 			bwt = bwt_pac2bwt(str, algo_type == 3);
 			bwt_dump_bwt(str2, bwt);
