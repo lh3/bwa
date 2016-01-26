@@ -60,11 +60,12 @@ Index database sequences in the FASTA format.
 Prefix of the output database [same as db filename]
 .TP
 .BI -a \ STR
-Algorithm for constructing BWT index. BWA implements two algorithms for BWT
+Algorithm for constructing BWT index. BWA implements three algorithms for BWT
 construction:
-.B is
+.BR is ,
+.B bwtsw
 and
-.BR bwtsw .
+.BR rb2 .
 The first algorithm is a little faster for small database but requires large
 RAM and does not work for databases with total length longer than 2GB. The
 second algorithm is adapted from the BWT-SW source code. It in theory works
