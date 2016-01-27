@@ -16,8 +16,6 @@ KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
 
-void *kopen(const char *fn, int *_fd);
-int kclose(void *a);
 void kt_pipeline(int n_threads, void *(*func)(void*, int, void*), void *shared_data, int n_steps);
 
 typedef struct {
@@ -115,12 +113,11 @@ static void update_a(mem_opt_t *opt, const mem_opt_t *opt0)
 int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt, opt0;
-	int fd, fd2, i, c, ignore_alt = 0, no_mt_io = 0;
+	int i, c, ignore_alt = 0, no_mt_io = 0;
 	int fixed_chunk_size = -1;
 	gzFile fp, fp2 = 0;
 	char *p, *rg_line = 0, *hdr_line = 0;
 	const char *mode = 0;
-	void *ko = 0, *ko2 = 0;
 	mem_pestat_t pes[4];
 	ktp_aux_t aux;
 
@@ -337,24 +334,22 @@ int main_mem(int argc, char *argv[])
 		for (i = 0; i < aux.idx->bns->n_seqs; ++i)
 			aux.idx->bns->anns[i].is_alt = 0;
 
-	ko = kopen(argv[optind + 1], &fd);
-	if (ko == 0) {
+	fp = strcmp(argv[optind+1], "-")? gzopen(argv[optind+1], "r") : gzdopen(fileno(stdin), "r");
+	if (fp == 0) {
 		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__, argv[optind + 1]);
 		return 1;
 	}
-	fp = gzdopen(fd, "r");
 	aux.ks = kseq_init(fp);
 	if (optind + 2 < argc) {
 		if (opt->flag&MEM_F_PE) {
 			if (bwa_verbose >= 2)
 				fprintf(stderr, "[W::%s] when '-p' is in use, the second query file is ignored.\n", __func__);
 		} else {
-			ko2 = kopen(argv[optind + 2], &fd2);
-			if (ko2 == 0) {
+			fp2 = strcmp(argv[optind+2], "-")? gzopen(argv[optind+2], "r") : gzdopen(fileno(stdin), "r");
+			if (fp2 == 0) {
 				if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] fail to open file `%s'.\n", __func__, argv[optind + 2]);
 				return 1;
 			}
-			fp2 = gzdopen(fd2, "r");
 			aux.ks2 = kseq_init(fp2);
 			opt->flag |= MEM_F_PE;
 		}
@@ -367,10 +362,10 @@ int main_mem(int argc, char *argv[])
 	free(opt);
 	bwa_idx_destroy(aux.idx);
 	kseq_destroy(aux.ks);
-	err_gzclose(fp); kclose(ko);
+	err_gzclose(fp);
 	if (aux.ks2) {
 		kseq_destroy(aux.ks2);
-		err_gzclose(fp2); kclose(ko2);
+		err_gzclose(fp2);
 	}
 	return 0;
 }
