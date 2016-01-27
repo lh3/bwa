@@ -34,6 +34,8 @@
 #include "bntseq.h"
 #include "bwt.h"
 #include "utils.h"
+#include "rle.h"
+#include "rope.h"
 
 #ifdef _DIVBWT
 #include "divsufsort.h"
@@ -90,11 +92,31 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 	if (use_is) {
 		bwt->primary = is_bwt(buf, bwt->seq_len);
 	} else {
-#ifdef _DIVBWT
-		bwt->primary = divbwt(buf, buf, 0, bwt->seq_len);
-#else
-		err_fatal_simple("libdivsufsort is not compiled in.");
-#endif
+		rope_t *r;
+		int64_t x;
+		rpitr_t itr;
+		const uint8_t *blk;
+
+		r = rope_init(ROPE_DEF_MAX_NODES, ROPE_DEF_BLOCK_LEN);
+		for (i = bwt->seq_len - 1, x = 0; i >= 0; --i) {
+			int c = buf[i] + 1;
+			x = rope_insert_run(r, x, c, 1, 0) + 1;
+			while (--c >= 0) x += r->c[c];
+		}
+		bwt->primary = x;
+		rope_itr_first(r, &itr);
+		x = 0;
+		while ((blk = rope_itr_next_block(&itr)) != 0) {
+			const uint8_t *q = blk + 2, *end = blk + 2 + *rle_nptr(blk);
+			while (q < end) {
+				int c = 0;
+				int64_t l;
+				rle_dec1(q, c, l);
+				for (i = 0; i < l; ++i)
+					buf[x++] = c - 1;
+			}
+		}
+		rope_destroy(r);
 	}
 	bwt->bwt = (u_int32_t*)calloc(bwt->bwt_size, 4);
 	for (i = 0; i < bwt->seq_len; ++i)
@@ -189,26 +211,19 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 	extern void bwa_pac_rev_core(const char *fn, const char *fn_rev);
 
 	char *prefix = 0, *str, *str2, *str3;
-	int c, algo_type = 0, is_64 = 0, block_size = 10000000;
+	int c, algo_type = 0, is_64 = 0;
 	clock_t t;
 	int64_t l_pac;
 
 	while ((c = getopt(argc, argv, "6a:p:b:")) >= 0) {
 		switch (c) {
 		case 'a': // if -a is not set, algo_type will be determined later
-			if (strcmp(optarg, "div") == 0) algo_type = 1;
-			else if (strcmp(optarg, "bwtsw") == 0) algo_type = 2;
+			if (strcmp(optarg, "rb2") == 0) algo_type = 1;
 			else if (strcmp(optarg, "is") == 0) algo_type = 3;
 			else err_fatal(__func__, "unknown algorithm: '%s'.", optarg);
 			break;
 		case 'p': prefix = strdup(optarg); break;
 		case '6': is_64 = 1; break;
-		case 'b':
-			block_size = strtol(optarg, &str, 10);
-			if (*str == 'G' || *str == 'g') block_size *= 1024 * 1024 * 1024;
-			else if (*str == 'M' || *str == 'm') block_size *= 1024 * 1024;
-			else if (*str == 'K' || *str == 'k') block_size *= 1024;
-			break;
 		default: return 1;
 		}
 	}
@@ -216,9 +231,8 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 	if (optind + 1 > argc) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Usage:   bwa index [options] <in.fasta>\n\n");
-		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [auto]\n");
+		fprintf(stderr, "Options: -a STR    BWT construction algorithm: is or rb2 [auto]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
-		fprintf(stderr, "         -b INT    block size for the bwtsw algorithm (effective with -a bwtsw) [%d]\n", block_size);
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
@@ -242,19 +256,16 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		err_gzclose(fp);
 	}
-	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
+	if (algo_type == 0) algo_type = l_pac > 50000000? 1 : 3; // set the algorithm for generating BWT
 	{
+		bwt_t *bwt;
 		strcpy(str, prefix); strcat(str, ".pac");
 		strcpy(str2, prefix); strcat(str2, ".bwt");
 		t = clock();
 		fprintf(stderr, "[bwa_index] Construct BWT for the packed sequence...\n");
-		if (algo_type == 2) bwt_bwtgen2(str, str2, block_size);
-		else if (algo_type == 1 || algo_type == 3) {
-			bwt_t *bwt;
-			bwt = bwt_pac2bwt(str, algo_type == 3);
-			bwt_dump_bwt(str2, bwt);
-			bwt_destroy(bwt);
-		}
+		bwt = bwt_pac2bwt(str, algo_type == 3);
+		bwt_dump_bwt(str2, bwt);
+		bwt_destroy(bwt);
 		fprintf(stderr, "[bwa_index] %.2f seconds elapse.\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 	}
 	{

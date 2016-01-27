@@ -7,6 +7,7 @@
 #include "ksw.h"
 #include "utils.h"
 #include "kstring.h"
+#include "kvec.h"
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -55,10 +56,12 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 		}
 		trim_readno(&ks->name);
 		kseq2bseq1(ks, &seqs[n]);
+		seqs[n].id = n;
 		size += seqs[n++].l_seq;
 		if (ks2) {
 			trim_readno(&ks2->name);
 			kseq2bseq1(ks2, &seqs[n]);
+			seqs[n].id = n;
 			size += seqs[n++].l_seq;
 		}
 		if (size >= chunk_size && (n&1) == 0) break;
@@ -69,6 +72,24 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 	}
 	*n_ = n;
 	return seqs;
+}
+
+void bseq_classify(int n, bseq1_t *seqs, int m[2], bseq1_t *sep[2])
+{
+	int i, has_last;
+	kvec_t(bseq1_t) a[2] = {{0,0,0}, {0,0,0}};
+	for (i = 1, has_last = 1; i < n; ++i) {
+		if (has_last) {
+			if (strcmp(seqs[i].name, seqs[i-1].name) == 0) {
+				kv_push(bseq1_t, a[1], seqs[i-1]);
+				kv_push(bseq1_t, a[1], seqs[i]);
+				has_last = 0;
+			} else kv_push(bseq1_t, a[0], seqs[i-1]);
+		} else has_last = 1;
+	}
+	if (has_last) kv_push(bseq1_t, a[0], seqs[i-1]);
+	sep[0] = a[0].a, m[0] = a[0].n;
+	sep[1] = a[1].a, m[1] = a[1].n;
 }
 
 /*****************
@@ -346,13 +367,23 @@ int bwa_idx2mem(bwaidx_t *idx)
  * SAM header routines *
  ***********************/
 
-void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line)
+void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 {
-	int i;
+	int i, n_SQ = 0;
 	extern char *bwa_pg;
-	for (i = 0; i < bns->n_seqs; ++i)
-		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
-	if (rg_line) err_printf("%s\n", rg_line);
+	if (hdr_line) {
+		const char *p = hdr_line;
+		while ((p = strstr(p, "@SQ\t")) != 0) {
+			if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
+			p += 4;
+		}
+	}
+	if (n_SQ == 0) {
+		for (i = 0; i < bns->n_seqs; ++i)
+			err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[i].name, bns->anns[i].len);
+	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
+		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
+	if (hdr_line) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }
 
@@ -401,3 +432,16 @@ err_set_rg:
 	return 0;
 }
 
+char *bwa_insert_header(const char *s, char *hdr)
+{
+	int len = 0;
+	if (s == 0 || s[0] != '@') return hdr;
+	if (hdr) {
+		len = strlen(hdr);
+		hdr = realloc(hdr, len + strlen(s) + 2);
+		hdr[len++] = '\n';
+		strcpy(hdr + len, s);
+	} else hdr = strdup(s);
+	bwa_escape(hdr + len);
+	return hdr;
+}

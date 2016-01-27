@@ -23,7 +23,7 @@ typedef struct {
 } bwaidx_t;
 
 typedef struct {
-	int l_seq;
+	int l_seq, id;
 	char *name, *comment, *seq, *qual, *sam;
 } bseq1_t;
 
@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 	bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_);
+	void bseq_classify(int n, bseq1_t *seqs, int m[2], bseq1_t *sep[2]);
 
 	void bwa_fill_scmat(int a, int b, int8_t mat[25]);
 	uint32_t *bwa_gen_cigar(const int8_t mat[25], int q, int r, int w_, int64_t l_pac, const uint8_t *pac, int l_query, uint8_t *query, int64_t rb, int64_t re, int *score, int *n_cigar, int *NM);
@@ -50,8 +51,9 @@ extern "C" {
 	int bwa_idx2mem(bwaidx_t *idx);
 	int bwa_mem2idx(int64_t l_mem, uint8_t *mem, bwaidx_t *idx);
 
-	void bwa_print_sam_hdr(const bntseq_t *bns, const char *rg_line);
+	void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line);
 	char *bwa_set_rg(const char *s);
+	char *bwa_insert_header(const char *s, char *hdr);
 
 #ifdef __cplusplus
 }

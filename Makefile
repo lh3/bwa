@@ -5,7 +5,7 @@ WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
 LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o bwamem_extra.o malloc_wrap.o
-AOBJS=		QSufSort.o bwt_gen.o is.o bwtindex.o kopen.o fastmap.o bwashm.o
+AOBJS=		rope.o rle.o is.o bwtindex.o kopen.o fastmap.o bwashm.o
 PROG=		bwa
 INCLUDES=	
 LIBS=		-lm -lz -lpthread
@@ -42,7 +42,8 @@ depend:
 QSufSort.o: QSufSort.h
 bamlite.o: bamlite.h malloc_wrap.h
 bntseq.o: bntseq.h utils.h kseq.h malloc_wrap.h khash.h
-bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h kstring.h malloc_wrap.h kseq.h
+bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h kstring.h malloc_wrap.h kvec.h
+bwa.o: kseq.h
 bwamem.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h ksw.h kvec.h
 bwamem.o: ksort.h utils.h kbtree.h
 bwamem_extra.o: bwa.h bntseq.h bwt.h bwamem.h kstring.h malloc_wrap.h
@@ -55,11 +56,10 @@ bwase.o: bwa.h ksw.h
 bwaseqio.o: bwtaln.h bwt.h utils.h bamlite.h malloc_wrap.h kseq.h
 bwashm.o: bwa.h bntseq.h bwt.h
 bwt.o: utils.h bwt.h kvec.h malloc_wrap.h
-bwt_gen.o: QSufSort.h malloc_wrap.h
 bwt_lite.o: bwt_lite.h malloc_wrap.h
 bwtaln.o: bwtaln.h bwt.h bwtgap.h utils.h bwa.h bntseq.h malloc_wrap.h
 bwtgap.o: bwtgap.h bwt.h bwtaln.h malloc_wrap.h
-bwtindex.o: bntseq.h bwt.h utils.h malloc_wrap.h
+bwtindex.o: bntseq.h bwt.h utils.h rle.h rope.h malloc_wrap.h
 bwtsw2_aux.o: bntseq.h bwt_lite.h utils.h bwtsw2.h bwt.h kstring.h
 bwtsw2_aux.o: malloc_wrap.h bwa.h ksw.h kseq.h ksort.h
 bwtsw2_chain.o: bwtsw2.h bntseq.h bwt_lite.h bwt.h malloc_wrap.h ksort.h
@@ -76,5 +76,8 @@ kstring.o: kstring.h malloc_wrap.h
 ksw.o: ksw.h malloc_wrap.h
 main.o: kstring.h malloc_wrap.h utils.h
 malloc_wrap.o: malloc_wrap.h
+maxk.o: bwa.h bntseq.h bwt.h bwamem.h kseq.h malloc_wrap.h
 pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
+rle.o: rle.h
+rope.o: rle.h rope.h
 utils.o: utils.h ksort.h malloc_wrap.h kseq.h
