@@ -87,31 +87,6 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	return ar;
 }
 
-void mem_reg2ovlp(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a)
-{
-	int i;
-	kstring_t str = {0,0,0};
-	for (i = 0; i < a->n; ++i) {
-		const mem_alnreg_t *p = &a->a[i];
-		int is_rev, rid, qb = p->qb, qe = p->qe;
-		int64_t pos, rb = p->rb, re = p->re;
-		pos = bns_depos(bns, rb < bns->l_pac? rb : re - 1, &is_rev);
-		rid = bns_pos2rid(bns, pos);
-		assert(rid == p->rid);
-		pos -= bns->anns[rid].offset;
-		kputs(s->name, &str); kputc('\t', &str);
-		kputw(s->l_seq, &str); kputc('\t', &str);
-		if (is_rev) qb ^= qe, qe ^= qb, qb ^= qe; // swap
-		kputw(qb, &str); kputc('\t', &str); kputw(qe, &str); kputc('\t', &str);
-		kputs(bns->anns[rid].name, &str); kputc('\t', &str);
-		kputw(bns->anns[rid].len, &str); kputc('\t', &str);
-		kputw(pos, &str); kputc('\t', &str); kputw(pos + (re - rb), &str); kputc('\t', &str);
-		ksprintf(&str, "%.3f", (double)p->truesc / opt->a / (qe - qb > re - rb? qe - qb : re - rb));
-		kputc('\n', &str);
-	}
-	s->sam = str.s;
-}
-
 static inline int get_pri_idx(double XA_drop_ratio, const mem_alnreg_t *a, int i)
 {
 	int k = a[i].secondary_all;
