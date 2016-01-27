@@ -65,7 +65,7 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 {
 	bwt_t *bwt;
 	ubyte_t *buf, *buf2;
-	int i, pac_size;
+	int64_t i, pac_size;
 	FILE *fp;
 
 	// initialization
