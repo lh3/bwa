@@ -16,8 +16,6 @@ typedef struct __smem_i smem_i;
 #define MEM_F_ALL       0x8
 #define MEM_F_NO_MULTI  0x10
 #define MEM_F_NO_RESCUE 0x20
-#define MEM_F_SELF_OVLP 0x40
-#define MEM_F_ALN_REG   0x80
 #define MEM_F_REF_HDR	0x100
 #define MEM_F_SOFTCLIP  0x200
 #define MEM_F_SMARTPE   0x400

@@ -114,7 +114,7 @@ static void smem_aux_destroy(smem_aux_t *a)
 static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, const uint8_t *seq, smem_aux_t *a)
 {
 	int i, k, x = 0, old_n;
-	int start_width = (opt->flag & MEM_F_SELF_OVLP)? 2 : 1;
+	int start_width = 1;
 	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
 	a->mem.n = 0;
 	// first pass: find all SMEMs
@@ -486,13 +486,6 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 			else ++m;
 		}
 	return m;
-}
-
-int mem_test_and_remove_exact(const mem_opt_t *opt, int n, mem_alnreg_t *a, int qlen)
-{
-	if (!(opt->flag & MEM_F_SELF_OVLP) || n == 0 || a->truesc != qlen * opt->a) return n;
-	memmove(a, a + 1, (n - 1) * sizeof(mem_alnreg_t));
-	return n - 1;
 }
 
 typedef kvec_t(int) int_v;
@@ -1046,8 +1039,6 @@ mem_alnreg_v mem_align1_core(const mem_opt_t *opt, const bwt_t *bwt, const bntse
 	}
 	free(chn.a);
 	regs.n = mem_sort_dedup_patch(opt, bns, pac, (uint8_t*)seq, regs.n, regs.a);
-	if (opt->flag & MEM_F_SELF_OVLP)
-		regs.n = mem_test_and_remove_exact(opt, regs.n, regs.a, l_seq);
 	if (bwa_verbose >= 4) {
 		err_printf("* %ld chains remain after removing duplicated chains\n", regs.n);
 		for (i = 0; i < regs.n; ++i) {
@@ -1168,12 +1159,8 @@ static void worker2(void *data, int i, int tid)
 	worker_t *w = (worker_t*)data;
 	if (!(w->opt->flag&MEM_F_PE)) {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read '%s' <=====\n", w->seqs[i].name);
-		if (w->opt->flag & MEM_F_ALN_REG) {
-			mem_reg2ovlp(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i]);
-		} else {
-			mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
-			mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
-		}
+		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
+		mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 		free(w->regs[i].a);
 	} else {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read pair '%s' <=====\n", w->seqs[i<<1|0].name);
