@@ -127,7 +127,7 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "1epaFMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:")) >= 0) {
+	while ((c = getopt(argc, argv, "1paMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:W:x:G:h:y:K:X:H:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
@@ -142,8 +142,6 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'p') opt->flag |= MEM_F_PE | MEM_F_SMARTPE;
 		else if (c == 'M') opt->flag |= MEM_F_NO_MULTI;
 		else if (c == 'S') opt->flag |= MEM_F_NO_RESCUE;
-		else if (c == 'e') opt->flag |= MEM_F_SELF_OVLP;
-		else if (c == 'F') opt->flag |= MEM_F_ALN_REG;
 		else if (c == 'Y') opt->flag |= MEM_F_SOFTCLIP;
 		else if (c == 'V') opt->flag |= MEM_F_REF_HDR;
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
@@ -248,7 +246,6 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -m INT        perform at most INT rounds of mate rescues for each read [%d]\n", opt->max_matesw);
 		fprintf(stderr, "       -S            skip mate rescue\n");
 		fprintf(stderr, "       -P            skip pairing; mate rescue performed unless -S also in use\n");
-		fprintf(stderr, "       -e            discard full-length exact matches\n");
 		fprintf(stderr, "\nScoring options:\n\n");
 		fprintf(stderr, "       -A INT        score for a sequence match, which scales options -TdBOELU unless overridden [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT        penalty for a mismatch [%d]\n", opt->b);
@@ -260,7 +257,6 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     pacbio: -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0  (PacBio reads to ref)\n");
 		fprintf(stderr, "                     ont2d: -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0  (Oxford Nanopore 2D-reads to ref)\n");
 		fprintf(stderr, "                     intractg: -B9 -O16 -L5  (intra-species contigs to ref)\n");
-//		fprintf(stderr, "                     pbread: -k13 -W40 -c1000 -r10 -A1 -B1 -O1 -E1 -N25 -FeaD.001\n");
 		fprintf(stderr, "\nInput/output options:\n\n");
 		fprintf(stderr, "       -p            smart pairing (ignoring in2.fq)\n");
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
@@ -293,21 +289,14 @@ int main_mem(int argc, char *argv[])
 			if (!opt0.b) opt->b = 9;
 			if (!opt0.pen_clip5) opt->pen_clip5 = 5;
 			if (!opt0.pen_clip3) opt->pen_clip3 = 5;
-		} else if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "pbread") == 0 || strcmp(mode, "ont2d") == 0) {
+		} else if (strcmp(mode, "pacbio") == 0 || strcmp(mode, "pbref") == 0 || strcmp(mode, "ont2d") == 0) {
 			if (!opt0.o_del) opt->o_del = 1;
 			if (!opt0.e_del) opt->e_del = 1;
 			if (!opt0.o_ins) opt->o_ins = 1;
 			if (!opt0.e_ins) opt->e_ins = 1;
 			if (!opt0.b) opt->b = 1;
 			if (opt0.split_factor == 0.) opt->split_factor = 10.;
-			if (strcmp(mode, "pbread") == 0) { // pacbio read-to-read setting; NOT working well!
-				opt->flag |= MEM_F_ALL | MEM_F_SELF_OVLP | MEM_F_ALN_REG;
-				if (!opt0.min_chain_weight) opt->min_chain_weight = 40;
-				if (!opt0.max_occ) opt->max_occ = 1000;
-				if (!opt0.min_seed_len) opt->min_seed_len = 13;
-				if (!opt0.max_chain_extend) opt->max_chain_extend = 25;
-				if (opt0.drop_ratio == 0.) opt->drop_ratio = .001;
-			} else if (strcmp(mode, "ont2d") == 0) {
+			if (strcmp(mode, "ont2d") == 0) {
 				if (!opt0.min_chain_weight) opt->min_chain_weight = 20;
 				if (!opt0.min_seed_len) opt->min_seed_len = 14;
 				if (!opt0.pen_clip5) opt->pen_clip5 = 0;
@@ -350,8 +339,7 @@ int main_mem(int argc, char *argv[])
 			opt->flag |= MEM_F_PE;
 		}
 	}
-	if (!(opt->flag & MEM_F_ALN_REG))
-		bwa_print_sam_hdr(aux.idx->bns, hdr_line);
+	bwa_print_sam_hdr(aux.idx->bns, hdr_line);
 	aux.actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
 	kt_pipeline(no_mt_io? 1 : 2, process, &aux, 3);
 	free(hdr_line);
