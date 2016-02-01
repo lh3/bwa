@@ -34,6 +34,8 @@
 #include "bntseq.h"
 #include "bwt.h"
 #include "utils.h"
+#include "rle.h"
+#include "rope.h"
 
 #ifdef _DIVBWT
 #include "divsufsort.h"
@@ -63,7 +65,7 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 {
 	bwt_t *bwt;
 	ubyte_t *buf, *buf2;
-	int i, pac_size;
+	int64_t i, pac_size;
 	FILE *fp;
 
 	// initialization
@@ -90,11 +92,31 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 	if (use_is) {
 		bwt->primary = is_bwt(buf, bwt->seq_len);
 	} else {
-#ifdef _DIVBWT
-		bwt->primary = divbwt(buf, buf, 0, bwt->seq_len);
-#else
-		err_fatal_simple("libdivsufsort is not compiled in.");
-#endif
+		rope_t *r;
+		int64_t x;
+		rpitr_t itr;
+		const uint8_t *blk;
+
+		r = rope_init(ROPE_DEF_MAX_NODES, ROPE_DEF_BLOCK_LEN);
+		for (i = bwt->seq_len - 1, x = 0; i >= 0; --i) {
+			int c = buf[i] + 1;
+			x = rope_insert_run(r, x, c, 1, 0) + 1;
+			while (--c >= 0) x += r->c[c];
+		}
+		bwt->primary = x;
+		rope_itr_first(r, &itr);
+		x = 0;
+		while ((blk = rope_itr_next_block(&itr)) != 0) {
+			const uint8_t *q = blk + 2, *end = blk + 2 + *rle_nptr(blk);
+			while (q < end) {
+				int c = 0;
+				int64_t l;
+				rle_dec1(q, c, l);
+				for (i = 0; i < l; ++i)
+					buf[x++] = c - 1;
+			}
+		}
+		rope_destroy(r);
 	}
 	bwt->bwt = (u_int32_t*)calloc(bwt->bwt_size, 4);
 	for (i = 0; i < bwt->seq_len; ++i)
@@ -196,7 +218,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 	while ((c = getopt(argc, argv, "6a:p:b:")) >= 0) {
 		switch (c) {
 		case 'a': // if -a is not set, algo_type will be determined later
-			if (strcmp(optarg, "div") == 0) algo_type = 1;
+			if (strcmp(optarg, "rb2") == 0) algo_type = 1;
 			else if (strcmp(optarg, "bwtsw") == 0) algo_type = 2;
 			else if (strcmp(optarg, "is") == 0) algo_type = 3;
 			else err_fatal(__func__, "unknown algorithm: '%s'.", optarg);
@@ -216,7 +238,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 	if (optind + 1 > argc) {
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Usage:   bwa index [options] <in.fasta>\n\n");
-		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw or is [auto]\n");
+		fprintf(stderr, "Options: -a STR    BWT construction algorithm: bwtsw, is or rb2 [auto]\n");
 		fprintf(stderr, "         -p STR    prefix of the index [same as fasta name]\n");
 		fprintf(stderr, "         -b INT    block size for the bwtsw algorithm (effective with -a bwtsw) [%d]\n", block_size);
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");

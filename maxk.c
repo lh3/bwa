@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <limits.h>
 #include <string.h>
+#include <unistd.h>
 #include "bwa.h"
 #include "bwamem.h"
 #include "kseq.h"
