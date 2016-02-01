@@ -382,7 +382,7 @@ int main_fastmap(int argc, char *argv[])
 		fprintf(stderr, "Options: -l INT    min SMEM length to output [%d]\n", min_len);
 		fprintf(stderr, "         -w INT    max interval size to find coordiantes [%d]\n", min_iwidth);
 		fprintf(stderr, "         -i INT    min SMEM interval size [%d]\n", min_intv);
-		fprintf(stderr, "         -l INT    max MEM length [%d]\n", max_len);
+		fprintf(stderr, "         -L INT    max MEM length [%d]\n", max_len);
 		fprintf(stderr, "         -I INT    stop if MEM is longer than -l with a size less than INT [%ld]\n", (long)max_intv);
 		fprintf(stderr, "\n");
 		return 1;
