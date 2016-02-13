@@ -32,6 +32,7 @@
 #include <time.h>
 #include <zlib.h>
 #include "bntseq.h"
+#include "bwa.h"
 #include "bwt.h"
 #include "utils.h"
 #include "rle.h"
@@ -208,19 +209,14 @@ int bwa_bwt2sa(int argc, char *argv[]) // the "bwt2sa" command
 
 int bwa_index(int argc, char *argv[]) // the "index" command
 {
-	extern void bwa_pac_rev_core(const char *fn, const char *fn_rev);
-
-	char *prefix = 0, *str, *str2, *str3;
-	int c, algo_type = 0, is_64 = 0, block_size = 10000000;
-	clock_t t;
-	int64_t l_pac;
-
+	int c, algo_type = BWTALGO_AUTO, is_64 = 0, block_size = 10000000;
+	char *prefix = 0, *str;
 	while ((c = getopt(argc, argv, "6a:p:b:")) >= 0) {
 		switch (c) {
 		case 'a': // if -a is not set, algo_type will be determined later
-			if (strcmp(optarg, "rb2") == 0) algo_type = 1;
-			else if (strcmp(optarg, "bwtsw") == 0) algo_type = 2;
-			else if (strcmp(optarg, "is") == 0) algo_type = 3;
+			if (strcmp(optarg, "rb2") == 0) algo_type = BWTALGO_RB2;
+			else if (strcmp(optarg, "bwtsw") == 0) algo_type = BWTALGO_BWTSW;
+			else if (strcmp(optarg, "is") == 0) algo_type = BWTALGO_IS;
 			else err_fatal(__func__, "unknown algorithm: '%s'.", optarg);
 			break;
 		case 'p': prefix = strdup(optarg); break;
@@ -252,16 +248,29 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(prefix, argv[optind]);
 		if (is_64) strcat(prefix, ".64");
 	}
+	bwa_idx_build(argv[optind], prefix, algo_type, block_size);
+	free(prefix);
+	return 0;
+}
+
+int bwa_idx_build(const char *fa, const char *prefix, int algo_type, int block_size)
+{
+	extern void bwa_pac_rev_core(const char *fn, const char *fn_rev);
+
+	char *str, *str2, *str3;
+	clock_t t;
+	int64_t l_pac;
+
 	str  = (char*)calloc(strlen(prefix) + 10, 1);
 	str2 = (char*)calloc(strlen(prefix) + 10, 1);
 	str3 = (char*)calloc(strlen(prefix) + 10, 1);
 
 	{ // nucleotide indexing
-		gzFile fp = xzopen(argv[optind], "r");
+		gzFile fp = xzopen(fa, "r");
 		t = clock();
-		fprintf(stderr, "[bwa_index] Pack FASTA... ");
+		if (bwa_verbose >= 3) fprintf(stderr, "[bwa_index] Pack FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 0);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+		if (bwa_verbose >= 3) fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		err_gzclose(fp);
 	}
 	if (algo_type == 0) algo_type = l_pac > 50000000? 2 : 3; // set the algorithm for generating BWT
@@ -269,7 +278,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(str, prefix); strcat(str, ".pac");
 		strcpy(str2, prefix); strcat(str2, ".bwt");
 		t = clock();
-		fprintf(stderr, "[bwa_index] Construct BWT for the packed sequence...\n");
+		if (bwa_verbose >= 3) fprintf(stderr, "[bwa_index] Construct BWT for the packed sequence...\n");
 		if (algo_type == 2) bwt_bwtgen2(str, str2, block_size);
 		else if (algo_type == 1 || algo_type == 3) {
 			bwt_t *bwt;
@@ -277,25 +286,25 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 			bwt_dump_bwt(str2, bwt);
 			bwt_destroy(bwt);
 		}
-		fprintf(stderr, "[bwa_index] %.2f seconds elapse.\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+		if (bwa_verbose >= 3) fprintf(stderr, "[bwa_index] %.2f seconds elapse.\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 	}
 	{
 		bwt_t *bwt;
 		strcpy(str, prefix); strcat(str, ".bwt");
 		t = clock();
-		fprintf(stderr, "[bwa_index] Update BWT... ");
+		if (bwa_verbose >= 3) fprintf(stderr, "[bwa_index] Update BWT... ");
 		bwt = bwt_restore_bwt(str);
 		bwt_bwtupdate_core(bwt);
 		bwt_dump_bwt(str, bwt);
 		bwt_destroy(bwt);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+		if (bwa_verbose >= 3) fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 	}
 	{
-		gzFile fp = xzopen(argv[optind], "r");
+		gzFile fp = xzopen(fa, "r");
 		t = clock();
-		fprintf(stderr, "[bwa_index] Pack forward-only FASTA... ");
+		if (bwa_verbose >= 3) fprintf(stderr, "[bwa_index] Pack forward-only FASTA... ");
 		l_pac = bns_fasta2bntseq(fp, prefix, 1);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+		if (bwa_verbose >= 3) fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 		err_gzclose(fp);
 	}
 	{
@@ -303,13 +312,13 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		strcpy(str, prefix); strcat(str, ".bwt");
 		strcpy(str3, prefix); strcat(str3, ".sa");
 		t = clock();
-		fprintf(stderr, "[bwa_index] Construct SA from BWT and Occ... ");
+		if (bwa_verbose >= 3) fprintf(stderr, "[bwa_index] Construct SA from BWT and Occ... ");
 		bwt = bwt_restore_bwt(str);
 		bwt_cal_sa(bwt, 32);
 		bwt_dump_sa(str3, bwt);
 		bwt_destroy(bwt);
-		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
+		if (bwa_verbose >= 3) fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 	}
-	free(str3); free(str2); free(str); free(prefix);
+	free(str3); free(str2); free(str);
 	return 0;
 }
