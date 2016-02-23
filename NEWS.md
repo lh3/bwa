@@ -23,7 +23,7 @@ Detailed changes:
    license. This allows us to create an Apache2-licensed BWA (in the "Apache2"
    branch) for commercial users who are concerned with GPL.
 
-(0.7.13: 23 Feburary 2016, r1118)
+(0.7.13: 23 Feburary 2016, r1126)
 
 
 
