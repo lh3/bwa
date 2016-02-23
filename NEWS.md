@@ -1,3 +1,32 @@
+Release 0.7.13 (23 Feburary 2016)
+---------------------------------
+
+This release fixes a few minor bugs in the previous version and adds a few
+minor features. All BWA algorithms should produce identical output to 0.7.12
+when there are no ALT contigs.
+
+Detailed changes:
+
+ * Fixed a bug in "bwa-postalt.js". The old version may produce 0.5% of wrong
+   bases for reads mapped to the ALT contigs.
+
+ * Fixed a potential bug in the multithreading mode. It may occur when mapping
+   is much faster than file reading, which should almost never happen in
+   practice.
+
+ * Changed the download URL of GRCh38.
+
+ * Removed the read overlap mode. It is not working well.
+
+ * Added the ropebwt2 algorithm as an alternative to index large genomes.
+   Ropebwt2 is slower than the "bwtsw" algorithm, but it has a permissive
+   license. This allows us to create an Apache2-licensed BWA (in the "Apache2"
+   branch) for commercial users who are concerned with GPL.
+
+(0.7.13: 23 Feburary 2016, r1126)
+
+
+
 Release 0.7.12 (28 December 2014)
 ---------------------------------
 
