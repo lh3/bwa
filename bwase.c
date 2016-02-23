@@ -113,7 +113,7 @@ bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int r
 {
 	bwtint_t pos_f;
 	int is_rev;
-	*strand = 0;
+	*strand = 0; // initialise strand to 0 otherwise we could return without setting it
 	pos_f = bwt_sa(bwt, sapos); // position on the forward-reverse coordinate
 	if (pos_f < bns->l_pac && bns->l_pac < pos_f + ref_len) return (bwtint_t)-1;
 	pos_f = bns_depos(bns, pos_f, &is_rev); // position on the forward strand; this may be the first base or the last base
