@@ -379,7 +379,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 						bwt_multi1_t *q = p[j]->multi + k;
 						q->pos = bwa_sa2pos(bns, bwt, q->pos, p[j]->len + q->ref_shift, &strand);
 						q->strand = strand;
-						if (q->pos != p[j]->pos)
+						if (q->pos != p[j]->pos && q->pos != (bwtint_t)-1)
 							p[j]->multi[n_multi++] = *q;
 					}
 					p[j]->n_multi = n_multi;
