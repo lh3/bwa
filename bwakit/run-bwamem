@@ -5,7 +5,7 @@ use warnings;
 use Getopt::Std;
 
 my %opts = (t=>1);
-getopts("SadskHo:R:x:t:", \%opts);
+getopts("PSadskHo:R:x:t:", \%opts);
 
 die('
 Usage:   run-bwamem [options] <idxbase> <file1> [file2]
@@ -151,7 +151,7 @@ $cmd .= "  | $root/bwa mem $bwa_opts$ARGV[0] - 2> $prefix.log.bwamem \\\n";
 $cmd .= "  | $root/samblaster 2> $prefix.log.dedup \\\n" if defined($opts{d});
 
 my $has_hla = 0;
-if (-f "$ARGV[0].alt") {
+if (-f "$ARGV[0].alt" && !defined($opts{P})) {
 	my $fh;
 	open($fh, "$ARGV[0].alt") || die;
 	while (<$fh>) {
