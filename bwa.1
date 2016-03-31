@@ -107,6 +107,8 @@ appropriate algorithm will be chosen automatically.
 .IR clipPen ]
 .RB [ -U
 .IR unpairPen ]
+.RB [ -x
+.IR readType ]
 .RB [ -R
 .IR RGline ]
 .RB [ -H
@@ -256,6 +258,18 @@ Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
 and scores a paired as scoreRead1+scoreRead2-insertPenalty. It compares these
 two scores to determine whether we should force pairing. A larger value leads to
 more aggressive read pair. [17]
+.TP
+.BI -x \ STR
+Read type. Changes multiple parameters unless overriden [null]
+    pacbio:
+.B -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0
+(PacBio reads to ref)
+    ont2d:
+.B -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0
+(Oxford Nanopore 2D-reads to ref)
+    intractg:
+.B -B9 -O16 -L5
+(intra-species contigs to ref)
 
 .TP
 .B INPUT/OUTPUT OPTIONS:
