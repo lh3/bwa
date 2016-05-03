@@ -381,7 +381,7 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 	if (n_SQ == 0) {
 		for (i = 0; i < bns->n_seqs; ++i) {
 			err_printf("@SQ\tSN:%s\tLN:%d", bns->anns[i].name, bns->anns[i].len);
-			if (bns->anns[i].is_alt) err_printf("\tAH:Y\n");
+			if (bns->anns[i].is_alt) err_printf("\tAH:*\n");
 			else err_fputc('\n', stdout);
 		}
 	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
