@@ -1,3 +1,13 @@
+Release 0.7.14 (4 May 2016)
+---------------------------
+
+In the ALT mapping mode, this release adds the "AH:*" header tag to SQ lines
+corresponding to alternate haplotypes.
+
+(0.7.14: 4 May 2016, r1136)
+
+
+
 Release 0.7.13 (23 Feburary 2016)
 ---------------------------------
 
