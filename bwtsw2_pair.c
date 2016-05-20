@@ -82,7 +82,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 	r.high = (int)(p75 + 3. * (p75 - p25) + .499);
 	if (r.low > r.avg - MAX_STDDEV * r.std) r.low = (int)(r.avg - MAX_STDDEV * r.std + .499);
 	r.low = tmp > max_len? tmp : max_len;
-	if (r.high < r.avg - MAX_STDDEV * r.std) r.high = (int)(r.avg + MAX_STDDEV * r.std + .499);
+	if (r.high < r.avg + MAX_STDDEV * r.std) r.high = (int)(r.avg + MAX_STDDEV * r.std + .499);
 	ksprintf(msg, "[%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r.low, r.high);
 	free(isize);
 	return r;

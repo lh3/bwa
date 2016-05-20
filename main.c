@@ -4,8 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.13-r1126"
-#endif
+#define PACKAGE_VERSION "0.7.13-r1126-insert-size-fix"
 
 int bwa_fa2pac(int argc, char *argv[]);
 int bwa_pac2bwt(int argc, char *argv[]);
