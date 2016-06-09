@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <zlib.h>
 #include <assert.h>
+#include <inttypes.h>
 #include "bntseq.h"
 #include "bwa.h"
 #include "ksw.h"
@@ -144,9 +145,9 @@ uint32_t *bwa_gen_cigar2(const int8_t mat[25], int o_del, int e_del, int o_ins, 
 		max_del = (int)((double)(((l_query+1)>>1) * mat[0] - o_del) / e_del + 1.);
 		max_gap = max_ins > max_del? max_ins : max_del;
 		max_gap = max_gap > 1? max_gap : 1;
-		w = (max_gap + abs(rlen - l_query) + 1) >> 1;
+		w = (max_gap + llabs(rlen - l_query) + 1) >> 1;
 		w = w < w_? w : w_;
-		min_w = abs(rlen - l_query) + 3;
+		min_w = llabs(rlen - l_query) + 3;
 		w = w > min_w? w : min_w;
 		// NW alignment
 		if (bwa_verbose >= 4) {
