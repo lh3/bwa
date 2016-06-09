@@ -423,7 +423,7 @@ static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8
 			subo = p->G2 > opt->t? p->G2 : opt->t;
 			if (p->flag>>16 == 1 || p->flag>>16 == 2) c *= .5;
 			if (p->n_seeds < 2) c *= .2;
-			q->qual = (int)(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a) + .499);
+			q->qual = lrint(c * (p->G - subo) * (250.0 / p->G + 0.03 / opt->a));
 			if (q->qual > 250) q->qual = 250;
 			if (q->qual < 0) q->qual = 0;
 			if (p->flag&1) q->qual = 0; // this is a random hit
@@ -547,7 +547,7 @@ static void update_opt(bsw2opt_t *dst, const bsw2opt_t *src, int qlen)
 	double ll = log(qlen);
 	int i, k;
 	*dst = *src;
-	if (dst->t < ll * dst->coef) dst->t = (int)(ll * dst->coef + .499);
+	if (dst->t < ll * dst->coef) dst->t = lrint(ll * dst->coef);
 	// set band width: the query length sets a boundary on the maximum band width
 	k = (qlen * dst->a - 2 * dst->q) / (2 * dst->r + dst->a);
 	i = (qlen * dst->a - dst->a - dst->t) / dst->r;

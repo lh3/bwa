@@ -74,12 +74,12 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 			continue;
 		} else fprintf(stderr, "[M::%s] analyzing insert size distribution for orientation %c%c...\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
 		ks_introsort_64(q->n, q->a);
-		p25 = q->a[(int)(.25 * q->n + .499)];
-		p50 = q->a[(int)(.50 * q->n + .499)];
-		p75 = q->a[(int)(.75 * q->n + .499)];
-		r->low  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
+		p25 = q->a[lrint(.25 * q->n)];
+		p50 = q->a[lrint(.50 * q->n)];
+		p75 = q->a[lrint(.75 * q->n)];
+		r->low  = lrint(p25 - OUTLIER_BOUND * (p75 - p25));
 		if (r->low < 1) r->low = 1;
-		r->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+		r->high = lrint(p75 + OUTLIER_BOUND * (p75 - p25));
 		fprintf(stderr, "[M::%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
 		fprintf(stderr, "[M::%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r->low, r->high);
 		for (i = x = 0, r->avg = 0; i < q->n; ++i)
@@ -91,10 +91,10 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 				r->std += (q->a[i] - r->avg) * (q->a[i] - r->avg);
 		r->std = sqrt(r->std / x);
 		fprintf(stderr, "[M::%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r->avg, r->std);
-		r->low  = (int)(p25 - MAPPING_BOUND * (p75 - p25) + .499);
-		r->high = (int)(p75 + MAPPING_BOUND * (p75 - p25) + .499);
-		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = (int)(r->avg - MAX_STDDEV * r->std + .499);
-		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
+		r->low  = lrint(p25 - MAPPING_BOUND * (p75 - p25));
+		r->high = lrint(p75 + MAPPING_BOUND * (p75 - p25));
+		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = lrint(r->avg - MAX_STDDEV * r->std);
+		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = lrint(r->avg + MAX_STDDEV * r->std);
 		if (r->low < 1) r->low = 1;
 		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
 		free(q->a);
@@ -215,7 +215,7 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 				if (dist > pes[dir].high) break;
 				if (dist < pes[dir].low)  continue;
 				ns = (dist - pes[dir].avg) / pes[dir].std;
-				q = (int)((v.a[i].y>>32) + (v.a[k].y>>32) + .721 * log(2. * erfc(fabs(ns) * M_SQRT1_2)) * opt->a + .499); // .721 = 1/log(4)
+				q = lrint((v.a[i].y>>32) + (v.a[k].y>>32) + .721 * log(2. * erfc(fabs(ns) * M_SQRT1_2)) * opt->a); // .721 = 1/log(4)
 				if (q < 0) q = 0;
 				p = kv_pushp(pair64_t, u);
 				p->y = (uint64_t)k<<32 | i;
@@ -245,7 +245,7 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m);
 void mem_reorder_primary5(int T, mem_alnreg_v *a);
 
-#define raw_mapq(diff, a) ((int)(6.02 * (diff) / (a) + .499))
+#define raw_mapq(diff, a) (lrint(6.02 * (diff) / (a)))
 
 int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], uint64_t id, bseq1_t s[2], mem_alnreg_v a[2])
 {
@@ -294,13 +294,13 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
-		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
+		//q_pe = o && subo < o? lrint(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov)) : 0;
 		subo = subo > score_un? subo : score_un;
 		q_pe = raw_mapq(o - subo, opt->a);
-		if (n_sub > 0) q_pe -= (int)(4.343 * log(n_sub+1) + .499);
+		if (n_sub > 0) q_pe -= lrint(4.343 * log(n_sub+1));
 		if (q_pe < 0) q_pe = 0;
 		if (q_pe > 60) q_pe = 60;
-		q_pe = (int)(q_pe * (1. - .5 * (a[0].a[0].frac_rep + a[1].a[0].frac_rep)) + .499);
+		q_pe = llrint(q_pe * (1. - .5 * (a[0].a[0].frac_rep + a[1].a[0].frac_rep)));
 		// the following assumes no split hits
 		if (o > score_un) { // paired alignment is preferred
 			mem_alnreg_t *c[2];

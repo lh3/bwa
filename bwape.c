@@ -106,9 +106,9 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	p25 = isizes[(int)(tot*0.25 + 0.5)];
 	p50 = isizes[(int)(tot*0.50 + 0.5)];
 	p75 = isizes[(int)(tot*0.75 + 0.5)];
-	tmp  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
+	tmp  = lrint(p25 - OUTLIER_BOUND * (p75 - p25));
 	ii->low = tmp > max_len? tmp : max_len; // ii->low is unsigned
-	ii->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+	ii->high = lrint(p75 + OUTLIER_BOUND * (p75 - p25));
 	if (ii->low > ii->high) {
 		fprintf(stderr, "[infer_isize] fail to infer insert size: upper bound is smaller than read length\n");
 		free(isizes);
@@ -131,7 +131,7 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	skewness = skewness / n / (ii->std * ii->std * ii->std);
 	for (y = 1.0; y < 10.0; y += 0.01)
 		if (.5 * erfc(y / M_SQRT2) < ap_prior / L * (y * ii->std + ii->avg)) break;
-	ii->high_bayesian = (bwtint_t)(y * ii->std + ii->avg + .499);
+	ii->high_bayesian = llrint(y * ii->std + ii->avg);
 	for (i = 0; i < tot; ++i)
 		if (isizes[i] > ii->high_bayesian) ++n_ap;
 	ii->ap_prior = .01 * (n_ap + .01) / tot;
@@ -145,7 +145,7 @@ static int infer_isize(int n_seqs, bwa_seq_t *seqs[2], isize_info_t *ii, double 
 	}
 	for (y = 1.0; y < 10.0; y += 0.01)
 		if (.5 * erfc(y / M_SQRT2) < ap_prior / L * (y * ii->std + ii->avg)) break;
-	ii->high_bayesian = (bwtint_t)(y * ii->std + ii->avg + .499);
+	ii->high_bayesian = llrint(y * ii->std + ii->avg);
 	fprintf(stderr, "[infer_isize] low and high boundaries: %ld and %ld for estimating avg and std\n", (long)ii->low, (long)ii->high);
 	fprintf(stderr, "[infer_isize] inferred external isize from %d pairs: %.3lf +/- %.3lf\n", n, ii->avg, ii->std);
 	fprintf(stderr, "[infer_isize] skewness: %.3lf; kurtosis: %.3lf; ap_prior: %.2e\n", skewness, kurtosis, ii->ap_prior);
@@ -170,7 +170,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 		{ \
 			uint64_t s = d->aln[(v).y&1].a[(v).y>>2].score + d->aln[(u).y&1].a[(u).y>>2].score; \
 			s *= 10; \
-			if (ii->high) s += (int)(-4.343 * log(.5 * erfc(M_SQRT1_2 * fabs(l - ii->avg) / ii->std)) + .499); \
+			if (ii->high) s += lrint(-4.343 * log(.5 * erfc(M_SQRT1_2 * fabs(l - ii->avg) / ii->std))); \
 			s = s<<32 | (uint32_t)hash_64((u).x<<32 | (v).x); \
 			if (s>>32 == o_score>>32) ++o_n; \
 			else if (s>>32 < o_score>>32) { subo_n += o_n; o_n = 1; } \
@@ -572,10 +572,10 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 					int s_old, clip = 0, s_new;
 					if (__cigar_op(cigar[k][0]) == 3) clip += __cigar_len(cigar[k][0]);
 					if (__cigar_op(cigar[k][n_cigar[k]-1]) == 3) clip += __cigar_len(cigar[k][n_cigar[k]-1]);
-					s_old = (int)((p[k]->n_mm * 9 + p[k]->n_gapo * 13 + p[k]->n_gape * 2) / 3. * 8. + .499);
-					s_new = (int)(((cnt[k]>>16) * 9 + (cnt[k]>>8&0xff) * 13 + (cnt[k]&0xff) * 2 + clip * 3) / 3. * 8. + .499);
+					s_old = lrint((p[k]->n_mm * 9 + p[k]->n_gapo * 13 + p[k]->n_gape * 2) / 3. * 8.);
+					s_new = lrint(((cnt[k]>>16) * 9 + (cnt[k]>>8&0xff) * 13 + (cnt[k]&0xff) * 2 + clip * 3) / 3. * 8.);
 					s_old += -4.343 * log(ii->ap_prior / bns->l_pac);
-					s_new += (int)(-4.343 * log(.5 * erfc(M_SQRT1_2 * 1.5) + .499)); // assume the mapped isize is 1.5\sigma
+					s_new += lrint(-4.343 * log(.5 * erfc(M_SQRT1_2 * 1.5))); // assume the mapped isize is 1.5\sigma
 					if (s_old < s_new) { // reject SW alignment
 						mq_adjust[k] = s_new - s_old;
 						free(cigar[k]); cigar[k] = 0; n_cigar[k] = 0;

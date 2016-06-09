@@ -115,7 +115,7 @@ static void mem_collect_intv(const mem_opt_t *opt, const bwt_t *bwt, int len, co
 {
 	int i, k, x = 0, old_n;
 	int start_width = 1;
-	int split_len = (int)(opt->min_seed_len * opt->split_factor + .499);
+	int split_len = lrintf(opt->min_seed_len * opt->split_factor);
 	a->mem.n = 0;
 	// first pass: find all SMEMs
 	while (x < len) {
@@ -426,8 +426,8 @@ int mem_patch_reg(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac,
 	w = w < opt->w<<2? w : opt->w<<2;
 	if (bwa_verbose >= 4) printf("* test potential hit merge with global alignment; w=%d\n", w);
 	bwa_gen_cigar2(opt->mat, opt->o_del, opt->e_del, opt->o_ins, opt->e_ins, w, bns->l_pac, pac, b->qe - a->qb, query + a->qb, a->rb, b->re, &score, 0, 0);
-	q_s = (int)((double)(b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score) + .499); // predicted score from query
-	r_s = (int)((double)(b->re - a->rb) / ((b->re - b->rb) + (a->re - a->rb)) * (b->score + a->score) + .499); // predicted score from ref
+	q_s = lrint((double)(b->qe - a->qb) / ((b->qe - b->qb) + (a->qe - a->qb)) * (b->score + a->score)); // predicted score from query
+	r_s = lrint((double)(b->re - a->rb) / ((b->re - b->rb) + (a->re - a->rb)) * (b->score + a->score)); // predicted score from ref
 	if (bwa_verbose >= 4) printf("* score=%d;(%d,%d)\n", score, q_s, r_s);
 	if ((double)score / (q_s > r_s? q_s : r_s) < PATCH_MIN_SC_RATIO) return 0;
 	*_w = w;
@@ -598,7 +598,7 @@ int mem_seed_sw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, i
 void mem_flt_chained_seeds(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, int l_query, const uint8_t *query, int n_chn, mem_chain_t *a)
 {
 	double min_l = opt->min_chain_weight? MEM_HSP_COEF * opt->min_chain_weight : MEM_MINSC_COEF * log(l_query);
-	int i, j, k, min_HSP_score = (int)(opt->a * min_l + .499);
+	int i, j, k, min_HSP_score = lrint(opt->a * min_l);
 	if (min_l > MEM_SEEDSW_COEF * l_query) return; // don't run the following for short reads
 	for (i = 0; i < n_chn; ++i) {
 		mem_chain_t *c = &a[i];
@@ -956,15 +956,15 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 		double tmp;
 		tmp = l < opt->mapQ_coef_len? 1. : opt->mapQ_coef_fac / log(l);
 		tmp *= identity * identity;
-		mapq = (int)(6.02 * (a->score - sub) / opt->a * tmp * tmp + .499);
+		mapq = lrint(6.02 * (a->score - sub) / opt->a * tmp * tmp);
 	} else {
-		mapq = (int)(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov) + .499);
-		mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+		mapq = lrint(MEM_MAPQ_COEF * (1. - (double)sub / a->score) * log(a->seedcov));
+		mapq = identity < 0.95? lrint(mapq * identity * identity) : mapq;
 	}
-	if (a->sub_n > 0) mapq -= (int)(4.343 * log(a->sub_n+1) + .499);
+	if (a->sub_n > 0) mapq -= lrint(4.343 * log(a->sub_n+1));
 	if (mapq > 60) mapq = 60;
 	if (mapq < 0) mapq = 0;
-	mapq = (int)(mapq * (1. - a->frac_rep) + .499);
+	mapq = lrint(mapq * (1. - a->frac_rep));
 	return mapq;
 }
 
