@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <errno.h>
+#include <unistd.h>
 #include "QSufSort.h"
 
 #ifdef USE_MALLOC_WRAPPERS
@@ -1607,18 +1608,37 @@ void bwt_bwtgen2(const char *fn_pac, const char *fn_bwt, int block_size)
 	BWTIncFree(bwtInc);
 }
 
-void bwt_bwtgen(const char *fn_pac, const char *fn_bwt)
+void bwt_bwtgen(const char *fn_pac, const char *fn_bwt, int block_size)
 {
-	bwt_bwtgen2(fn_pac, fn_bwt, 10000000);
+	bwt_bwtgen2(fn_pac, fn_bwt, block_size);
 }
 
 int bwt_bwtgen_main(int argc, char *argv[])
 {
-	if (argc < 3) {
+	int c, block_size = 10000000;
+	char *str;
+
+
+	while ((c = getopt(argc, argv, "b:")) >= 0) {
+		switch (c) {
+		case 'b':
+			block_size = strtol(optarg, &str, 10);
+			if (*str == 'G' || *str == 'g') block_size *= 1024 * 1024 * 1024;
+			else if (*str == 'M' || *str == 'm') block_size *= 1024 * 1024;
+			else if (*str == 'K' || *str == 'k') block_size *= 1024;
+			break;
+		default: return 1;
+		}
+	}
+
+	if (optind + 1 > argc) {
 		fprintf(stderr, "Usage: bwtgen <in.pac> <out.bwt>\n");
+		fprintf(stderr, "Options: -b INT    block size [%d]\n", block_size);
 		return 1;
 	}
-	bwt_bwtgen(argv[1], argv[2]);
+
+
+	bwt_bwtgen(argv[1], argv[2], block_size);
 	return 0;
 }
 
