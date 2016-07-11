@@ -1638,7 +1638,7 @@ int bwt_bwtgen_main(int argc, char *argv[])
 	}
 
 
-	bwt_bwtgen(argv[1], argv[2], block_size);
+	bwt_bwtgen(argv[optind], argv[optind+1], block_size);
 	return 0;
 }
 
