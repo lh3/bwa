@@ -436,12 +436,12 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			h1 = h;             // save H(i,j) to h1 for the next column
 			mj = m > h? mj : j; // record the position where max score is achieved
 			m = m > h? m : h;   // m is stored at eh[mj+1]
-			t = M - oe_del;
+			t = h - oe_del;     //E(i+1,j) = max{H(i,j)-gapo, E(i,j)} - gape
 			t = t > 0? t : 0;
 			e -= e_del;
 			e = e > t? e : t;   // computed E(i+1,j)
 			p->e = e;           // save E(i+1,j) for the next row
-			t = M - oe_ins;
+			t = h - oe_ins;     //F(i,j+1) = max{H(i,j)-gapo, F(i,j)} - gape
 			t = t > 0? t : 0;
 			f -= e_ins;
 			f = f > t? f : t;   // computed F(i,j+1)
