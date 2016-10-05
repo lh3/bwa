@@ -1,3 +1,23 @@
+Release 0.7.15 (31 May 2016)
+----------------------------
+
+Fixed a long existing bug which potentially leads underestimated insert size
+upper bound. This bug should have little effect in practice.
+
+(0.7.15: 31 May 2016, r1140)
+
+
+
+Release 0.7.14 (4 May 2016)
+---------------------------
+
+In the ALT mapping mode, this release adds the "AH:*" header tag to SQ lines
+corresponding to alternate haplotypes.
+
+(0.7.14: 4 May 2016, r1136)
+
+
+
 Release 0.7.13 (23 Feburary 2016)
 ---------------------------------
 

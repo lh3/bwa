@@ -968,6 +968,30 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	return mapq;
 }
 
+void mem_reorder_primary5(int T, mem_alnreg_v *a)
+{
+	int k, n_pri = 0, left_st = INT_MAX, left_k = -1;
+	mem_alnreg_t t;
+	for (k = 0; k < a->n; ++k)
+		if (a->a[k].secondary < 0 && !a->a[k].is_alt && a->a[k].score >= T) ++n_pri;
+	if (n_pri <= 1) return; // only one alignment
+	for (k = 0; k < a->n; ++k) {
+		mem_alnreg_t *p = &a->a[k];
+		if (p->secondary >= 0 || p->is_alt || p->score < T) continue;
+		if (p->qb < left_st) left_st = p->qb, left_k = k;
+	}
+	assert(a->a[0].secondary < 0);
+	if (left_k == 0) return; // no need to reorder
+	t = a->a[0], a->a[0] = a->a[left_k], a->a[left_k] = t;
+	for (k = 1; k < a->n; ++k) { // update secondary and secondary_all
+		mem_alnreg_t *p = &a->a[k];
+		if (p->secondary == 0) p->secondary = left_k;
+		else if (p->secondary == left_k) p->secondary = 0;
+		if (p->secondary_all == 0) p->secondary_all = left_k;
+		else if (p->secondary_all == left_k) p->secondary_all = 0;
+	}
+}
+
 // TODO (future plan): group hits into a uint64_t[] array. This will be cleaner and more flexible
 void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, bseq1_t *s, mem_alnreg_v *a, int extra_flag, const mem_aln_t *m)
 {
@@ -1160,6 +1184,7 @@ static void worker2(void *data, int i, int tid)
 	if (!(w->opt->flag&MEM_F_PE)) {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read '%s' <=====\n", w->seqs[i].name);
 		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
+		if (w->opt->flag & MEM_F_PRIMARY5) mem_reorder_primary5(w->opt->T, &w->regs[i]);
 		mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 		free(w->regs[i].a);
 	} else {
