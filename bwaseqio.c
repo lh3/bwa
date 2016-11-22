@@ -163,18 +163,25 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 	n_seqs = 0;
 	seqs = (bwa_seq_t*)calloc(n_needed, sizeof(bwa_seq_t));
 	while ((l = kseq_read(seq)) >= 0) {
+		p = &seqs[n_seqs++];
 		if ((mode & BWA_MODE_CFY) && (seq->comment.l != 0)) {
-			// skip reads that are marked to be filtered by Casava
+			// Flag QC-failing after CASAVA
 			char *s = index(seq->comment.s, ':');
 			if (s && *(++s) == 'Y') {
-				continue;
+				p->extra_flag |= SAM_QCF;
 			}
 		}
 		if (is_64 && seq->qual.l)
 			for (i = 0; i < seq->qual.l; ++i) seq->qual.s[i] -= 31;
 		if (seq->seq.l <= l_bc) continue; // sequence length equals or smaller than the barcode length
-		p = &seqs[n_seqs++];
+		/* 	
+			Deal with the barcode. Apparently bwa needs it always to be there, even if 
+			it is null. Create a 1 byte array to store an empty barcode. If needed realloc
+		*/
+		p->bc = malloc(sizeof(char));	// Apparently we need the barcode to be always
+		p->bc[0] = 0;
 		if (l_bc) { // then trim barcode
+			p->bc = realloc(p->bc, l_bc * sizeof(char));
 			for (i = 0; i < l_bc; ++i)
 				p->bc[i] = (seq->qual.l && seq->qual.s[i]-33 < BARCODE_LOW_QUAL)? tolower(seq->seq.s[i]) : toupper(seq->seq.s[i]);
 			p->bc[i] = 0;
@@ -187,7 +194,7 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 				seq->qual.l -= l_bc; seq->qual.s[seq->qual.l] = 0;
 			}
 			l = seq->seq.l;
-		} else p->bc[0] = 0;
+		}
 		p->tid = -1; // no assigned to a thread
 		p->qual = 0;
 		p->full_len = p->clip_len = p->len = l;
@@ -230,6 +237,7 @@ void bwa_free_read_seq(int n_seqs, bwa_seq_t *seqs)
 		free(p->name);
 		free(p->seq); free(p->rseq); free(p->qual); free(p->aln); free(p->md); free(p->multi);
 		free(p->cigar);
+		free(p->bc);
 	}
 	free(seqs);
 }

@@ -9,15 +9,17 @@
 #define BWA_TYPE_REPEAT 2
 #define BWA_TYPE_MATESW 3
 
-#define SAM_FPD   1 // paired
-#define SAM_FPP   2 // properly paired
-#define SAM_FSU   4 // self-unmapped
-#define SAM_FMU   8 // mate-unmapped
-#define SAM_FSR  16 // self on the reverse strand
-#define SAM_FMR  32 // mate on the reverse strand
-#define SAM_FR1  64 // this is read one
-#define SAM_FR2 128 // this is read two
-#define SAM_FSC 256 // secondary alignment
+#define SAM_FPD    1 // paired
+#define SAM_FPP    2 // properly paired
+#define SAM_FSU    4 // self-unmapped
+#define SAM_FMU    8 // mate-unmapped
+#define SAM_FSR   16 // self on the reverse strand
+#define SAM_FMR   32 // mate on the reverse strand
+#define SAM_FR1   64 // this is read one
+#define SAM_FR2  128 // this is read two
+#define SAM_FSC  256 // secondary alignment
+#define SAM_QCF  512 // QC-fail
+#define SAM_OPD 1024 // duplicated read
 
 #define BWA_AVG_ERR 0.02
 #define BWA_MIN_RDLEN 35 // for read trimming
@@ -66,7 +68,7 @@ typedef struct {
 typedef struct {
 	char *name;
 	ubyte_t *seq, *rseq, *qual;
-	uint32_t len:20, strand:1, type:2, dummy:1, extra_flag:8;
+	uint32_t len:18, strand:1, type:2, dummy:1, extra_flag:10;
 	uint32_t n_mm:8, n_gapo:8, n_gape:8, mapQ:8;
 	int score;
 	int clip_len;
@@ -85,7 +87,7 @@ typedef struct {
 	// for multi-threading only
 	int tid;
 	// barcode
-	char bc[BWA_MAX_BCLEN+1]; // null terminated; up to BWA_MAX_BCLEN bases
+	char *bc; // store barcode, if any.
 	// NM and MD tags
 	uint32_t full_len:20, nm:12;
 	char *md;
@@ -104,7 +106,7 @@ typedef struct {
 
 typedef struct {
 	int s_mm, s_gapo, s_gape;
-	int mode; // bit 24-31 are the barcode length
+	uint32_t mode; // bit 24-31 are the barcode length
 	int indel_end_skip, max_del_occ, max_entries;
 	float fnr;
 	int max_diff, max_gapo, max_gape;
