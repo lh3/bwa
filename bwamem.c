@@ -809,25 +809,9 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 	return l;
 }
 
-void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
-{
-	int i, l_name;
-	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
-
-	if (m_) mtmp = *m_, m = &mtmp;
-	// set flag
-	p->flag |= m? 0x1 : 0; // is paired in sequencing
-	p->flag |= p->rid < 0? 0x4 : 0; // is mapped
-	p->flag |= m && m->rid < 0? 0x8 : 0; // is mate mapped
-	if (p->rid < 0 && m && m->rid >= 0) // copy mate to alignment
-		p->rid = m->rid, p->pos = m->pos, p->is_rev = m->is_rev, p->n_cigar = 0;
-	if (m && m->rid < 0 && p->rid >= 0) // copy alignment to mate
-		m->rid = p->rid, m->pos = p->pos, m->is_rev = p->is_rev, m->n_cigar = 0;
-	p->flag |= p->is_rev? 0x10 : 0; // is on the reverse strand
-	p->flag |= m && m->is_rev? 0x20 : 0; // is mate on the reverse strand
-
+void mem_fmt_sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *p, const mem_aln_t *m) {
 	// print up to CIGAR
-	l_name = strlen(s->name);
+	int i, l_name = strlen(s->name);
 	ks_resize(str, str->l + s->l_seq + l_name + (s->qual? s->l_seq : 0) + 20);
 	kputsn(s->name, l_name, str); kputc('\t', str); // QNAME
 	kputw((p->flag&0xffff) | (p->flag&0x10000? 0x100 : 0), str); kputc('\t', str); // FLAG
@@ -843,7 +827,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
 			}
 		} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
-	} else kputsn("*\t0\t0\t*", 7, str); // without coordinte
+	} else kputsn("*\t0\t0\t*", 7, str); // without coordinate
 	kputc('\t', str);
 
 	// print the mate position if applicable
@@ -936,6 +920,27 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 			if (str->s[i] == '\t') str->s[i] = ' ';
 	}
 	kputc('\n', str);
+}
+
+void (*mem_fmt_fnc)(const mem_opt_t*, const bntseq_t*, kstring_t*, bseq1_t*, int, const mem_aln_t*, int, const mem_aln_t*, const mem_aln_t*) = &mem_fmt_sam;
+
+void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
+{
+	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
+
+	if (m_) mtmp = *m_, m = &mtmp;
+	// set flag
+	p->flag |= m? 0x1 : 0; // is paired in sequencing
+	p->flag |= p->rid < 0? 0x4 : 0; // is mapped
+	p->flag |= m && m->rid < 0? 0x8 : 0; // is mate mapped
+	if (p->rid < 0 && m && m->rid >= 0) // copy mate to alignment
+		p->rid = m->rid, p->pos = m->pos, p->is_rev = m->is_rev, p->n_cigar = 0;
+	if (m && m->rid < 0 && p->rid >= 0) // copy alignment to mate
+		m->rid = p->rid, m->pos = p->pos, m->is_rev = p->is_rev, m->n_cigar = 0;
+	p->flag |= p->is_rev? 0x10 : 0; // is on the reverse strand
+	p->flag |= m && m->is_rev? 0x20 : 0; // is mate on the reverse strand
+
+	(*mem_fmt_fnc)(opt, bns, str, s, n, list, which, p, m);
 }
 
 /************************
