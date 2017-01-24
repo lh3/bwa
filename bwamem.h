@@ -4,6 +4,7 @@
 #include "bwt.h"
 #include "bntseq.h"
 #include "bwa.h"
+#include "kstring.h"
 
 #define MEM_MAPQ_COEF 30.0
 #define MEM_MAPQ_MAX  60
@@ -106,6 +107,8 @@ extern "C" {
 
 	mem_opt_t *mem_opt_init(void);
 	void mem_fill_scmat(int a, int b, int8_t mat[25]);
+
+	extern void (*mem_fmt_fnc)(const mem_opt_t*, const bntseq_t*, kstring_t*, bseq1_t*, int, const mem_aln_t*, int, const mem_aln_t*, const mem_aln_t*);
 
 	/**
 	 * Align a batch of sequences and generate the alignments in the SAM format

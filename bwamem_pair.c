@@ -348,7 +348,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		}
 		for (i = 0; i < n_aa[0]; ++i)
 			mem_aln2sam(opt, bns, &str, &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
-		s[0].sam = strdup(str.s); str.l = 0;
+		s[0].sam = str.s; str.m = str.l = 0; str.s = 0;
 		for (i = 0; i < n_aa[1]; ++i)
 			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
 		s[1].sam = str.s;
