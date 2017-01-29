@@ -43,12 +43,71 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 	return j < r->n? r->a[j].score : opt->min_seed_len * opt->a;
 }
 
-void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
-{
-	int i, d, max;
-	uint64_v isize[4];
+void mem_pestat(const mem_opt_t *opt, int **ins_size_dist, mem_pestat_t pes[4]) {
+	int i, d, k, n[4], x, p25, p50, p75, max;
+	for (d = 0, max = 0; d < 4; ++d) {
+		for (i = 0, n[d] = 0; i < opt->max_ins; ++i)
+			n[d] += ins_size_dist[d][i];
+		if (n[d] > max) max=n[d];
+	}
+	if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%d, %d, %d, %d)\n", __func__, n[0], n[1], n[2], n[3]);
+	for (d = 0; d < 4; ++d) {
+		mem_pestat_t *r = &pes[d];
+		if (n[d] < MIN_DIR_CNT) {
+			fprintf(stderr, "[M::%s] skip orientation %c%c as there are not enough pairs\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+			r->failed = 1;
+			continue;
+		} else fprintf(stderr, "[M::%s] analyzing insert size distribution for orientation %c%c...\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+                // TODO: Code in bwtsw2_pair.c also computes percentiles. It would be better to merge these two.
+		p25 = 0;
+		k = 0;
+		x = (int)(.25 * n[d] + .499);
+		while (k <= x)
+			k += ins_size_dist[d][p25++];
+		p50 = p25;
+		x = (int)(.50 * n[d] + .499);
+		while (k <= x)
+			k += ins_size_dist[d][p50++];
+		p75 = p50;
+		x = (int)(.75 * n[d] + .499); // Will be strictly less than n[d], unless MIN_DIR_CNT is set to 1 and n[d] equals 1.
+		while (k <= x)
+			k += ins_size_dist[d][p75++];
+		r->low	= (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
+		if (r->low < 1) r->low = 1;
+		r->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+		if (r->high > opt->max_ins) r->high = opt->max_ins;
+		fprintf(stderr, "[M::%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
+		fprintf(stderr, "[M::%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r->low, r->high);
+		for (i = r->low-1, r->avg = 0, x = 0; i < r->high; ++i) {
+			k = ins_size_dist[d][i];
+			x += k;
+			r->avg += (i+1)*k;
+		}
+		r->avg /= x;
+		for (i = r->low-1, r->std = 0; i < r->high; ++i) {
+			k = ins_size_dist[d][i];
+			r->std += k*(i+1-r->avg)*(i+1-r->avg);
+		}
+		r->std = sqrt(r->std / x);
+		fprintf(stderr, "[M::%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r->avg, r->std);
+		r->low  = (int)(p25 - MAPPING_BOUND * (p75 - p25) + .499);
+		r->high = (int)(p75 + MAPPING_BOUND * (p75 - p25) + .499);
+		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = (int)(r->avg - MAX_STDDEV * r->std + .499);
+		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
+		if (r->low < 1) r->low = 1;
+		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
+	}
+	for (d = 0; d < 4; ++d)
+		if (pes[d].failed == 0 && n[d] < max * MIN_DIR_RATIO) {
+			pes[d].failed = 1;
+			fprintf(stderr, "[M::%s] skip orientation %c%c\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
+		}
+}
+
+void mem_pestat_store(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4], int **global_ins_size_dist) {
+	int i, d, *ins_size_dist[4];
+	for (d = 0; d < 4; ++d) ins_size_dist[d] = calloc(opt->max_ins, sizeof(int));
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
-	memset(isize, 0, sizeof(kvec_t(int)) * 4);
 	for (i = 0; i < n>>1; ++i) {
 		int dir;
 		int64_t is;
@@ -60,52 +119,14 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		if (cal_sub(opt, r[1]) > MIN_RATIO * r[1]->a[0].score) continue;
 		if (r[0]->a[0].rid != r[1]->a[0].rid) continue; // not on the same chr
 		dir = mem_infer_dir(l_pac, r[0]->a[0].rb, r[1]->a[0].rb, &is);
-		if (is && is <= opt->max_ins) kv_push(uint64_t, isize[dir], is);
+		if (is && is <= opt->max_ins) ins_size_dist[dir][is-1]++;
 	}
-	if (bwa_verbose >= 3) fprintf(stderr, "[M::%s] # candidate unique pairs for (FF, FR, RF, RR): (%ld, %ld, %ld, %ld)\n", __func__, isize[0].n, isize[1].n, isize[2].n, isize[3].n);
-	for (d = 0; d < 4; ++d) { // TODO: this block is nearly identical to the one in bwtsw2_pair.c. It would be better to merge these two.
-		mem_pestat_t *r = &pes[d];
-		uint64_v *q = &isize[d];
-		int p25, p50, p75, x;
-		if (q->n < MIN_DIR_CNT) {
-			fprintf(stderr, "[M::%s] skip orientation %c%c as there are not enough pairs\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
-			r->failed = 1;
-			free(q->a);
-			continue;
-		} else fprintf(stderr, "[M::%s] analyzing insert size distribution for orientation %c%c...\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
-		ks_introsort_64(q->n, q->a);
-		p25 = q->a[(int)(.25 * q->n + .499)];
-		p50 = q->a[(int)(.50 * q->n + .499)];
-		p75 = q->a[(int)(.75 * q->n + .499)];
-		r->low  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
-		if (r->low < 1) r->low = 1;
-		r->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
-		fprintf(stderr, "[M::%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
-		fprintf(stderr, "[M::%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r->low, r->high);
-		for (i = x = 0, r->avg = 0; i < q->n; ++i)
-			if (q->a[i] >= r->low && q->a[i] <= r->high)
-				r->avg += q->a[i], ++x;
-		r->avg /= x;
-		for (i = 0, r->std = 0; i < q->n; ++i)
-			if (q->a[i] >= r->low && q->a[i] <= r->high)
-				r->std += (q->a[i] - r->avg) * (q->a[i] - r->avg);
-		r->std = sqrt(r->std / x);
-		fprintf(stderr, "[M::%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r->avg, r->std);
-		r->low  = (int)(p25 - MAPPING_BOUND * (p75 - p25) + .499);
-		r->high = (int)(p75 + MAPPING_BOUND * (p75 - p25) + .499);
-		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = (int)(r->avg - MAX_STDDEV * r->std + .499);
-		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
-		if (r->low < 1) r->low = 1;
-		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
-		free(q->a);
+	mem_pestat(opt, ins_size_dist, pes);
+	for (d = 0; d < 4; ++d) {
+		for (i = 0; i < opt->max_ins; ++i)
+			global_ins_size_dist[d][i] += ins_size_dist[d][i];
+		free(ins_size_dist[d]);
 	}
-	for (d = 0, max = 0; d < 4; ++d)
-		max = max > isize[d].n? max : isize[d].n;
-	for (d = 0; d < 4; ++d)
-		if (pes[d].failed == 0 && isize[d].n < max * MIN_DIR_RATIO) {
-			pes[d].failed = 1;
-			fprintf(stderr, "[M::%s] skip orientation %c%c\n", __func__, "FR"[d>>1&1], "FR"[d&1]);
-		}
 }
 
 int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], const mem_alnreg_t *a, int l_ms, const uint8_t *ms, mem_alnreg_v *ma)
@@ -153,8 +174,8 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			if (aln.score >= opt->min_seed_len && aln.qb >= 0) { // something goes wrong if aln.qb < 0
 				b.rid = a->rid;
 				b.is_alt = a->is_alt;
-				b.qb = is_rev? l_ms - (aln.qe + 1) : aln.qb;                                                                                                                                                                              
-				b.qe = is_rev? l_ms - aln.qb : aln.qe + 1; 
+				b.qb = is_rev? l_ms - (aln.qe + 1) : aln.qb;
+				b.qe = is_rev? l_ms - aln.qb : aln.qe + 1;
 				b.rb = is_rev? (l_pac<<1) - (rb + aln.te + 1) : rb + aln.tb;
 				b.re = is_rev? (l_pac<<1) - (rb + aln.tb) : rb + aln.te + 1;
 				b.score = aln.score;
