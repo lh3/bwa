@@ -14,23 +14,49 @@ if [ $# -eq 0 ]; then
 	echo "  hs37     primary assembly of GRCh37 (used by 1000g phase 1) plus the EBV genome"
 	echo "  hs37d5   hs37 plus decoy contigs (used by 1000g phase 3)"
 	echo ""
-	echo "Note: This script downloads human reference genomes. For hs38a and hs38DH, it needs additional"
-	echo "      sequences and ALT-to-REF mapping included in the bwa.kit package."
+	echo "Note: This script downloads human reference genomes into a current working directory unless"
+        echo "they are already present there or symlinked from there."
+        echo "You may skip the download you you have somewhere one of these:"
+        echo "$url37d5"
+        echo "$url38"
+        echo "For hs38a and hs38DH, it needs additional sequences and ALT-to-REF mapping included in the"
+        echo "  bwa.kit package."
 	exit 1;
 fi
 
 if [ $1 == "hs38DH" ]; then
-	(wget -O- $url38 | gzip -dc; cat $root/resource-GRCh38/hs38DH-extra.fa) > $1.fa
+	if [ ! -e GCA_000001405.15_GRCh38_full_analysis_set.fna.gz ]; then
+		(wget -O- $url38 | gzip -dc; cat $root/resource-GRCh38/hs38DH-extra.fa) > $1.fa
+	else
+		gzip -dc GCA_000001405.15_GRCh38_full_analysis_set.fna.gz > $1.fa
+		cat $root/resource-GRCh38/hs38DH-extra.fa >> $1.fa
+	fi
 	[ ! -f $1.fa.alt ] && cp $root/resource-GRCh38/hs38DH.fa.alt $1.fa.alt
 elif [ $1 == "hs38a" ]; then
-	wget -O- $url38 | gzip -dc > $1.fa
+	if [ ! -e GCA_000001405.15_GRCh38_full_analysis_set.fna.gz ]; then
+		wget -O- $url38 | gzip -dc > $1.fa
+	else
+		gzip -dc GCA_000001405.15_GRCh38_full_analysis_set.fna.gz > $1.fa
+	fi
 	[ ! -f $1.fa.alt ] && grep _alt $root/resource-GRCh38/hs38DH.fa.alt > $1.fa.alt
 elif [ $1 == "hs38" ]; then
-	wget -O- $url38 | gzip -dc | awk '/^>/{f=/_alt/?0:1}f' > $1.fa
+	if [ ! -e GCA_000001405.15_GRCh38_full_analysis_set.fna.gz ]; then
+		wget -O- $url38 | gzip -dc | awk '/^>/{f=/_alt/?0:1}f' > $1.fa
+	else
+		gzip -dc GCA_000001405.15_GRCh38_full_analysis_set.fna.gz | awk '/^>/{f=/_alt/?0:1}f' > $1.fa
+	fi
 elif [ $1 == "hs37d5" ]; then
-	wget -O- $url37d5 | gzip -dc > $1.fa 2>/dev/null
+	if [ ! -e hs37d5.fa.gz ]; then
+		wget -O- $url37d5 | gzip -dc > $1.fa 2>/dev/null
+	else
+		gzip -dc hs37d5.fa.gz > $1.fa 2>/dev/null
+	fi
 elif [ $1 == "hs37" ]; then
-	wget -O- $url37d5 | gzip -dc 2>/dev/null | awk '/^>/{f=/>hs37d5/?0:1}f' > $1.fa
+	if [ ! -e hs37d5.fa.gz ]; then
+		wget -O- $url37d5 | gzip -dc 2>/dev/null | awk '/^>/{f=/>hs37d5/?0:1}f' > $1.fa
+	else
+		gzip -dc hs37d5.fa.gz 2>/dev/null | awk '/^>/{f=/>hs37d5/?0:1}f' > $1.fa
+	fi
 else
 	echo "ERROR: unknown genome build"
 fi
