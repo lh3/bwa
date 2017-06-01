@@ -1,6 +1,6 @@
 [![Build Status](https://travis-ci.org/lh3/bwa.svg?branch=dev)](https://travis-ci.org/lh3/bwa)
 [![Build Status](https://drone.io/github.com/lh3/bwa/status.png)](https://drone.io/github.com/lh3/bwa/latest)
-##Getting started
+## Getting started
 
 	git clone https://github.com/lh3/bwa.git
 	cd bwa; make
@@ -8,7 +8,7 @@
 	./bwa mem ref.fa read-se.fq.gz | gzip -3 > aln-se.sam.gz
 	./bwa mem ref.fa read1.fq read2.fq | gzip -3 > aln-pe.sam.gz
 
-##Introduction
+## Introduction
 
 BWA is a software package for mapping DNA sequences against a large reference
 genome, such as the human genome. It consists of three algorithms:
@@ -24,7 +24,7 @@ reference genome (the **index** command). Alignment algorithms are invoked with
 different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 **bwasw** for BWA-SW and **mem** for the BWA-MEM algorithm.
 
-##Availability
+## Availability
 
 BWA is released under [GPLv3][1]. The latest source code is [freely
 available at github][2]. Released packages can [be downloaded][3] at
@@ -37,7 +37,7 @@ In addition to BWA, this self-consistent package also comes with bwa-associated
 and 3rd-party tools for proper BAM-to-FASTQ conversion, mapping to ALT contigs,
 adapter triming, duplicate marking, HLA typing and associated data files.
 
-##Seeking helps
+## Seeking helps
 
 The detailed usage is described in the man page available together with the
 source code. You can use `man ./bwa.1` to view the man page in a terminal. The
@@ -46,7 +46,7 @@ have questions about BWA, you may [sign up the mailing list][6] and then send
 the questions to [bio-bwa-help@sourceforge.net][7]. You may also ask questions
 in forums such as [BioStar][8] and [SEQanswers][9].
 
-##Citing BWA
+## Citing BWA
 
 * Li H. and Durbin R. (2009) Fast and accurate short read alignment with
  Burrows-Wheeler transform. *Bioinformatics*, **25**, 1754-1760. [PMID:
