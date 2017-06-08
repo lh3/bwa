@@ -1602,7 +1602,7 @@ void bwt_bwtgen2(const char *fn_pac, const char *fn_bwt, int block_size)
 {
 	BWTInc *bwtInc;
 	bwtInc = BWTIncConstructFromPacked(fn_pac, block_size, block_size);
-	printf("[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
+	fprintf(stderr, "[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
 	BWTSaveBwtCodeAndOcc(bwtInc->bwt, fn_bwt, 0);
 	BWTIncFree(bwtInc);
 }
