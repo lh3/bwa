@@ -1,6 +1,6 @@
 #! /bin/bash
 # Generated automatically by config.status (bwa) 0.7.15
-# Libtool was configured on host jinshou:
+# Libtool was configured on host pus2:
 # NOTE: Changes made to this file will be lost: look at ltmain.sh.
 
 # Provide generalized library-building support services.

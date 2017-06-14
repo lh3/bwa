@@ -411,26 +411,42 @@ char *bwa_set_rg(const char *s)
 	char *p, *q, *r, *rg_line = 0;
 	memset(bwa_rg_id, 0, 256);
 	if (strstr(s, "@RG") != s) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] the read group line is not started with @RG\n", __func__);
-		goto err_set_rg;
+		//if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] the read group line is not started with @RG\n", __func__);
+		fprintf(stderr, "[E::%s] the read group line: %s is not started with @RG\n", __func__, s);
+      if (s[0] == '\'' && s[strlen(s)-1] == '\'')  {
+         fprintf(stderr, "RG line single quoted: %s\n", s);
+         rg_line = strdup(s+1);
+         rg_line[strlen(rg_line)-1]='\0';
+      }
+      else {
+         goto err_set_rg;
+      }
 	}
-	rg_line = strdup(s);
+   else {
+      rg_line = strdup(s);
+   }
+   fprintf(stderr, "rg_line: %s\n", rg_line);
 	bwa_escape(rg_line);
+   fprintf(stderr, "after bwa_escape rg_line: %s\n", rg_line);
 	if ((p = strstr(rg_line, "\tID:")) == 0) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID at the read group line\n", __func__);
+		//if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID at the read group line: %s\n", __func__, s);
+		fprintf(stderr, "[E::%s] no ID at the read group line: %s\n", __func__, s);
 		goto err_set_rg;
 	}
 	p += 4;
-	for (q = p; *q && *q != '\t' && *q != '\n'; ++q);
+	for (q = p; *q && *q != '\t' && *q != '\n' && *q != '\0'; ++q);
 	if (q - p + 1 > 256) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] @RG:ID is longer than 255 characters\n", __func__);
+		//if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] @RG:ID is longer than 255 characters\n", __func__);
+		fprintf(stderr, "[E::%s] @RG:ID is longer than 255 characters\n", __func__);
 		goto err_set_rg;
 	}
-	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n'; ++q)
+   // copy ID value to bwa_rg_id
+	for (q = p, r = bwa_rg_id; *q && *q != '\t' && *q != '\n' && *q != '\0'; ++q)
 		*r++ = *q;
 	return rg_line;
 
 err_set_rg:
+   fprintf(stderr, "failed bwa_set_rg!\n");
 	free(rg_line);
 	return 0;
 }
