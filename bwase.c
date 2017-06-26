@@ -173,13 +173,15 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 	ubyte_t *rseq;
 	int64_t k, rb, re, rlen;
 	int8_t mat[25];
+	int w;
 
 	bwa_fill_scmat(1, 3, mat);
 	rb = *_rb; re = rb + len + ref_shift;
 	assert(re <= l_pac);
 	rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
 	assert(re - rb == rlen);
-	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW > abs(rlen - len) * 1.5? SW_BW : abs(rlen - len) * 1.5, n_cigar, &cigar32);
+	w = abs((int)rlen - len) * 1.5;
+	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW > w? SW_BW : w, n_cigar, &cigar32);
 	assert(*n_cigar > 0);
 	if ((cigar32[*n_cigar - 1]&0xf) == 1) cigar32[*n_cigar - 1] = (cigar32[*n_cigar - 1]>>4<<4) | 3; // change endding ins to soft clipping
 	if ((cigar32[0]&0xf) == 1) cigar32[0] = (cigar32[0]>>4<<4) | 3; // change beginning ins to soft clipping
