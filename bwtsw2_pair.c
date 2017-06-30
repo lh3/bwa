@@ -70,6 +70,12 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 	for (i = x = 0, r.avg = 0; i < k; ++i)
 		if (isize[i] >= r.low && isize[i] <= r.high)
 			r.avg += isize[i], ++x;
+	if (x == 0) {
+		ksprintf(msg, "[%s] fail to infer the insert size distribution: no pairs within boundaries.\n", __func__);
+		free(isize);
+		r.failed = 1;
+		return r;
+	}
 	r.avg /= x;
 	for (i = 0, r.std = 0; i < k; ++i)
 		if (isize[i] >= r.low && isize[i] <= r.high)
