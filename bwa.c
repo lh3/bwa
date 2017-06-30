@@ -30,13 +30,23 @@ static inline void trim_readno(kstring_t *s)
 		s->l -= 2, s->s[s->l] = 0;
 }
 
+static inline char *dupkstring(const kstring_t *str, int dupempty)
+{
+	char *s = (str->l > 0 || dupempty)? malloc(str->l + 1) : NULL;
+	if (!s) return NULL;
+
+	memcpy(s, str->s, str->l);
+	s[str->l] = '\0';
+	return s;
+}
+
 static inline void kseq2bseq1(const kseq_t *ks, bseq1_t *s)
 { // TODO: it would be better to allocate one chunk of memory, but probably it does not matter in practice
-	s->name = strdup(ks->name.s);
-	s->comment = ks->comment.l? strdup(ks->comment.s) : 0;
-	s->seq = strdup(ks->seq.s);
-	s->qual = ks->qual.l? strdup(ks->qual.s) : 0;
-	s->l_seq = strlen(s->seq);
+	s->name = dupkstring(&ks->name, 1);
+	s->comment = dupkstring(&ks->comment, 0);
+	s->seq = dupkstring(&ks->seq, 1);
+	s->qual = dupkstring(&ks->qual, 0);
+	s->l_seq = ks->seq.l;
 }
 
 bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
