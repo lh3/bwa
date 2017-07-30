@@ -242,7 +242,7 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 					double diff;
 					G[0] = hits[i]->hits[0].G + a[1].G;
 					G[1] = hits[i+1]->hits[0].G + a[0].G;
-					diff = fabs(G[0] - G[1]) / (opt->a + opt->b) / ((hits[i]->hits[0].len + a[1].len + hits[i+1]->hits[0].len + a[0].len) / 2.);
+					diff = fabs((double)(G[0] - G[1])) / (opt->a + opt->b) / ((hits[i]->hits[0].len + a[1].len + hits[i+1]->hits[0].len + a[0].len) / 2.);
 					if (diff > 0.05) a[G[0] > G[1]? 0 : 1].G = 0;
 				}
 				if (a[0].G == 0 || a[1].G == 0) { // one proper pair only

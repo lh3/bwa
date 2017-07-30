@@ -277,6 +277,14 @@ If ARG starts with @, it is interpreted as a string and gets inserted into the
 output SAM header; otherwise, ARG is interpreted as a file with all lines
 starting with @ in the file inserted into the SAM header. [null]
 .TP
+.BI -o \ FILE
+Write the output SAM file to
+.IR FILE .
+For compatibility with other BWA commands, this option may also be given as
+.B -f
+.IR FILE .
+[standard ouptut]
+.TP
 .BI -T \ INT
 Don't output alignment with score lower than
 .IR INT .
