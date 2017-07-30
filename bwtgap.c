@@ -46,7 +46,7 @@ static void gap_reset_stack(gap_stack_t *stack)
 }
 
 static inline void gap_push(gap_stack_t *stack, int i, bwtint_t k, bwtint_t l, int n_mm, int n_gapo, int n_gape, int n_ins, int n_del,
-							int state, int is_diff, const gap_opt_t *opt)
+							int n_seed_mm_ignore, int state, int is_diff, const gap_opt_t *opt)
 {
 	int score;
 	gap_entry_t *p;
@@ -62,6 +62,7 @@ static inline void gap_push(gap_stack_t *stack, int i, bwtint_t k, bwtint_t l, i
 	p->n_mm = n_mm; p->n_gapo = n_gapo; p->n_gape = n_gape;
 	p->n_ins = n_ins; p->n_del = n_del;
 	p->state = state; 
+	p->n_seed_mm_ignore = n_seed_mm_ignore;
 	p->last_diff_pos = is_diff? i : 0;
 	++(q->n_entries);
 	++(stack->n_entries);
@@ -128,11 +129,11 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 
 	//for (j = 0; j != len; ++j) printf("#0 %d: [%d,%u]\t[%d,%u]\n", j, w[0][j].bid, w[0][j].w, w[1][j].bid, w[1][j].w);
 	gap_reset_stack(stack); // reset stack
-	gap_push(stack, len, 0, bwt->seq_len, 0, 0, 0, 0, 0, 0, 0, opt);
+	gap_push(stack, len, 0, bwt->seq_len, 0, 0, 0, 0, 0, 0, 0, 0, opt);
 
 	while (stack->n_entries) {
 		gap_entry_t e;
-		int i, m, m_seed = 0, hit_found, allow_diff, allow_M, tmp;
+		int i, m, m_seed = 0, hit_found, allow_diff, allow_M, tmp, seeding_started = 0;
 		bwtint_t k, l, cnt_k[4], cnt_l[4], occ;
 
 		if (max_entries < stack->n_entries) max_entries = stack->n_entries;
@@ -145,9 +146,11 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 		m = max_diff - (e.n_mm + e.n_gapo);
 		if (opt->mode & BWA_MODE_GAPE) m -= e.n_gape;
 		if (m < 0) continue;
-		if (seed_width) { // apply seeding
+		if (seed_width && i + opt->seed_start <= len) { // apply seeding
 			m_seed = opt->max_seed_diff - (e.n_mm + e.n_gapo);
 			if (opt->mode & BWA_MODE_GAPE) m_seed -= e.n_gape;
+			m_seed += e.n_seed_mm_ignore; // ignore mistmatches and gaps prior to the seed start
+			seeding_started = 1;
 		}
 		//printf("#1\t[%d,%d,%d,%c]\t[%d,%d,%d]\t[%u,%u]\t[%u,%u]\t%d\n", stack->n_entries, a, i, "MID"[e.state], e.n_mm, e.n_gapo, e.n_gape, width[i-1].bid, width[i-1].w, k, l, e.last_diff_pos);
 		if (i > 0 && m < width[i-1].bid) continue;
@@ -203,10 +206,10 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 		// test whether diff is allowed
 		allow_diff = allow_M = 1;
 		if (i > 0) {
-			int ii = i - (len - opt->seed_len);
+			int ii = i - (len - opt->seed_len - opt->seed_start);
 			if (width[i-1].bid > m-1) allow_diff = 0;
 			else if (width[i-1].bid == m-1 && width[i].bid == m-1 && width[i-1].w == width[i].w) allow_M = 0;
-			if (seed_width && ii > 0) {
+			if (seeding_started && ii > 0) {
 				if (seed_width[ii-1].bid > m_seed-1) allow_diff = 0;
 				else if (seed_width[ii-1].bid == m_seed-1 && seed_width[ii].bid == m_seed-1
 						 && seed_width[ii-1].w == seed_width[ii].w) allow_M = 0;
@@ -218,24 +221,27 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 			if (e.state == STATE_M) { // gap open
 				if (e.n_gapo < opt->max_gapo) { // gap open is allowed
 					// insertion
-					gap_push(stack, i, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, e.n_ins + 1, e.n_del, STATE_I, 1, opt);
+					gap_push(stack, i, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, e.n_ins + 1, e.n_del, e.n_seed_mm_ignore + !seeding_started, STATE_I, 1, opt);
 					// deletion
 					for (j = 0; j != 4; ++j) {
 						k = bwt->L2[j] + cnt_k[j] + 1;
 						l = bwt->L2[j] + cnt_l[j];
-						if (k <= l) gap_push(stack, i + 1, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, e.n_ins, e.n_del + 1, STATE_D, 1, opt);
+						if (k <= l) gap_push(stack, i + 1, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, e.n_ins, e.n_del + 1, e.n_seed_mm_ignore + !seeding_started, STATE_D, 1, opt);
 					}
 				}
 			} else if (e.state == STATE_I) { // extention of an insertion
-				if (e.n_gape < opt->max_gape) // gap extention is allowed
-					gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, e.n_ins + 1, e.n_del, STATE_I, 1, opt);
+				if (e.n_gape < opt->max_gape) { // gap extention is allowed
+					int ign_gape = (opt->mode & BWA_MODE_GAPE) && !seeding_started;
+					gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, e.n_ins + 1, e.n_del, e.n_seed_mm_ignore + ign_gape, STATE_I, 1, opt);
+				}
 			} else if (e.state == STATE_D) { // extention of a deletion
 				if (e.n_gape < opt->max_gape) { // gap extention is allowed
 					if (e.n_gape + e.n_gapo < max_diff || occ < opt->max_del_occ) {
+						int ign_gape = (opt->mode & BWA_MODE_GAPE) && !seeding_started;
 						for (j = 0; j != 4; ++j) {
 							k = bwt->L2[j] + cnt_k[j] + 1;
 							l = bwt->L2[j] + cnt_l[j];
-							if (k <= l) gap_push(stack, i + 1, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, e.n_ins, e.n_del + 1, STATE_D, 1, opt);
+							if (k <= l) gap_push(stack, i + 1, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, e.n_ins, e.n_del + 1, e.n_seed_mm_ignore + ign_gape, STATE_D, 1, opt);
 						}
 					}
 				}
@@ -248,13 +254,13 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 				int is_mm = (j != 4 || seq[i] > 3);
 				k = bwt->L2[c] + cnt_k[c] + 1;
 				l = bwt->L2[c] + cnt_l[c];
-				if (k <= l) gap_push(stack, i, k, l, e.n_mm + is_mm, e.n_gapo, e.n_gape, e.n_ins, e.n_del, STATE_M, is_mm, opt);
+				if (k <= l) gap_push(stack, i, k, l, e.n_mm + is_mm, e.n_gapo, e.n_gape, e.n_ins, e.n_del, e.n_seed_mm_ignore + (is_mm && !seeding_started), STATE_M, is_mm, opt);
 			}
 		} else if (seq[i] < 4) { // try exact match only
 			int c = seq[i] & 3;
 			k = bwt->L2[c] + cnt_k[c] + 1;
 			l = bwt->L2[c] + cnt_l[c];
-			if (k <= l) gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape, e.n_ins, e.n_del, STATE_M, 0, opt);
+			if (k <= l) gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape, e.n_ins, e.n_del, e.n_seed_mm_ignore, STATE_M, 0, opt);
 		}
 	}
 
