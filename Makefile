@@ -1,4 +1,4 @@
-CC=			gcc
+CC=			cc
 #CC=			clang --analyze
 CFLAGS=		-g -Wall -Wno-unused-function -O2
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS

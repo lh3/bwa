@@ -1,6 +1,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <limits.h>
+#include <stdint.h>
 
 /************
  * kt_for() *
