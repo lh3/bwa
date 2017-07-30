@@ -214,13 +214,13 @@ int main_mem(int argc, char *argv[])
 			pes[1].std = pes[1].avg * .1;
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
 				pes[1].std = strtod(p+1, &p);
-			pes[1].high = (int)(pes[1].avg + 4. * pes[1].std + .499);
-			pes[1].low  = (int)(pes[1].avg - 4. * pes[1].std + .499);
+			pes[1].high = lrint(pes[1].avg + 4. * pes[1].std);
+			pes[1].low  = lrint(pes[1].avg - 4. * pes[1].std);
 			if (pes[1].low < 1) pes[1].low = 1;
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
-				pes[1].high = (int)(strtod(p+1, &p) + .499);
+				pes[1].high = lrint(strtod(p+1, &p));
 			if (*p != 0 && ispunct(*p) && isdigit(p[1]))
-				pes[1].low  = (int)(strtod(p+1, &p) + .499);
+				pes[1].low  = lrint(strtod(p+1, &p));
 			if (bwa_verbose >= 3)
 				fprintf(stderr, "[M::%s] mean insert size: %.3f, stddev: %.3f, max: %d, min: %d\n",
 						__func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);

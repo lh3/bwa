@@ -45,9 +45,9 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 		isize[k++] = l;
 	}
 	ks_introsort_64(k, isize);
-	p25 = isize[(int)(.25 * k + .499)];
-	p50 = isize[(int)(.50 * k + .499)];
-	p75 = isize[(int)(.75 * k + .499)];
+	p25 = isize[lrint(.25 * k)];
+	p50 = isize[lrint(.50 * k)];
+	p75 = isize[lrint(.75 * k)];
 	ksprintf(msg, "[%s] infer the insert size distribution from %d high-quality pairs.\n", __func__, k);
 	if (k < 8) {
 		ksprintf(msg, "[%s] fail to infer the insert size distribution: too few good pairs.\n", __func__);
@@ -55,10 +55,10 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 		r.failed = 1;
 		return r;
 	}
-	tmp    = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
+	tmp    = lrint(p25 - OUTLIER_BOUND * (p75 - p25));
 	r.low  = tmp > max_len? tmp : max_len;
 	if (r.low < 1) r.low = 1;
-	r.high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+	r.high = lrint(p75 + OUTLIER_BOUND * (p75 - p25));
 	if (r.low > r.high) {
 		ksprintf(msg, "[%s] fail to infer the insert size distribution: upper bound is smaller than max read length.\n", __func__);
 		free(isize);
@@ -82,13 +82,13 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 			r.std += (isize[i] - r.avg) * (isize[i] - r.avg);
 	r.std = sqrt(r.std / x);
 	ksprintf(msg, "[%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r.avg, r.std);
-	tmp  = (int)(p25 - 3. * (p75 - p25) + .499);
+	tmp  = lrint(p25 - 3. * (p75 - p25));
 	r.low  = tmp > max_len? tmp : max_len;
 	if (r.low < 1) r.low = 1;
-	r.high = (int)(p75 + 3. * (p75 - p25) + .499);
-	if (r.low > r.avg - MAX_STDDEV * r.std) r.low = (int)(r.avg - MAX_STDDEV * r.std + .499);
+	r.high = lrint(p75 + 3. * (p75 - p25));
+	if (r.low > r.avg - MAX_STDDEV * r.std) r.low = lrint(r.avg - MAX_STDDEV * r.std);
 	r.low = tmp > max_len? tmp : max_len;
-	if (r.high < r.avg + MAX_STDDEV * r.std) r.high = (int)(r.avg + MAX_STDDEV * r.std + .499);
+	if (r.high < r.avg + MAX_STDDEV * r.std) r.high = lrint(r.avg + MAX_STDDEV * r.std);
 	ksprintf(msg, "[%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r.low, r.high);
 	free(isize);
 	return r;
@@ -111,13 +111,13 @@ void bsw2_pair1(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, const b
 	// compute the region start and end
 	a->n_seeds = 1; a->flag |= BSW2_FLAG_MATESW; // before calling this routine, *a has been cleared with memset(0); the flag is set with 1<<6/7
 	if (h->is_rev == 0) {
-		beg = (int64_t)(h->k + st->avg - EXT_STDDEV * st->std - l_mseq + .499);
+		beg = llrint(h->k + st->avg - EXT_STDDEV * st->std - l_mseq);
 		if (beg < h->k) beg = h->k;
-		end = (int64_t)(h->k + st->avg + EXT_STDDEV * st->std + .499);
+		end = llrint(h->k + st->avg + EXT_STDDEV * st->std);
 		a->is_rev = 1; a->flag |= 16;
 	} else {
-		beg = (int64_t)(h->k + h->end - h->beg - st->avg - EXT_STDDEV * st->std + .499);
-		end = (int64_t)(h->k + h->end - h->beg - st->avg + EXT_STDDEV * st->std + l_mseq + .499);
+		beg = llrint(h->k + h->end - h->beg - st->avg - EXT_STDDEV * st->std);
+		end = llrint(h->k + h->end - h->beg - st->avg + EXT_STDDEV * st->std + l_mseq);
 		if (end > h->k + (h->end - h->beg)) end = h->k + (h->end - h->beg);
 		a->is_rev = 0;
 	}
