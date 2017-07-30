@@ -5,6 +5,7 @@
 #include <string.h>
 #include <time.h>
 #include <stdint.h>
+#include <sys/types.h>
 #ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
