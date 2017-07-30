@@ -424,10 +424,14 @@ char *bwa_set_rg(const char *s)
 		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] the read group line is not started with @RG\n", __func__);
 		goto err_set_rg;
 	}
+	if (strstr(s, "\t") != NULL) {
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] the read group line contained literal <tab> characters -- replace with escaped tabs: \\t\n", __func__);
+		goto err_set_rg;
+	}
 	rg_line = strdup(s);
 	bwa_escape(rg_line);
 	if ((p = strstr(rg_line, "\tID:")) == 0) {
-		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID at the read group line\n", __func__);
+		if (bwa_verbose >= 1) fprintf(stderr, "[E::%s] no ID within the read group line\n", __func__);
 		goto err_set_rg;
 	}
 	p += 4;
