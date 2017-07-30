@@ -107,6 +107,8 @@ appropriate algorithm will be chosen automatically.
 .IR clipPen ]
 .RB [ -U
 .IR unpairPen ]
+.RB [ -x
+.IR readType ]
 .RB [ -R
 .IR RGline ]
 .RB [ -H
@@ -256,6 +258,18 @@ Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
 and scores a paired as scoreRead1+scoreRead2-insertPenalty. It compares these
 two scores to determine whether we should force pairing. A larger value leads to
 more aggressive read pair. [17]
+.TP
+.BI -x \ STR
+Read type. Changes multiple parameters unless overriden [null]
+    pacbio:
+.B -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0
+(PacBio reads to ref)
+    ont2d:
+.B -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0
+(Oxford Nanopore 2D-reads to ref)
+    intractg:
+.B -B9 -O16 -L5
+(intra-species contigs to ref)
 
 .TP
 .B INPUT/OUTPUT OPTIONS:
@@ -310,7 +324,7 @@ Output all found alignments for single-end or unpaired paired-end reads. These
 alignments will be flagged as secondary alignments.
 .TP
 .B -C
-Append append FASTA/Q comment to SAM output. This option can be used to
+Append FASTA/Q comment to SAM output. This option can be used to
 transfer read meta information (e.g. barcode) to the SAM output. Note that the
 FASTA/Q comment (the string after a space in the header line) must conform the SAM
 spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
@@ -324,7 +338,7 @@ supplementary alignments.
 Mark shorter split hits as secondary (for Picard compatibility).
 .TP
 .BI -v \ INT
-Control the verbose level of the output. This option has not been fully
+Control the verbosity level of the output. This option has not been fully
 supported throughout BWA. Ideally, a value 0 for disabling all the output to
 stderr; 1 for outputting errors only; 2 for warnings and errors; 3 for
 all normal messages; 4 or higher for debugging. When this option takes value
