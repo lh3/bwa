@@ -321,7 +321,8 @@ uses soft clipping for the primary alignment and hard clipping for
 supplementary alignments.
 .TP
 .B -M
-Mark shorter split hits as secondary (for Picard compatibility).
+Mark shorter split hits of a chimeric alignment as 'secondary alignment' (SAM flag 0x100)
+instead of 'supplementary alignment' (flag 0x800) (for Picard<1.96 compatibility).
 .TP
 .BI -v \ INT
 Control the verbose level of the output. This option has not been fully
