@@ -397,8 +397,10 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 
 		// get seqid
 		nn = bns_cnt_ambi(bns, p->pos, j, &seqid);
-		if (p->type != BWA_TYPE_NO_MATCH && p->pos + j - bns->anns[seqid].offset > bns->anns[seqid].len)
+		if (p->type != BWA_TYPE_NO_MATCH && p->pos + j - bns->anns[seqid].offset > bns->anns[seqid].len) {
 			flag |= SAM_FSU; // flag UNMAP as this alignment bridges two adjacent reference sequences
+			p->mapQ = 0;
+                }
 
 		// update flag and print it
 		if (p->strand) flag |= SAM_FSR;
