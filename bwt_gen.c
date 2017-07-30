@@ -1555,8 +1555,10 @@ void BWTFree(BWT *bwt)
 void BWTIncFree(BWTInc *bwtInc)
 {
 	if (bwtInc == 0) return;
-	free(bwtInc->bwt);
+	BWTFree(bwtInc->bwt);
 	free(bwtInc->workingMemory);
+	free(bwtInc->cumulativeCountInCurrentBuild);
+	free(bwtInc->packedShift);
 	free(bwtInc);
 }
 
