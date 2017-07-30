@@ -1544,19 +1544,13 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 	return bwtInc;
 }
 
-void BWTFree(BWT *bwt)
-{
-	if (bwt == 0) return;
-	free(bwt->cumulativeFreq);
-	free(bwt->occValueMajor);
-	free(bwt->decodeTable);
-	free(bwt);
-}
-
 void BWTIncFree(BWTInc *bwtInc)
 {
 	if (bwtInc == 0) return;
-	BWTFree(bwtInc->bwt);
+	free(bwtInc->bwt->cumulativeFreq);
+	free(bwtInc->bwt->occValueMajor);
+	free(bwtInc->bwt->decodeTable);
+	free(bwtInc->bwt);
 	free(bwtInc->workingMemory);
 	free(bwtInc->cumulativeCountInCurrentBuild);
 	free(bwtInc->packedShift);
