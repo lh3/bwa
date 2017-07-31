@@ -1,4 +1,4 @@
-.TH bwa 1 "31 May 2016" "bwa-0.7.15-r1140" "Bioinformatics tools"
+.TH bwa 1 "30 July 2017" "bwa-0.7.16-r1180" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -261,16 +261,20 @@ more aggressive read pair. [17]
 .TP
 .BI -x \ STR
 Read type. Changes multiple parameters unless overriden [null]
-    pacbio:
+.RS
+.TP 10
+.BR pacbio :
 .B -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0
 (PacBio reads to ref)
-    ont2d:
+.TP
+.BR ont2d :
 .B -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0
 (Oxford Nanopore 2D-reads to ref)
-    intractg:
+.TP
+.BR intractg :
 .B -B9 -O16 -L5
 (intra-species contigs to ref)
-
+.RE
 .TP
 .B INPUT/OUTPUT OPTIONS:
 .TP
@@ -298,6 +302,21 @@ For compatibility with other BWA commands, this option may also be given as
 .B -f
 .IR FILE .
 [standard ouptut]
+.TP
+.B -5
+For split alignment, mark the segment with the smallest coordinate as the
+primary. This option may help some Hi-C pipelines. By default, BWA-MEM marks
+highest scoring segment as primary.
+.TP
+.B -K \ INT
+Process
+.I INT
+input bases in each batch regardless of the number of threads in use
+.RI [10000000* nThreads ].
+By default, the batch size is proportional to the number of threads in use.
+Because the inferred insert size distribution slightly depends on the batch
+size, using different number of threads may produce different output.
+Specifying this option helps reproducibility.
 .TP
 .BI -T \ INT
 Don't output alignment with score lower than
