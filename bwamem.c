@@ -809,6 +809,19 @@ static inline int get_rlen(int n_cigar, const uint32_t *cigar)
 	return l;
 }
 
+static inline void add_cigar(const mem_opt_t *opt, mem_aln_t *p, kstring_t *str, int which)
+{
+	int i;
+	if (p->n_cigar) { // aligned
+		for (i = 0; i < p->n_cigar; ++i) {
+			int c = p->cigar[i]&0xf;
+			if (!(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt && (c == 3 || c == 4))
+				c = which? 4 : 3; // use hard clipping for supplementary alignments
+			kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
+		}
+	} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
+}
+
 void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
 {
 	int i, l_name;
@@ -835,14 +848,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputs(bns->anns[p->rid].name, str); kputc('\t', str); // RNAME
 		kputl(p->pos + 1, str); kputc('\t', str); // POS
 		kputw(p->mapq, str); kputc('\t', str); // MAPQ
-		if (p->n_cigar) { // aligned
-			for (i = 0; i < p->n_cigar; ++i) {
-				int c = p->cigar[i]&0xf;
-				if (!(opt->flag&MEM_F_SOFTCLIP) && !p->is_alt && (c == 3 || c == 4))
-					c = which? 4 : 3; // use hard clipping for supplementary alignments
-				kputw(p->cigar[i]>>4, str); kputc("MIDSH"[c], str);
-			}
-		} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
+		add_cigar(opt, p, str, which);
 	} else kputsn("*\t0\t0\t*", 7, str); // without coordinte
 	kputc('\t', str);
 
@@ -899,6 +905,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputsn("\tNM:i:", 6, str); kputw(p->NM, str);
 		kputsn("\tMD:Z:", 6, str); kputs((char*)(p->cigar + p->n_cigar), str);
 	}
+	if (m && m->n_cigar) { kputsn("\tMC:Z:", 6, str); add_cigar(opt, m, str, which); }
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
@@ -966,6 +973,30 @@ int mem_approx_mapq_se(const mem_opt_t *opt, const mem_alnreg_t *a)
 	if (mapq < 0) mapq = 0;
 	mapq = (int)(mapq * (1. - a->frac_rep) + .499);
 	return mapq;
+}
+
+void mem_reorder_primary5(int T, mem_alnreg_v *a)
+{
+	int k, n_pri = 0, left_st = INT_MAX, left_k = -1;
+	mem_alnreg_t t;
+	for (k = 0; k < a->n; ++k)
+		if (a->a[k].secondary < 0 && !a->a[k].is_alt && a->a[k].score >= T) ++n_pri;
+	if (n_pri <= 1) return; // only one alignment
+	for (k = 0; k < a->n; ++k) {
+		mem_alnreg_t *p = &a->a[k];
+		if (p->secondary >= 0 || p->is_alt || p->score < T) continue;
+		if (p->qb < left_st) left_st = p->qb, left_k = k;
+	}
+	assert(a->a[0].secondary < 0);
+	if (left_k == 0) return; // no need to reorder
+	t = a->a[0], a->a[0] = a->a[left_k], a->a[left_k] = t;
+	for (k = 1; k < a->n; ++k) { // update secondary and secondary_all
+		mem_alnreg_t *p = &a->a[k];
+		if (p->secondary == 0) p->secondary = left_k;
+		else if (p->secondary == left_k) p->secondary = 0;
+		if (p->secondary_all == 0) p->secondary_all = left_k;
+		else if (p->secondary_all == left_k) p->secondary_all = 0;
+	}
 }
 
 // TODO (future plan): group hits into a uint64_t[] array. This will be cleaner and more flexible
@@ -1160,6 +1191,7 @@ static void worker2(void *data, int i, int tid)
 	if (!(w->opt->flag&MEM_F_PE)) {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read '%s' <=====\n", w->seqs[i].name);
 		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
+		if (w->opt->flag & MEM_F_PRIMARY5) mem_reorder_primary5(w->opt->T, &w->regs[i]);
 		mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
 		free(w->regs[i].a);
 	} else {

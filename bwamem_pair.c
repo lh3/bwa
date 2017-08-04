@@ -94,7 +94,7 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		r->low  = (int)(p25 - MAPPING_BOUND * (p75 - p25) + .499);
 		r->high = (int)(p75 + MAPPING_BOUND * (p75 - p25) + .499);
 		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = (int)(r->avg - MAX_STDDEV * r->std + .499);
-		if (r->high < r->avg - MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
+		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
 		if (r->low < 1) r->low = 1;
 		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
 		free(q->a);
@@ -243,6 +243,7 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 }
 
 void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m);
+void mem_reorder_primary5(int T, mem_alnreg_v *a);
 
 #define raw_mapq(diff, a) ((int)(6.02 * (diff) / (a) + .499))
 
@@ -275,6 +276,10 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	}
 	n_pri[0] = mem_mark_primary_se(opt, a[0].n, a[0].a, id<<1|0);
 	n_pri[1] = mem_mark_primary_se(opt, a[1].n, a[1].a, id<<1|1);
+	if (opt->flag & MEM_F_PRIMARY5) {
+		mem_reorder_primary5(opt->T, &a[0]);
+		mem_reorder_primary5(opt->T, &a[1]);
+	}
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
 	if (n_pri[0] && n_pri[1] && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z, n_pri)) > 0) {

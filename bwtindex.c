@@ -119,7 +119,7 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 		}
 		rope_destroy(r);
 	}
-	bwt->bwt = (u_int32_t*)calloc(bwt->bwt_size, 4);
+	bwt->bwt = (uint32_t*)calloc(bwt->bwt_size, 4);
 	for (i = 0; i < bwt->seq_len; ++i)
 		bwt->bwt[i>>4] |= buf[i] << ((15 - (i&15)) << 1);
 	free(buf);
@@ -175,7 +175,7 @@ void bwt_bwtupdate_core(bwt_t *bwt)
 int bwa_bwtupdate(int argc, char *argv[]) // the "bwtupdate" command
 {
 	bwt_t *bwt;
-	if (argc < 2) {
+	if (argc != 2) {
 		fprintf(stderr, "Usage: bwa bwtupdate <the.bwt>\n");
 		return 1;
 	}
