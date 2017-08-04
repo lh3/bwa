@@ -113,6 +113,7 @@ bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int r
 {
 	bwtint_t pos_f;
 	int is_rev;
+	*strand = 0; // initialise strand to 0 otherwise we could return without setting it
 	pos_f = bwt_sa(bwt, sapos); // position on the forward-reverse coordinate
 	if (pos_f < bns->l_pac && bns->l_pac < pos_f + ref_len) return (bwtint_t)-1;
 	pos_f = bns_depos(bns, pos_f, &is_rev); // position on the forward strand; this may be the first base or the last base
@@ -172,13 +173,15 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 	ubyte_t *rseq;
 	int64_t k, rb, re, rlen;
 	int8_t mat[25];
+	int w;
 
 	bwa_fill_scmat(1, 3, mat);
 	rb = *_rb; re = rb + len + ref_shift;
 	assert(re <= l_pac);
 	rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
 	assert(re - rb == rlen);
-	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW > abs(rlen - len) * 1.5? SW_BW : abs(rlen - len) * 1.5, n_cigar, &cigar32);
+	w = abs((int)rlen - len) * 1.5;
+	ksw_global(len, seq, rlen, rseq, 5, mat, 5, 1, SW_BW > w? SW_BW : w, n_cigar, &cigar32);
 	assert(*n_cigar > 0);
 	if ((cigar32[*n_cigar - 1]&0xf) == 1) cigar32[*n_cigar - 1] = (cigar32[*n_cigar - 1]>>4<<4) | 3; // change endding ins to soft clipping
 	if ((cigar32[0]&0xf) == 1) cigar32[0] = (cigar32[0]>>4<<4) | 3; // change beginning ins to soft clipping
@@ -504,7 +507,8 @@ void bwase_initialize()
 void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ, const char *rg_line)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
-	int i, n_seqs, tot_seqs = 0, m_aln;
+	int i, n_seqs, m_aln;
+	long long tot_seqs = 0;
 	bwt_aln1_t *aln = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
@@ -562,7 +566,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 
 		bwa_free_read_seq(n_seqs, seqs);
-		fprintf(stderr, "[bwa_aln_core] %d sequences have been processed.\n", tot_seqs);
+		fprintf(stderr, "[bwa_aln_core] %lld sequences have been processed.\n", tot_seqs);
 	}
 
 	// destroy

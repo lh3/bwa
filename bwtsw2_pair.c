@@ -70,6 +70,12 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 	for (i = x = 0, r.avg = 0; i < k; ++i)
 		if (isize[i] >= r.low && isize[i] <= r.high)
 			r.avg += isize[i], ++x;
+	if (x == 0) {
+		ksprintf(msg, "[%s] fail to infer the insert size distribution: no pairs within boundaries.\n", __func__);
+		free(isize);
+		r.failed = 1;
+		return r;
+	}
 	r.avg /= x;
 	for (i = 0, r.std = 0; i < k; ++i)
 		if (isize[i] >= r.low && isize[i] <= r.high)
@@ -82,7 +88,7 @@ bsw2pestat_t bsw2_stat(int n, bwtsw2_t **buf, kstring_t *msg, int max_ins)
 	r.high = (int)(p75 + 3. * (p75 - p25) + .499);
 	if (r.low > r.avg - MAX_STDDEV * r.std) r.low = (int)(r.avg - MAX_STDDEV * r.std + .499);
 	r.low = tmp > max_len? tmp : max_len;
-	if (r.high < r.avg - MAX_STDDEV * r.std) r.high = (int)(r.avg + MAX_STDDEV * r.std + .499);
+	if (r.high < r.avg + MAX_STDDEV * r.std) r.high = (int)(r.avg + MAX_STDDEV * r.std + .499);
 	ksprintf(msg, "[%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r.low, r.high);
 	free(isize);
 	return r;
@@ -236,7 +242,7 @@ void bsw2_pair(const bsw2opt_t *opt, int64_t l_pac, const uint8_t *pac, int n, b
 					double diff;
 					G[0] = hits[i]->hits[0].G + a[1].G;
 					G[1] = hits[i+1]->hits[0].G + a[0].G;
-					diff = fabs(G[0] - G[1]) / (opt->a + opt->b) / ((hits[i]->hits[0].len + a[1].len + hits[i+1]->hits[0].len + a[0].len) / 2.);
+					diff = fabs((double)(G[0] - G[1])) / (opt->a + opt->b) / ((hits[i]->hits[0].len + a[1].len + hits[i+1]->hits[0].len + a[0].len) / 2.);
 					if (diff > 0.05) a[G[0] > G[1]? 0 : 1].G = 0;
 				}
 				if (a[0].G == 0 || a[1].G == 0) { // one proper pair only

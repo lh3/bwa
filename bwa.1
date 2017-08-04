@@ -1,4 +1,4 @@
-.TH bwa 1 "23 December 2014" "bwa-0.7.12-r1034" "Bioinformatics tools"
+.TH bwa 1 "30 July 2017" "bwa-0.7.16-r1180" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -107,6 +107,8 @@ appropriate algorithm will be chosen automatically.
 .IR clipPen ]
 .RB [ -U
 .IR unpairPen ]
+.RB [ -x
+.IR readType ]
 .RB [ -R
 .IR RGline ]
 .RB [ -H
@@ -202,7 +204,7 @@ Discard a MEM if it has more than
 .I INT
 occurence in the genome. This is an insensitive parameter. [500]
 .TP
-.BI -D \ INT
+.BI -D \ FLOAT
 Drop chains shorter than
 .I FLOAT
 fraction of the longest overlapping chain [0.5]
@@ -256,7 +258,23 @@ Penalty for an unpaired read pair. BWA-MEM scores an unpaired read pair as
 and scores a paired as scoreRead1+scoreRead2-insertPenalty. It compares these
 two scores to determine whether we should force pairing. A larger value leads to
 more aggressive read pair. [17]
-
+.TP
+.BI -x \ STR
+Read type. Changes multiple parameters unless overriden [null]
+.RS
+.TP 10
+.BR pacbio :
+.B -k17 -W40 -r10 -A1 -B1 -O1 -E1 -L0
+(PacBio reads to ref)
+.TP
+.BR ont2d :
+.B -k14 -W20 -r10 -A1 -B1 -O1 -E1 -L0
+(Oxford Nanopore 2D-reads to ref)
+.TP
+.BR intractg :
+.B -B9 -O16 -L5
+(intra-species contigs to ref)
+.RE
 .TP
 .B INPUT/OUTPUT OPTIONS:
 .TP
@@ -276,6 +294,29 @@ attached to every read in the output. An example is '@RG\\tID:foo\\tSM:bar'.
 If ARG starts with @, it is interpreted as a string and gets inserted into the
 output SAM header; otherwise, ARG is interpreted as a file with all lines
 starting with @ in the file inserted into the SAM header. [null]
+.TP
+.BI -o \ FILE
+Write the output SAM file to
+.IR FILE .
+For compatibility with other BWA commands, this option may also be given as
+.B -f
+.IR FILE .
+[standard ouptut]
+.TP
+.B -5
+For split alignment, mark the segment with the smallest coordinate as the
+primary. This option may help some Hi-C pipelines. By default, BWA-MEM marks
+highest scoring segment as primary.
+.TP
+.B -K \ INT
+Process
+.I INT
+input bases in each batch regardless of the number of threads in use
+.RI [10000000* nThreads ].
+By default, the batch size is proportional to the number of threads in use.
+Because the inferred insert size distribution slightly depends on the batch
+size, using different number of threads may produce different output.
+Specifying this option helps reproducibility.
 .TP
 .BI -T \ INT
 Don't output alignment with score lower than
@@ -302,7 +343,7 @@ Output all found alignments for single-end or unpaired paired-end reads. These
 alignments will be flagged as secondary alignments.
 .TP
 .B -C
-Append append FASTA/Q comment to SAM output. This option can be used to
+Append FASTA/Q comment to SAM output. This option can be used to
 transfer read meta information (e.g. barcode) to the SAM output. Note that the
 FASTA/Q comment (the string after a space in the header line) must conform the SAM
 spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
@@ -316,7 +357,7 @@ supplementary alignments.
 Mark shorter split hits as secondary (for Picard compatibility).
 .TP
 .BI -v \ INT
-Control the verbose level of the output. This option has not been fully
+Control the verbosity level of the output. This option has not been fully
 supported throughout BWA. Ideally, a value 0 for disabling all the output to
 stderr; 1 for outputting errors only; 2 for warnings and errors; 3 for
 all normal messages; 4 or higher for debugging. When this option takes value

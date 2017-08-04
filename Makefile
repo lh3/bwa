@@ -62,7 +62,7 @@ bwt.o: utils.h bwt.h kvec.h malloc_wrap.h
 bwt_lite.o: bwt_lite.h malloc_wrap.h
 bwtaln.o: bwtaln.h bwt.h bwtgap.h utils.h bwa.h bntseq.h malloc_wrap.h
 bwtgap.o: bwtgap.h bwt.h bwtaln.h malloc_wrap.h
-bwtindex.o: bntseq.h bwt.h utils.h rle.h rope.h malloc_wrap.h
+bwtindex.o: bntseq.h bwa.h bwt.h utils.h rle.h rope.h malloc_wrap.h
 bwtsw2_aux.o: bntseq.h bwt_lite.h utils.h bwtsw2.h bwt.h kstring.h
 bwtsw2_aux.o: malloc_wrap.h bwa.h ksw.h kseq.h ksort.h
 bwtsw2_chain.o: bwtsw2.h bntseq.h bwt_lite.h bwt.h malloc_wrap.h ksort.h

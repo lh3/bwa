@@ -299,9 +299,9 @@ int64_t bns_fasta2bntseq(gzFile fp_fa, const char *prefix, int for_only)
 	// read sequences
 	while (kseq_read(seq) >= 0) pac = add1(seq, bns, pac, &m_pac, &m_seqs, &m_holes, &q);
 	if (!for_only) { // add the reverse complemented sequence
-		m_pac = (bns->l_pac * 2 + 3) / 4 * 4;
-		pac = realloc(pac, m_pac/4);
-		memset(pac + (bns->l_pac+3)/4, 0, (m_pac - (bns->l_pac+3)/4*4) / 4);
+		int64_t ll_pac = (bns->l_pac * 2 + 3) / 4 * 4;
+		if (ll_pac > m_pac) pac = realloc(pac, ll_pac/4);
+		memset(pac + (bns->l_pac+3)/4, 0, (ll_pac - (bns->l_pac+3)/4*4) / 4);
 		for (l = bns->l_pac - 1; l >= 0; --l, ++bns->l_pac)
 			_set_pac(pac, bns->l_pac, 3-_get_pac(pac, l));
 	}
