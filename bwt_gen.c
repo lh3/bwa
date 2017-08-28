@@ -338,6 +338,7 @@ BWT *BWTCreate(const bgint_t textLength, unsigned int *decodeTable)
 		bwt->decodeTable = (unsigned*)calloc(DNA_OCC_CNT_TABLE_SIZE_IN_WORD, sizeof(unsigned int));
 		GenerateDNAOccCountTable(bwt->decodeTable);
 	} else {
+		// FIXME Prevent BWTFree() from freeing decodeTable in this case
 		bwt->decodeTable = decodeTable;
 	}
 
@@ -1538,25 +1539,21 @@ BWTInc *BWTIncConstructFromPacked(const char *inputFileName, bgint_t initialMaxB
 					(long)bwtInc->numberOfIterationDone, (long)processedTextLength);
 		}
 	}
-	return bwtInc;
-}
 
-void BWTFree(BWT *bwt)
-{
-	if (bwt == 0) return;
-	free(bwt->cumulativeFreq);
-	free(bwt->bwtCode);
-	free(bwt->occValue);
-	free(bwt->occValueMajor);
-	free(bwt->decodeTable);
-	free(bwt);
+	fclose(packedFile);
+	return bwtInc;
 }
 
 void BWTIncFree(BWTInc *bwtInc)
 {
 	if (bwtInc == 0) return;
+	free(bwtInc->bwt->cumulativeFreq);
+	free(bwtInc->bwt->occValueMajor);
+	free(bwtInc->bwt->decodeTable);
 	free(bwtInc->bwt);
 	free(bwtInc->workingMemory);
+	free(bwtInc->cumulativeCountInCurrentBuild);
+	free(bwtInc->packedShift);
 	free(bwtInc);
 }
 
@@ -1602,7 +1599,7 @@ void bwt_bwtgen2(const char *fn_pac, const char *fn_bwt, int block_size)
 {
 	BWTInc *bwtInc;
 	bwtInc = BWTIncConstructFromPacked(fn_pac, block_size, block_size);
-	printf("[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
+	fprintf(stderr, "[bwt_gen] Finished constructing BWT in %u iterations.\n", bwtInc->numberOfIterationDone);
 	BWTSaveBwtCodeAndOcc(bwtInc->bwt, fn_bwt, 0);
 	BWTIncFree(bwtInc);
 }

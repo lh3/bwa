@@ -1,6 +1,5 @@
 [![Build Status](https://travis-ci.org/lh3/bwa.svg?branch=dev)](https://travis-ci.org/lh3/bwa)
-[![Build Status](https://drone.io/github.com/lh3/bwa/status.png)](https://drone.io/github.com/lh3/bwa/latest)
-##Getting started
+## Getting started
 
 	git clone https://github.com/lh3/bwa.git
 	cd bwa; make
@@ -8,7 +7,7 @@
 	./bwa mem ref.fa read-se.fq.gz | gzip -3 > aln-se.sam.gz
 	./bwa mem ref.fa read1.fq read2.fq | gzip -3 > aln-pe.sam.gz
 
-##Introduction
+## Introduction
 
 BWA is a software package for mapping DNA sequences against a large reference
 genome, such as the human genome. It consists of three algorithms:
@@ -24,7 +23,7 @@ reference genome (the **index** command). Alignment algorithms are invoked with
 different sub-commands: **aln/samse/sampe** for BWA-backtrack,
 **bwasw** for BWA-SW and **mem** for the BWA-MEM algorithm.
 
-##Availability
+## Availability
 
 BWA is released under [GPLv3][1]. The latest source code is [freely
 available at github][2]. Released packages can [be downloaded][3] at
@@ -37,7 +36,7 @@ In addition to BWA, this self-consistent package also comes with bwa-associated
 and 3rd-party tools for proper BAM-to-FASTQ conversion, mapping to ALT contigs,
 adapter triming, duplicate marking, HLA typing and associated data files.
 
-##Seeking helps
+## Seeking help
 
 The detailed usage is described in the man page available together with the
 source code. You can use `man ./bwa.1` to view the man page in a terminal. The
@@ -46,7 +45,7 @@ have questions about BWA, you may [sign up the mailing list][6] and then send
 the questions to [bio-bwa-help@sourceforge.net][7]. You may also ask questions
 in forums such as [BioStar][8] and [SEQanswers][9].
 
-##Citing BWA
+## Citing BWA
 
 * Li H. and Durbin R. (2009) Fast and accurate short read alignment with
  Burrows-Wheeler transform. *Bioinformatics*, **25**, 1754-1760. [PMID:
@@ -63,7 +62,7 @@ in forums such as [BioStar][8] and [SEQanswers][9].
 Please note that the last reference is a preprint hosted at [arXiv.org][13]. I
 do not have plan to submit it to a peer-reviewed journal in the near future.
 
-##Frequently asked questions (FAQs)
+## Frequently asked questions (FAQs)
 
 1. [What types of data does BWA work with?](#type)
 2. [Why does a read appear multiple times in the output SAM?](#multihit)
@@ -73,7 +72,7 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 6. [Does BWA work with ALT contigs in the GRCh38 release?](#altctg)
 7. [Can I just run BWA-MEM against GRCh38+ALT without post-processing?](#postalt)
 
-####<a name="type"></a>1. What types of data does BWA work with?
+#### <a name="type"></a>1. What types of data does BWA work with?
 
 BWA works with a variety types of DNA sequence data, though the optimal
 algorithm and setting may vary. The following list gives the recommended
@@ -108,7 +107,7 @@ errors given longer query sequences as the chance of missing all seeds is small.
 As is shown above, with non-default settings, BWA-MEM works with Oxford Nanopore
 reads with a sequencing error rate over 20%.
 
-####<a name="multihit"></a>2. Why does a read appear multiple times in the output SAM?
+#### <a name="multihit"></a>2. Why does a read appear multiple times in the output SAM?
 
 BWA-SW and BWA-MEM perform local alignments. If there is a translocation, a gene
 fusion or a long deletion, a read bridging the break point may have two hits,
@@ -116,18 +115,18 @@ occupying two lines in the SAM output. With the default setting of BWA-MEM, one
 and only one line is primary and is soft clipped; other lines are tagged with
 0x800 SAM flag (supplementary alignment) and are hard clipped.
 
-####<a name="4gb"></a>3. Does BWA work on reference sequences longer than 4GB in total?
+#### <a name="4gb"></a>3. Does BWA work on reference sequences longer than 4GB in total?
 
 Yes. Since 0.6.x, all BWA algorithms work with a genome with total length over
 4GB. However, individual chromosome should not be longer than 2GB.
 
-####<a name="pe0"></a>4. Why can one read in a pair has high mapping quality but the other has zero?
+#### <a name="pe0"></a>4. Why can one read in a pair have a high mapping quality but the other has zero?
 
 This is correct. Mapping quality is assigned for individual read, not for a read
 pair. It is possible that one read can be mapped unambiguously, but its mate
 falls in a tandem repeat and thus its accurate position cannot be determined.
 
-####<a name="endref"></a>5. How can a BWA-backtrack alignment stands out of the end of a chromosome?
+#### <a name="endref"></a>5. How can a BWA-backtrack alignment stand out of the end of a chromosome?
 
 Internally BWA concatenates all reference sequences into one long sequence. A
 read may be mapped to the junction of two adjacent reference sequences. In this
@@ -135,7 +134,7 @@ case, BWA-backtrack will flag the read as unmapped (0x4), but you will see
 position, CIGAR and all the tags. A similar issue may occur to BWA-SW alignment
 as well. BWA-MEM does not have this problem.
 
-####<a name="altctg"></a>6. Does BWA work with ALT contigs in the GRCh38 release?
+#### <a name="altctg"></a>6. Does BWA work with ALT contigs in the GRCh38 release?
 
 Yes, since 0.7.11, BWA-MEM officially supports mapping to GRCh38+ALT.
 BWA-backtrack and BWA-SW don't properly support ALT mapping as of now. Please
@@ -143,7 +142,7 @@ see [README-alt.md][18] for details. Briefly, it is recommended to use
 [bwakit][17], the binary release of BWA, for generating the reference genome
 and for mapping.
 
-####<a name="postalt"></a>7. Can I just run BWA-MEM against GRCh38+ALT without post-processing?
+#### <a name="postalt"></a>7. Can I just run BWA-MEM against GRCh38+ALT without post-processing?
 
 If you are not interested in hits to ALT contigs, it is okay to run BWA-MEM
 without post-processing. The alignments produced this way are very close to
