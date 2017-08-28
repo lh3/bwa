@@ -13,7 +13,7 @@ void *wrap_calloc(size_t nmemb, size_t size,
 	void *p = calloc(nmemb, size);
 	if (NULL == p) {
 		fprintf(stderr,
-				"[%s] Failed to allocate %zd bytes at %s line %u: %s\n",
+				"[%s] Failed to allocate %zu bytes at %s line %u: %s\n",
 				func, nmemb * size, file, line, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -25,7 +25,7 @@ void *wrap_malloc(size_t size,
 	void *p = malloc(size);
 	if (NULL == p) {
 		fprintf(stderr,
-				"[%s] Failed to allocate %zd bytes at %s line %u: %s\n",
+				"[%s] Failed to allocate %zu bytes at %s line %u: %s\n",
 				func, size, file, line, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -37,7 +37,7 @@ void *wrap_realloc(void *ptr, size_t size,
 	void *p = realloc(ptr, size);
 	if (NULL == p) {
 		fprintf(stderr,
-				"[%s] Failed to allocate %zd bytes at %s line %u: %s\n",
+				"[%s] Failed to allocate %zu bytes at %s line %u: %s\n",
 				func, size, file, line, strerror(errno));
 		exit(EXIT_FAILURE);
 	}
@@ -49,7 +49,7 @@ char *wrap_strdup(const char *s,
 	char *p = strdup(s);
 	if (NULL == p) {
 		fprintf(stderr,
-				"[%s] Failed to allocate %zd bytes at %s line %u: %s\n",
+				"[%s] Failed to allocate %zu bytes at %s line %u: %s\n",
 				func, strlen(s), file, line, strerror(errno));
 		exit(EXIT_FAILURE);
 	}

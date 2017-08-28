@@ -158,7 +158,8 @@ bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa)
 
 void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 {
-	int i, n_seqs, tot_seqs = 0;
+	int i, n_seqs;
+	long long tot_seqs = 0;
 	bwa_seq_t *seqs;
 	bwa_seqio_t *ks;
 	clock_t t;
@@ -218,7 +219,7 @@ void bwa_aln_core(const char *prefix, const char *fn_fa, const gap_opt_t *opt)
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC);
 
 		bwa_free_read_seq(n_seqs, seqs);
-		fprintf(stderr, "[bwa_aln_core] %d sequences have been processed.\n", tot_seqs);
+		fprintf(stderr, "[bwa_aln_core] %lld sequences have been processed.\n", tot_seqs);
 	}
 
 	// destroy
