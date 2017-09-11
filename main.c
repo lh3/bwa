@@ -4,7 +4,7 @@
 #include "utils.h"
 
 #ifndef PACKAGE_VERSION
-#define PACKAGE_VERSION "0.7.16a-r1181"
+#define PACKAGE_VERSION "0.7.16a-r1185-dirty"
 #endif
 
 int bwa_fa2pac(int argc, char *argv[]);
