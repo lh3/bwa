@@ -130,7 +130,7 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "51paMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:")) >= 0) {
+	while ((c = getopt(argc, argv, "51paqMCSPVYjk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
@@ -148,6 +148,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'Y') opt->flag |= MEM_F_SOFTCLIP;
 		else if (c == 'V') opt->flag |= MEM_F_REF_HDR;
 		else if (c == '5') opt->flag |= MEM_F_PRIMARY5;
+		else if (c == 'q') opt->flag |= MEM_F_NO_LOWER_Q;
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -268,7 +269,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -H STR/FILE   insert STR to header if it starts with @; or insert lines in FILE [null]\n");
 		fprintf(stderr, "       -o FILE       sam file to output results to [stdout]\n");
 		fprintf(stderr, "       -j            treat ALT contigs as part of the primary assembly (i.e. ignore <idxbase>.alt file)\n");
-		fprintf(stderr, "       -5            for split alignment, take the alignment with the smallest coordiate as primary\n");
+		fprintf(stderr, "       -5            for split alignment, take the alignment with the smallest coordinate as primary\n");
 		fprintf(stderr, "       -K INT        process INT input bases in each batch regardless of nThreads (for reproducibility) []\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "       -v INT        verbosity level: 1=error, 2=warning, 3=message, 4+=debugging [%d]\n", bwa_verbose);
@@ -278,6 +279,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -V            output the reference FASTA header in the XR tag\n");
 		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
+		fprintf(stderr, "       -q            don't lower MAPQ for supplementary alignments\n");
 		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");

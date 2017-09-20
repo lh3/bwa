@@ -1026,8 +1026,8 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		if (p->secondary >= 0) q->sub = -1; // don't output sub-optimal score
 		if (l && p->secondary < 0) // if supplementary
 			q->flag |= (opt->flag&MEM_F_NO_MULTI)? 0x10000 : 0x800;
-		if (!(opt->flag&MEM_F_PRIMARY5) && l && !p->is_alt && q->mapq > aa.a[0].mapq)
-			q->mapq = aa.a[0].mapq; // lower mapq for supplementary mappings, unless -5 is applied
+		if (!(opt->flag&MEM_F_PRIMARY5 || opt->flag&MEM_F_NO_LOWER_Q) && l && !p->is_alt && q->mapq > aa.a[0].mapq)
+			q->mapq = aa.a[0].mapq; // lower mapq for supplementary mappings, unless -5 or -q is applied
 		++l;
 	}
 	if (aa.n == 0) { // no alignments good enough; then write an unaligned record
