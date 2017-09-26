@@ -20,6 +20,7 @@ typedef struct __smem_i smem_i;
 #define MEM_F_SOFTCLIP  0x200
 #define MEM_F_SMARTPE   0x400
 #define MEM_F_PRIMARY5  0x800
+#define MEM_F_KEEP_SUPP_MAPQ 0x1000
 
 typedef struct {
 	int a, b;               // match score and mismatch penalty
