@@ -49,7 +49,7 @@ static inline void kseq2bseq1(const kseq_t *ks, bseq1_t *s)
 	s->l_seq = ks->seq.l;
 }
 
-bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
+bseq1_t *bseq_read(int64_t chunk_size, int *n_, void *ks1_, void *ks2_)
 {
 	kseq_t *ks = (kseq_t*)ks1_, *ks2 = (kseq_t*)ks2_;
 	int size = 0, m, n;
