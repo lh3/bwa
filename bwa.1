@@ -1,4 +1,4 @@
-.TH bwa 1 "30 July 2017" "bwa-0.7.16-r1180" "Bioinformatics tools"
+.TH bwa 1 "23 October 2017" "bwa-0.7.17-r1188" "Bioinformatics tools"
 .SH NAME
 .PP
 bwa - Burrows-Wheeler Alignment Tool
@@ -303,9 +303,14 @@ For compatibility with other BWA commands, this option may also be given as
 .IR FILE .
 [standard ouptut]
 .TP
+.B -q
+ Don't reduce the mapping quality of split alignment of lower alignment score.
+.TP
 .B -5
 For split alignment, mark the segment with the smallest coordinate as the
-primary. This option may help some Hi-C pipelines. By default, BWA-MEM marks
+primary. It automatically applies option
+.B -q
+as well. This option may help some Hi-C pipelines. By default, BWA-MEM marks
 highest scoring segment as primary.
 .TP
 .B -K \ INT
