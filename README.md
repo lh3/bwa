@@ -5,6 +5,7 @@
 **Note: [minimap2][minimap2] has replaced BWA-MEM for PacBio and Nanopore read
 alignment.** It is ~50 times as fast, more accurate, produces better base-level
 alignment and works with long RNA-seq reads and long-read assemblies.
+
 [minimap2]: https://github.com/lh3/minimap2
 
 ## Getting started
