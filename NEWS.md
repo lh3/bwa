@@ -1,3 +1,14 @@
+Release 0.7.17 (23 October 2017)
+--------------------------------
+
+This release adds option -q to preserve the mapping quality of split alignment
+with a lower alignment score than the primary alignment. Option -5
+automatically applies -q as well.
+
+(0.7.17: 23 October 2017, r1188)
+
+
+
 Release 0.7.16 (30 July 2017)
 -----------------------------
 

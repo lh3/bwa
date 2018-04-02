@@ -1,4 +1,13 @@
 [![Build Status](https://travis-ci.org/lh3/bwa.svg?branch=dev)](https://travis-ci.org/lh3/bwa)
+[![SourceForge Downloads](https://img.shields.io/sourceforge/dt/bio-bwa.svg)](https://sourceforge.net/projects/bio-bwa/files/?source=navbar)
+[![GitHub Downloads](https://img.shields.io/github/downloads/lh3/bwa/total.svg?style=flat)](https://github.com/lh3/bwa/releases)
+
+**Note: [minimap2][minimap2] has replaced BWA-MEM for __PacBio and Nanopore__ read
+alignment.** It retains all major BWA-MEM features, but is ~50 times as fast,
+more versatile, more accurate and produces better base-level alignment.
+
+[minimap2]: https://github.com/lh3/minimap2
+
 ## Getting started
 
 	git clone https://github.com/lh3/bwa.git
