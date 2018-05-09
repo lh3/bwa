@@ -80,6 +80,7 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 5. [How can a BWA-backtrack alignment stands out of the end of a chromosome?](#endref)
 6. [Does BWA work with ALT contigs in the GRCh38 release?](#altctg)
 7. [Can I just run BWA-MEM against GRCh38+ALT without post-processing?](#postalt)
+8. [When should I use the -M option?](#minusM)
 
 #### <a name="type"></a>1. What types of data does BWA work with?
 
@@ -160,6 +161,10 @@ post-processing helps to reduce false mappings caused by reads from the
 diverged part of ALT contigs and also enables HLA typing. It is recommended to
 run the post-processing script.
 
+#### <a name="minusM"></a>8. When should I use the -M option ?
+
+The BWA MEM -M option was implemented to generate alignments backwardly compatible to SAM versions prior to X.Y .
+Picard had not been updated to implement the changes to the SAM specification. Picard has caught up with the SAM specification since Picard version U.V.W. from around 2015
 
 
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
