@@ -1,10 +1,11 @@
 CC=			gcc
 #CC=			clang --analyze
-CFLAGS=		-g -Wall -Wno-unused-function -O2
+CFLAGS=		-g -Wall -Wno-unused-function -O3
+CXXFLAGS=	-g -Wall -Wno-unused-variable -O3
 WRAP_MALLOC=-DUSE_MALLOC_WRAPPERS
 AR=			ar
 DFLAGS=		-DHAVE_PTHREAD $(WRAP_MALLOC)
-LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o bwamem_extra.o malloc_wrap.o \
+LOBJS=		utils.o kthread.o kstring.o ksw.o bwt.o bntseq.o bwa.o bwamem.o bwamem_pair.o bwamem_extra.o malloc_wrap.o intel_ext.o intel_opt/fast_extend_engine.o intel_opt/extend_vec.o \
 			QSufSort.o bwt_gen.o rope.o rle.o is.o bwtindex.o
 AOBJS=		bwashm.o bwase.o bwaseqio.o bwtgap.o bwtaln.o bamlite.o \
 			bwape.o kopen.o pemerge.o maxk.o \
@@ -15,31 +16,66 @@ INCLUDES=
 LIBS=		-lm -lz -lpthread
 SUBDIRS=	.
 
+
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
 endif
 
-.SUFFIXES:.c .o .cc
+COMPILER_VER:=$(shell $(CC) -dumpversion | \
+sed -e 's/\.\([0-9][0-9]\)/\1/g' \
+    -e 's/\.\([0-9]\)/0\1/g' \
+    -e 's/^[0-9]\{3,4\}$$/&00/' )
+
+AVX2_SUPPORTED:=$(shell $(CC) check_avx2_support.c -o check_avx2_support ; ./check_avx2_support | grep Yes)
+
+ifeq "$(CC)" "gcc"
+ifeq "$(AVX2_SUPPORTED)" "Yes"
+ifeq "$(shell expr $(COMPILER_VER) \>= 40901)" "1"
+$(info AVX2 Supported and GCC >= 4.9.1 detected, enabling Intel optimizations with AVX2.)
+DFLAGS += -DUSE_AVX2
+CXXFLAGS += -mavx -mavx2
+else
+$(info AVX2 Supported but GCC <= 4.9.1 detected, enabling Intel optimizations with SSE4.)
+CXXFLAGS += -msse -msse2 -mssse3 -msse4 -msse4.1 -msse4.2
+endif
+else
+$(info AVX2 Not Supported, enabling Intel optimizations with SSE4.)
+CXXFLAGS += -msse -msse2 -mssse3 -msse4 -msse4.1 -msse4.2
+endif
+endif
+
+
+.SUFFIXES:.c .o .cc .cpp
+
 
 .c.o:
 		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
 
+.cpp.o:
+		$(CXX) -c $(CXXFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+
 all:$(PROG)
 
-bwa:libbwa.a $(AOBJS) main.o
-		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
+bwa: libbwa.a $(AOBJS) main.o
+		$(CXX) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
 
 bwamem-lite:libbwa.a example.o
-		$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
+		$(CXX) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
+ed_intrav.o:ed_intrav.cpp
+		$(CXX) -c $(CXXFLAGS) $(INCLUDES) -DSW_FILTER_AND_EXTEND -o $@ $<
+
 clean:
-		rm -f gmon.out *.o a.out $(PROG) *~ *.a
+		rm -f gmon.out *.o a.out $(PROG) *~ *.a intel_opt/*.o
 
 depend:
-	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c )
+	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c *.cpp )
+
+#avx2_check: check_avx2_support.c
+#		gcc check_avx2_support.c -o check_avx2_support.o
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
@@ -49,7 +85,7 @@ bntseq.o: bntseq.h utils.h kseq.h malloc_wrap.h khash.h
 bwa.o: bntseq.h bwa.h bwt.h ksw.h utils.h kstring.h malloc_wrap.h kvec.h
 bwa.o: kseq.h
 bwamem.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h ksw.h kvec.h
-bwamem.o: ksort.h utils.h kbtree.h
+bwamem.o: ksort.h utils.h intel_ext.h kbtree.h
 bwamem_extra.o: bwa.h bntseq.h bwt.h bwamem.h kstring.h malloc_wrap.h
 bwamem_pair.o: kstring.h malloc_wrap.h bwamem.h bwt.h bntseq.h bwa.h kvec.h
 bwamem_pair.o: utils.h ksw.h
@@ -75,6 +111,7 @@ bwtsw2_pair.o: utils.h bwt.h bntseq.h bwtsw2.h bwt_lite.h kstring.h
 bwtsw2_pair.o: malloc_wrap.h ksw.h
 example.o: bwamem.h bwt.h bntseq.h bwa.h kseq.h malloc_wrap.h
 fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
+fastmap.o: intel_ext.h
 is.o: malloc_wrap.h
 kopen.o: malloc_wrap.h
 kstring.o: kstring.h malloc_wrap.h
@@ -86,3 +123,8 @@ pemerge.o: ksw.h kseq.h malloc_wrap.h kstring.h bwa.h bntseq.h bwt.h utils.h
 rle.o: rle.h
 rope.o: rle.h rope.h
 utils.o: utils.h ksort.h malloc_wrap.h kseq.h
+ed_intrav.o: ed_intrav64.h ed_intrav64x2.h ed_intrav.h ed_intravED.h
+ed_intrav.o: ed_fine.h
+intel_opt/fast_extend_engine.o: intel_opt/fast_extend.h 
+intel_opt/extend_vec.o: intel_opt/extend_vec128.h intel_opt/extend_vec128x2.h intel_opt/extend_vec256.h intel_opt/extend_vec256x2.h
+intel_ext.o: intel_ext.h
