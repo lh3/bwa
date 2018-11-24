@@ -12,6 +12,7 @@
 #include "utils.h"
 #include "bntseq.h"
 #include "kseq.h"
+#include "intel_ext.h"
 KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
@@ -130,7 +131,7 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "51qpaMCSPVYjuk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:")) >= 0) {
+	while ((c = getopt(argc, argv, "51qpafFMCSPVYjuk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
@@ -226,8 +227,10 @@ int main_mem(int argc, char *argv[])
 			if (bwa_verbose >= 3)
 				fprintf(stderr, "[M::%s] mean insert size: %.3f, stddev: %.3f, max: %d, min: %d\n",
 						__func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);
-		}
-		else return 1;
+		} else if (c == 'F') { 
+		    opt->flag |= MEM_F_FASTEXT;
+		    intel_init();
+		} else return 1;
 	}
 
 	if (rg_line) {
@@ -253,6 +256,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -m INT        perform at most INT rounds of mate rescues for each read [%d]\n", opt->max_matesw);
 		fprintf(stderr, "       -S            skip mate rescue\n");
 		fprintf(stderr, "       -P            skip pairing; mate rescue performed unless -S also in use\n");
+		fprintf(stderr, "       -F            Use Intel's filter and extend \n");
 		fprintf(stderr, "\nScoring options:\n\n");
 		fprintf(stderr, "       -A INT        score for a sequence match, which scales options -TdBOELU unless overridden [%d]\n", opt->a);
 		fprintf(stderr, "       -B INT        penalty for a mismatch [%d]\n", opt->b);
@@ -269,6 +273,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -R STR        read group header line such as '@RG\\tID:foo\\tSM:bar' [null]\n");
 		fprintf(stderr, "       -H STR/FILE   insert STR to header if it starts with @; or insert lines in FILE [null]\n");
 		fprintf(stderr, "       -o FILE       sam file to output results to [stdout]\n");
+		fprintf(stderr, "       -f FILE       sam file to output results to [stdout]\n");
 		fprintf(stderr, "       -j            treat ALT contigs as part of the primary assembly (i.e. ignore <idxbase>.alt file)\n");
 		fprintf(stderr, "       -5            for split alignment, take the alignment with the smallest coordinate as primary\n");
 		fprintf(stderr, "       -q            don't modify mapQ of supplementary alignments\n");
