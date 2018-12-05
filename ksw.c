@@ -113,6 +113,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
 	uint64_t *b;
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
+	__m128i _one, _qlen, _idx0;
 	kswr_t r;
 
 #define __max_16(ret, xx) do { \
@@ -120,7 +121,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 4)); \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 2)); \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 1)); \
-    	(ret) = _mm_extract_epi16((xx), 0) & 0x00ff; \
+		(ret) = _mm_extract_epi16((xx), 0) & 0x00ff; \
 	} while (0)
 
 	// initialization
@@ -141,10 +142,23 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 		_mm_store_si128(H0 + i, zero);
 		_mm_store_si128(Hmax + i, zero);
 	}
+	_one = _mm_set1_epi8(1);
+	_qlen = _mm_set1_epi8(q->qlen);
+
+	// prefix sum the slen
+	_idx0 = _mm_set1_epi8(slen);
+	_idx0 = _mm_adds_epu8(_idx0, _mm_slli_si128(_idx0, 1));
+	_idx0 = _mm_adds_epu8(_idx0, _mm_slli_si128(_idx0, 2));
+	_idx0 = _mm_adds_epu8(_idx0, _mm_slli_si128(_idx0, 4));
+	_idx0 = _mm_adds_epu8(_idx0, _mm_slli_si128(_idx0, 8));
+
+	// make it exclusive
+	_idx0 = _mm_slli_si128(_idx0, 1);
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, cmp, imax;
 		__m128i e, h, t, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+		__m128i _idx = _idx0;
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
 		for (j = 0; LIKELY(j < slen); ++j) {
@@ -159,7 +173,10 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 			e = _mm_load_si128(E + j); // e=E'(i,j)
 			h = _mm_max_epu8(h, e);
 			h = _mm_max_epu8(h, f); // h=H'(i,j)
-			max = _mm_max_epu8(max, h); // set max
+			t = _mm_max_epu8(_qlen, _idx); //emulate unsigned comparison
+			t = _mm_cmpeq_epi8(_idx, t);
+			t = _mm_andnot_si128(t, h); // mask out-of-range values
+			max = _mm_max_epu8(max, t); // set max
 			_mm_store_si128(H1 + j, h); // save to H'(i,j)
 			// now compute E'(i+1,j)
 			e = _mm_subs_epu8(e, e_del); // e=E'(i,j) - e_del
@@ -172,6 +189,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 			f = _mm_max_epu8(f, t);
 			// get H'(i-1,j) and prepare for the next j
 			h = _mm_load_si128(H0 + j); // h=H'(i-1,j)
+			_idx = _mm_adds_epu8(_idx, _one);
 		}
 		// NB: we do not need to set E(i,j) as we disallow adjecent insertion and then deletion
 		for (k = 0; LIKELY(k < 16); ++k) { // this block mimics SWPS3; NB: H(i,j) updated in the lazy-F loop cannot exceed max
@@ -234,13 +252,14 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
 	uint64_t *b;
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
+	__m128i _one, _qlen, _idx0;
 	kswr_t r;
 
 #define __max_8(ret, xx) do { \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 4)); \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 2)); \
-    	(ret) = _mm_extract_epi16((xx), 0); \
+		(ret) = _mm_extract_epi16((xx), 0); \
 	} while (0)
 
 	// initialization
@@ -260,10 +279,22 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 		_mm_store_si128(H0 + i, zero);
 		_mm_store_si128(Hmax + i, zero);
 	}
+	_one = _mm_set1_epi16(1);
+	_qlen = _mm_set1_epi16(q->qlen);
+
+	// prefix sum the slen
+	_idx0 = _mm_set1_epi16(slen);
+	_idx0 = _mm_adds_epu16(_idx0, _mm_slli_si128(_idx0, 2));
+	_idx0 = _mm_adds_epu16(_idx0, _mm_slli_si128(_idx0, 4));
+	_idx0 = _mm_adds_epu16(_idx0, _mm_slli_si128(_idx0, 8));
+
+	// make it exclusive
+	_idx0 = _mm_slli_si128(_idx0, 2);
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, imax;
 		__m128i e, t, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+		__m128i _idx = _idx0;
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 2);
 		for (j = 0; LIKELY(j < slen); ++j) {
@@ -271,7 +302,9 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 			e = _mm_load_si128(E + j);
 			h = _mm_max_epi16(h, e);
 			h = _mm_max_epi16(h, f);
-			max = _mm_max_epi16(max, h);
+			t = _mm_cmpgt_epi16(_qlen, _idx);
+			t = _mm_and_si128(t, h);
+			max = _mm_max_epi16(max, t);
 			_mm_store_si128(H1 + j, h);
 			e = _mm_subs_epu16(e, e_del);
 			t = _mm_subs_epu16(h, oe_del);
@@ -281,6 +314,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 			t = _mm_subs_epu16(h, oe_ins);
 			f = _mm_max_epi16(f, t);
 			h = _mm_load_si128(H0 + j);
+			_idx = _mm_adds_epu8(_idx, _one);
 		}
 		for (k = 0; LIKELY(k < 16); ++k) {
 			f = _mm_slli_si128(f, 2);
