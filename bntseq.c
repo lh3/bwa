@@ -197,7 +197,13 @@ bntseq_t *bns_restore(const char *prefix)
 				}
 				while (c != '\n' && c != EOF) c = fgetc(fp);
 				i = 0;
-			} else str[i++] = c; // FIXME: potential segfault here
+			} else {
+				if (i >= 1022) {
+					fprintf(stderr, "[E::%s] sequence name longer than 1023 characters. Abort!\n", __func__);
+					exit(1);
+				}
+				str[i++] = c;
+			}
 		}
 		kh_destroy(str, h);
 		fclose(fp);
