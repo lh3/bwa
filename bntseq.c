@@ -177,7 +177,26 @@ bntseq_t *bns_restore(const char *prefix)
 	bns = bns_restore_core(ann_filename, amb_filename, pac_filename);
 	if (bns == 0) return 0;
 	if ((fp = fopen(strcat(strcpy(alt_filename, prefix), ".alt"), "r")) != 0) { // read .alt file if present
-		char str[1024];
+		// Seek to end of regular, non-binary, file
+		off_t alt_file_size;
+		if (fseeko(fp, 0, SEEK_END) != 0) {
+			return 0;
+		}
+
+		// Get file size
+		alt_file_size = ftello(fp);
+		if (alt_file_size == -1) {
+			return 0;
+		}
+
+		// Allocate adequate memory to store .alt file
+		char *str = (char*)calloc(alt_file_size, sizeof(char));
+		if (str == NULL) {
+			return 0;
+		}
+		// Seek back to beginning of file to be read
+		fseeko(fp, 0, SEEK_SET);
+
 		khash_t(str) *h;
 		int c, i, absent;
 		khint_t k;
@@ -197,10 +216,11 @@ bntseq_t *bns_restore(const char *prefix)
 				}
 				while (c != '\n' && c != EOF) c = fgetc(fp);
 				i = 0;
-			} else str[i++] = c; // FIXME: potential segfault here
+			} else str[i++] = c;
 		}
 		kh_destroy(str, h);
 		fclose(fp);
+		free(str);
 	}
 	return bns;
 }
