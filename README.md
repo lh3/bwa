@@ -166,7 +166,7 @@ run the post-processing script.
 
 #### <a name="postalt"></a>8. Can I install BWA-MEM on Windows Subsystem for Linux (WSL)?
 
-Yes, but if your WSL is Ubuntu, additional step is needed before install:
+Yes, but if your WSL distribution is Ubuntu, additional step is needed before install:
 ```` sudo apt-get install build-essential make libz-dev -y   ````
 
 If you want to also install samtools on WSL see [this instruction][19] 
