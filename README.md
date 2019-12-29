@@ -164,6 +164,13 @@ post-processing helps to reduce false mappings caused by reads from the
 diverged part of ALT contigs and also enables HLA typing. It is recommended to
 run the post-processing script.
 
+#### <a name="postalt"></a>8. Can I install BWA-MEM on Windows Subsystem for Linux (WSL)?
+
+Yes, but if your WSL is Ubuntu, additional step is needed before install:
+```` sudo apt-get install build-essential make libz-dev -y   ````
+
+If you want to also install samtools on WSL see [this instruction][19] 
+
 
 
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
@@ -184,3 +191,4 @@ run the post-processing script.
 [16]: ftp://ftp.ncbi.nlm.nih.gov/genbank/genomes/Eukaryotes/vertebrates_mammals/Homo_sapiens/GRCh38/seqs_for_alignment_pipelines/
 [17]: http://sourceforge.net/projects/bio-bwa/files/bwakit/
 [18]: https://github.com/lh3/bwa/blob/master/README-alt.md
+[19]: https://gist.github.com/qqgg231/2224ac21510b980b2b4faf41a824e6d4
