@@ -239,7 +239,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
-		fprintf(stderr, "         `-a div' do not work not for long genomes.\n\n");
+		fprintf(stderr, "         `-a div' do not work for long genomes.\n\n");
 		return 1;
 	}
 	if (prefix == 0) {
