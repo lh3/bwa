@@ -1,6 +1,8 @@
 /* The MIT License
 
-   Copyright (c) 2008 Genome Research Ltd (GRL).
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -23,7 +25,7 @@
    SOFTWARE.
 */
 
-/* Contact: Heng Li <lh3@sanger.ac.uk> */
+/* Contact: Heng Li <hli@jimmy.harvard.edu> */
 
 #ifndef BWA_BWT_H
 #define BWA_BWT_H
