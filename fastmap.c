@@ -296,7 +296,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -H STR/FILE   insert STR to header if it starts with @; or insert lines in FILE [null]\n");
 		fprintf(stderr, "       -o FILE       sam file to output results to [stdout]\n");
 		fprintf(stderr, "       -j            treat ALT contigs as part of the primary assembly (i.e. ignore <idxbase>.alt file)\n");
-		fprintf(stderr, "       -5            for split alignment, take the alignment with the smallest coordinate as primary\n");
+		fprintf(stderr, "       -5            for split alignment, take the alignment with the smallest query (not genomic) coordinate as primary\n");
 		fprintf(stderr, "       -q            don't modify mapQ of supplementary alignments\n");
 		fprintf(stderr, "       -K INT        process INT input bases in each batch regardless of nThreads (for reproducibility) []\n");
 		fprintf(stderr, "\n");
