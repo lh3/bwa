@@ -79,7 +79,6 @@ bwt_t *bwt_pac2bwt(const char *fn_pac, int use_is)
 	buf2 = (ubyte_t*)calloc(pac_size, 1);
 	err_fread_noeof(buf2, 1, pac_size, fp);
 	err_fclose(fp);
-	memset(bwt->L2, 0, 5 * 4);
 	buf = (ubyte_t*)calloc(bwt->seq_len + 1, 1);
 	for (i = 0; i < bwt->seq_len; ++i) {
 		buf[i] = buf2[i>>2] >> ((3 - (i&3)) << 1) & 3;
