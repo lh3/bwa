@@ -42,6 +42,7 @@
 #define MIN_RATIO     0.8
 #define MIN_DIR_CNT   10
 #define MIN_DIR_RATIO 0.05
+
 #define OUTLIER_BOUND 2.0
 #define MAPPING_BOUND 3.0
 #define MAX_STDDEV    4.0
@@ -103,9 +104,9 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 		p25 = q->a[(int)(.25 * q->n + .499)];
 		p50 = q->a[(int)(.50 * q->n + .499)];
 		p75 = q->a[(int)(.75 * q->n + .499)];
-		r->low  = (int)(p25 - OUTLIER_BOUND * (p75 - p25) + .499);
+		r->low  = (int)(p25 - opt->outlier_bound_mem * (p75 - p25) + .499);
 		if (r->low < 1) r->low = 1;
-		r->high = (int)(p75 + OUTLIER_BOUND * (p75 - p25) + .499);
+		r->high = (int)(p75 + opt->outlier_bound_mem * (p75 - p25) + .499);
 		fprintf(stderr, "[M::%s] (25, 50, 75) percentile: (%d, %d, %d)\n", __func__, p25, p50, p75);
 		fprintf(stderr, "[M::%s] low and high boundaries for computing mean and std.dev: (%d, %d)\n", __func__, r->low, r->high);
 		for (i = x = 0, r->avg = 0; i < q->n; ++i)
@@ -117,10 +118,10 @@ void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *
 				r->std += (q->a[i] - r->avg) * (q->a[i] - r->avg);
 		r->std = sqrt(r->std / x);
 		fprintf(stderr, "[M::%s] mean and std.dev: (%.2f, %.2f)\n", __func__, r->avg, r->std);
-		r->low  = (int)(p25 - MAPPING_BOUND * (p75 - p25) + .499);
-		r->high = (int)(p75 + MAPPING_BOUND * (p75 - p25) + .499);
-		if (r->low  > r->avg - MAX_STDDEV * r->std) r->low  = (int)(r->avg - MAX_STDDEV * r->std + .499);
-		if (r->high < r->avg + MAX_STDDEV * r->std) r->high = (int)(r->avg + MAX_STDDEV * r->std + .499);
+		r->low  = (int)(p25 - opt->mapping_bound_mem * (p75 - p25) + .499);
+		r->high = (int)(p75 + opt->mapping_bound_mem * (p75 - p25) + .499);
+		if (r->low  > r->avg - opt->max_stddev_mem * r->std) r->low  = (int)(r->avg - opt->max_stddev_mem * r->std + .499);
+		if (r->high < r->avg + opt->max_stddev_mem * r->std) r->high = (int)(r->avg + opt->max_stddev_mem * r->std + .499);
 		if (r->low < 1) r->low = 1;
 		fprintf(stderr, "[M::%s] low and high boundaries for proper pairs: (%d, %d)\n", __func__, r->low, r->high);
 		free(q->a);
