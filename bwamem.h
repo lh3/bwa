@@ -81,6 +81,10 @@ typedef struct {
 	int max_matesw;         // perform maximally max_matesw rounds of mate-SW for each end
 	int max_XA_hits, max_XA_hits_alt; // if there are max_hits or fewer, output them all
 	int8_t mat[25];         // scoring matrix; mat[0] == 0 if unset
+
+	float outlier_bound_mem;  // controls how to calculate low and high boundaries for computing mean and std.dev
+	float mapping_bound_mem;  // controls how to calculate low and high boundaries for proper pairs. Low and high boundaries is calculated : F(Q1, Q2, Q3, mapping_bound_mem, max_stddev_mem) where Q2 is median insert size, Q1 and Q3 are lower and higher quartile  (also see max_stddev_mem).
+	float max_stddev_mem;     // controls how to calculate low and high boundaries for proper pairs. Low and high boundaries is calculated : F(Q1, Q2, Q3, mapping_bound_mem, max_stddev_mem) where Q2 is median insert size, Q1 and Q3 are lower and higher quartile  (also see mapping_bound_mem).
 } mem_opt_t;
 
 typedef struct {

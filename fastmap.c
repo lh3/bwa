@@ -156,8 +156,11 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "51qpaMCSPVYjuk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:")) >= 0) {
+	while ((c = getopt(argc, argv, "51qpaMCSPVYjuk:b:e:g:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
+		else if (c == 'b') opt->outlier_bound_mem = atof(optarg);
+		else if (c == 'e') opt->mapping_bound_mem = atof(optarg);
+		else if (c == 'g') opt->max_stddev_mem = atof(optarg);
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
 		else if (c == 'w') opt->w = atoi(optarg), opt0.w = 1;
@@ -267,6 +270,9 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "Usage: bwa mem [options] <idxbase> <in1.fq> [in2.fq]\n\n");
 		fprintf(stderr, "Algorithm options:\n\n");
 		fprintf(stderr, "       -t INT        number of threads [%d]\n", opt->n_threads);
+		fprintf(stderr, "       -b FLOAT      controls how to calculate low and high boundaries for computing mean and std.dev [%f]\n", opt->outlier_bound_mem);
+		fprintf(stderr, "       -e FLOAT      mapping bound mem. Controls how to calculate low and high boundaries for proper pairs.  [%f]\n", opt->mapping_bound_mem);
+		fprintf(stderr, "       -g FLOAT      max stddev mem. Controls how to calculate low and high boundaries for proper pairs.  [%f]\n", opt->max_stddev_mem);
 		fprintf(stderr, "       -k INT        minimum seed length [%d]\n", opt->min_seed_len);
 		fprintf(stderr, "       -w INT        band width for banded alignment [%d]\n", opt->w);
 		fprintf(stderr, "       -d INT        off-diagonal X-dropoff [%d]\n", opt->zdrop);
