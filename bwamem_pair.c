@@ -43,10 +43,6 @@
 #define MIN_DIR_CNT   10
 #define MIN_DIR_RATIO 0.05
 
-#define OUTLIER_BOUND 2.0
-#define MAPPING_BOUND 3.0
-#define MAX_STDDEV    4.0
-
 static inline int mem_infer_dir(int64_t l_pac, int64_t b1, int64_t b2, int64_t *dist)
 {
 	int64_t p2;
