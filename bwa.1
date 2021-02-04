@@ -202,7 +202,7 @@ yields fewer seeds, which leads to faster alignment speed but lower accuracy. [1
 .BI -c \ INT
 Discard a MEM if it has more than
 .I INT
-occurence in the genome. This is an insensitive parameter. [500]
+occurrence in the genome. This is an insensitive parameter. [500]
 .TP
 .BI -D \ FLOAT
 Drop chains shorter than
@@ -235,7 +235,7 @@ Mismatch penalty. The sequence error rate is approximately: {.75 * exp[-log(4) *
 .TP
 .BI -O \ INT[,INT]
 Gap open penalty. If two numbers are specified, the first is the penalty of
-openning a deletion and the second for openning an insertion. [6]
+opening a deletion and the second for opening an insertion. [6]
 .TP
 .BI -E \ INT[,INT]
 Gap extension penalty. If two numbers are specified, the first is the penalty
@@ -260,7 +260,7 @@ two scores to determine whether we should force pairing. A larger value leads to
 more aggressive read pair. [17]
 .TP
 .BI -x \ STR
-Read type. Changes multiple parameters unless overriden [null]
+Read type. Changes multiple parameters unless overridden [null]
 .RS
 .TP 10
 .BR pacbio :
@@ -301,7 +301,7 @@ Write the output SAM file to
 For compatibility with other BWA commands, this option may also be given as
 .B -f
 .IR FILE .
-[standard ouptut]
+[standard output]
 .TP
 .B -q
  Don't reduce the mapping quality of split alignment of lower alignment score.
@@ -688,7 +688,7 @@ X1	Number of suboptimal hits found by BWA
 XN	Number of ambiguous bases in the referenece
 XM	Number of mismatches in the alignment
 XO	Number of gap opens
-XG	Number of gap extentions
+XG	Number of gap extensions
 XT	Type: Unique/Repeat/N/Mate-sw
 XA	Alternative hits; format: /(chr,pos,CIGAR,NM;)*/
 _
