@@ -243,7 +243,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		return 1;
 	}
 	if (prefix == 0) {
-		prefix = malloc(strlen(argv[optind]) + 4);
+		prefix = (char*)malloc(strlen(argv[optind]) + 4);
 		strcpy(prefix, argv[optind]);
 		if (is_64) strcat(prefix, ".64");
 	}

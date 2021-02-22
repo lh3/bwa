@@ -38,7 +38,7 @@ int main_maxk(int argc, char *argv[])
 		if (ks->seq.l > max_len) {
 			max_len = ks->seq.l;
 			kroundup32(max_len);
-			cnt = realloc(cnt, max_len);
+			cnt = (uint8_t*)realloc(cnt, max_len);
 		}
 		memset(cnt, 0, ks->seq.l);
 		for (i = 0; i < ks->seq.l; ++i)

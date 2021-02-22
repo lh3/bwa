@@ -74,7 +74,7 @@ static const bntseq_t *global_bns = 0; // for debugging only
 mem_opt_t *mem_opt_init()
 {
 	mem_opt_t *o;
-	o = calloc(1, sizeof(mem_opt_t));
+	o = (mem_opt_t*)calloc(1, sizeof(mem_opt_t));
 	o->flag = 0;
 	o->a = 1; o->b = 4;
 	o->o_del = o->o_ins = 6;
@@ -123,9 +123,9 @@ typedef struct {
 static smem_aux_t *smem_aux_init()
 {
 	smem_aux_t *a;
-	a = calloc(1, sizeof(smem_aux_t));
-	a->tmpv[0] = calloc(1, sizeof(bwtintv_v));
-	a->tmpv[1] = calloc(1, sizeof(bwtintv_v));
+	a = (smem_aux_t*)calloc(1, sizeof(smem_aux_t));
+	a->tmpv[0] = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
+	a->tmpv[1] = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
 	return a;
 }
 
@@ -228,7 +228,7 @@ static int test_and_merge(const mem_opt_t *opt, int64_t l_pac, mem_chain_t *c, c
 	if (y >= 0 && x - y <= opt->w && y - x <= opt->w && x - last->len < opt->max_chain_gap && y - last->len < opt->max_chain_gap) { // grow the chain
 		if (c->n == c->m) {
 			c->m <<= 1;
-			c->seeds = realloc(c->seeds, c->m * sizeof(mem_seed_t));
+			c->seeds = (mem_seed_t*)realloc(c->seeds, c->m * sizeof(mem_seed_t));
 		}
 		c->seeds[c->n++] = *p;
 		return 1;
@@ -317,7 +317,7 @@ mem_chain_v mem_chain(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 			} else to_add = 1;
 			if (to_add) { // add the seed as a new chain
 				tmp.n = 1; tmp.m = 4;
-				tmp.seeds = calloc(tmp.m, sizeof(mem_seed_t));
+				tmp.seeds = (mem_seed_t*)calloc(tmp.m, sizeof(mem_seed_t));
 				tmp.seeds[0] = s;
 				tmp.rid = rid;
 				tmp.is_alt = !!bns->anns[rid].is_alt;
@@ -685,7 +685,7 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	rseq = bns_fetch_seq(bns, pac, &rmax[0], c->seeds[0].rbeg, &rmax[1], &rid);
 	assert(c->rid == rid);
 
-	srt = malloc(c->n * 8);
+	srt = (uint64_t*)malloc(c->n * sizeof(uint64_t));
 	for (i = 0; i < c->n; ++i)
 		srt[i] = (uint64_t)c->seeds[i].score<<32 | i;
 	ks_introsort_64(c->n, srt);
@@ -741,10 +741,10 @@ void mem_chain2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		if (s->qbeg) { // left extension
 			uint8_t *rs, *qs;
 			int qle, tle, gtle, gscore;
-			qs = malloc(s->qbeg);
+			qs = (uint8_t*)malloc(s->qbeg);
 			for (i = 0; i < s->qbeg; ++i) qs[i] = query[s->qbeg - 1 - i];
 			tmp = s->rbeg - rmax[0];
-			rs = malloc(tmp);
+			rs = (uint8_t*)malloc(tmp);
 			for (i = 0; i < tmp; ++i) rs[i] = rseq[tmp - 1 - i];
 			for (i = 0; i < MAX_BAND_TRY; ++i) {
 				int prev = a->score;
@@ -1129,7 +1129,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	}
 	qb = ar->qb, qe = ar->qe;
 	rb = ar->rb, re = ar->re;
-	query = malloc(l_query);
+	query = (uint8_t*)malloc(l_query);
 	for (i = 0; i < l_query; ++i) // convert to the nt4 encoding
 		query[i] = query_[i] < 5? query_[i] : nst_nt4_table[(int)query_[i]];
 	a.mapq = ar->secondary < 0? mem_approx_mapq_se(opt, ar) : 0;
@@ -1167,7 +1167,7 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 		int clip5, clip3;
 		clip5 = is_rev? l_query - qe : qb;
 		clip3 = is_rev? qb : l_query - qe;
-		a.cigar = realloc(a.cigar, 4 * (a.n_cigar + 2) + l_MD);
+		a.cigar = (uint32_t*)realloc(a.cigar, 4 * (a.n_cigar + 2) + l_MD);
 		if (clip5) {
 			memmove(a.cigar+1, a.cigar, a.n_cigar * 4 + l_MD); // make room for 5'-end clipping
 			a.cigar[0] = clip5<<4 | 3;
@@ -1241,11 +1241,11 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 
 	ctime = cputime(); rtime = realtime();
 	global_bns = bns;
-	w.regs = malloc(n * sizeof(mem_alnreg_v));
+	w.regs = (mem_alnreg_v*)malloc(n * sizeof(mem_alnreg_v));
 	w.opt = opt; w.bwt = bwt; w.bns = bns; w.pac = pac;
 	w.seqs = seqs; w.n_processed = n_processed;
 	w.pes = &pes[0];
-	w.aux = malloc(opt->n_threads * sizeof(smem_aux_t));
+	w.aux = (smem_aux_t**)malloc(opt->n_threads * sizeof(smem_aux_t));
 	for (i = 0; i < opt->n_threads; ++i)
 		w.aux[i] = smem_aux_init();
 	kt_for(opt->n_threads, worker1, &w, (opt->flag&MEM_F_PE)? n>>1 : n); // find mapping positions

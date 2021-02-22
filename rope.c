@@ -21,7 +21,7 @@ typedef struct { // memory pool for fast and compact memory allocation (no free)
 static mempool_t *mp_init(int size)
 {
 	mempool_t *mp;
-	mp = calloc(1, sizeof(mempool_t));
+	mp = (mempool_t*)calloc(1, sizeof(mempool_t));
 	mp->size = size;
 	mp->i = mp->n_elems = MP_CHUNK_SIZE / size;
 	mp->top = -1;
@@ -40,9 +40,9 @@ static inline void *mp_alloc(mempool_t *mp)
 	if (mp->i == mp->n_elems) {
 		if (++mp->top == mp->max) {
 			mp->max = mp->max? mp->max<<1 : 1;
-			mp->mem = realloc(mp->mem, sizeof(void*) * mp->max);
+			mp->mem = (uint8_t**)realloc(mp->mem, sizeof(uint8_t*) * mp->max);
 		}
-		mp->mem[mp->top] = calloc(mp->n_elems, mp->size);
+		mp->mem[mp->top] = (uint8_t*)calloc(mp->n_elems, mp->size);
 		mp->i = 0;
 	}
 	return mp->mem[mp->top] + (mp->i++) * mp->size;
@@ -55,23 +55,23 @@ static inline void *mp_alloc(mempool_t *mp)
 rope_t *rope_init(int max_nodes, int block_len)
 {
 	rope_t *rope;
-	rope = calloc(1, sizeof(rope_t));
+	rope = (rope_t*)calloc(1, sizeof(rope_t));
 	if (block_len < 32) block_len = 32;
 	rope->max_nodes = (max_nodes+ 1)>>1<<1;
 	rope->block_len = (block_len + 7) >> 3 << 3;
 	rope->node = mp_init(sizeof(rpnode_t) * rope->max_nodes);
 	rope->leaf = mp_init(rope->block_len);
-	rope->root = mp_alloc(rope->node);
+	rope->root = (rpnode_t*)mp_alloc((mempool_t*)rope->node);
 	rope->root->n = 1;
 	rope->root->is_bottom = 1;
-	rope->root->p = mp_alloc(rope->leaf);
+	rope->root->p = (rpnode_s*)mp_alloc((mempool_t*)rope->leaf);
 	return rope;
 }
 
 void rope_destroy(rope_t *rope)
 {
-	mp_destroy(rope->node);
-	mp_destroy(rope->leaf);
+	mp_destroy((mempool_t*)rope->node);
+	mp_destroy((mempool_t*)rope->leaf);
 	free(rope);
 }
 
@@ -80,7 +80,7 @@ static inline rpnode_t *split_node(rope_t *rope, rpnode_t *u, rpnode_t *v)
 	int j, i = v - u;
 	rpnode_t *w; // $w is the sibling of $v
 	if (u == 0) { // only happens at the root; add a new root
-		u = v = mp_alloc(rope->node);
+		u = v = (rpnode_t*)mp_alloc((mempool_t*)rope->node);
 		v->n = 1; v->p = rope->root; // the new root has the old root as the only child
 		memcpy(v->c, rope->c, 48);
 		for (j = 0; j < 6; ++j) v->l += v->c[j];
@@ -90,7 +90,7 @@ static inline rpnode_t *split_node(rope_t *rope, rpnode_t *u, rpnode_t *v)
 		memmove(v + 2, v + 1, sizeof(rpnode_t) * (u->n - i - 1));
 	++u->n; w = v + 1;
 	memset(w, 0, sizeof(rpnode_t));
-	w->p = mp_alloc(u->is_bottom? rope->leaf : rope->node);
+	w->p = (rpnode_s*)mp_alloc((mempool_t*)(u->is_bottom? rope->leaf : rope->node));
 	if (u->is_bottom) { // we are at the bottom level; $v->p is a string instead of a node
 		uint8_t *p = (uint8_t*)v->p, *q = (uint8_t*)w->p;
 		rle_split(p, q);
@@ -281,12 +281,12 @@ rpnode_t *rope_restore_node(const rope_t *r, FILE *fp, int64_t c[6])
 	rpnode_t *p;
 	fread(&is_bottom, 1, 1, fp);
 	fread(&n, 2, 1, fp);
-	p = mp_alloc(r->node);
+	p = (rpnode_t*)mp_alloc((mempool_t*)r->node);
 	p->is_bottom = is_bottom, p->n = n;
 	if (is_bottom) {
 		for (i = 0; i < n; ++i) {
 			uint16_t *q;
-			p[i].p = mp_alloc(r->leaf);
+			p[i].p = (rpnode_s*)mp_alloc((mempool_t*)r->leaf);
 			q = rle_nptr(p[i].p);
 			fread(p[i].c, 8, 6, fp);
 			fread(q, 2, 1, fp);
@@ -308,7 +308,7 @@ rpnode_t *rope_restore_node(const rope_t *r, FILE *fp, int64_t c[6])
 rope_t *rope_restore(FILE *fp)
 {
 	rope_t *r;
-	r = calloc(1, sizeof(rope_t));
+	r = (rope_t*)calloc(1, sizeof(rope_t));
 	fread(&r->max_nodes, 4, 1, fp);
 	fread(&r->block_len, 4, 1, fp);
 	r->node = mp_init(sizeof(rpnode_t) * r->max_nodes);

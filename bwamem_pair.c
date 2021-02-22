@@ -156,7 +156,7 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
 		is_larger = !(r>>1); // whether the mate has larger coordinate
 		if (is_rev) {
-			rev = malloc(l_ms); // this is the reverse complement of $ms
+			rev = (uint8_t*)malloc(l_ms); // this is the reverse complement of $ms
 			for (i = 0; i < l_ms; ++i) rev[l_ms - 1 - i] = ms[i] < 4? 3 - ms[i] : 4;
 			seq = rev;
 		} else seq = (uint8_t*)ms;

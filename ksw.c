@@ -384,8 +384,8 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	int i, j, k, oe_del = o_del + e_del, oe_ins = o_ins + e_ins, beg, end, max, max_i, max_j, max_ins, max_del, max_ie, gscore, max_off;
 	assert(h0 > 0);
 	// allocate memory
-	qp = malloc(qlen * m);
-	eh = calloc(qlen + 1, 8);
+	qp = (int8_t*)malloc(qlen * m);
+	eh = (eh_t*)calloc(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];
@@ -494,7 +494,7 @@ static inline uint32_t *push_cigar(int *n_cigar, int *m_cigar, uint32_t *cigar, 
 	if (*n_cigar == 0 || op != (cigar[(*n_cigar) - 1]&0xf)) {
 		if (*n_cigar == *m_cigar) {
 			*m_cigar = *m_cigar? (*m_cigar)<<1 : 4;
-			cigar = realloc(cigar, (*m_cigar) << 2);
+			cigar = (uint32_t*)realloc(cigar, (*m_cigar) << 2);
 		}
 		cigar[(*n_cigar)++] = len<<4 | op;
 	} else cigar[(*n_cigar)-1] += len<<4;
@@ -510,9 +510,9 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 	if (n_cigar_) *n_cigar_ = 0;
 	// allocate memory
 	n_col = qlen < 2*w+1? qlen : 2*w+1; // maximum #columns of the backtrack matrix
-	z = n_cigar_ && cigar_? malloc((long)n_col * tlen) : 0;
-	qp = malloc(qlen * m);
-	eh = calloc(qlen + 1, 8);
+	z = n_cigar_ && cigar_? (uint8_t*)malloc((long)n_col * tlen) : 0;
+	qp = (int8_t*)malloc(qlen * m);
+	eh = (eh_t*)calloc(qlen + 1, 8);
 	// generate the query profile
 	for (k = i = 0; k < m; ++k) {
 		const int8_t *p = &mat[k * m];

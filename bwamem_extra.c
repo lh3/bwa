@@ -48,12 +48,12 @@ struct __smem_i {
 smem_i *smem_itr_init(const bwt_t *bwt)
 {
 	smem_i *itr;
-	itr = calloc(1, sizeof(smem_i));
+	itr = (smem_i*)calloc(1, sizeof(smem_i));
 	itr->bwt = bwt;
-	itr->tmpvec[0] = calloc(1, sizeof(bwtintv_v));
-	itr->tmpvec[1] = calloc(1, sizeof(bwtintv_v));
-	itr->matches   = calloc(1, sizeof(bwtintv_v));
-	itr->sub       = calloc(1, sizeof(bwtintv_v));
+	itr->tmpvec[0] = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
+	itr->tmpvec[1] = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
+	itr->matches   = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
+	itr->sub       = (bwtintv_v*)calloc(1, sizeof(bwtintv_v));
 	itr->min_intv = 1;
 	itr->max_len  = INT_MAX;
 	itr->max_intv = 0;
@@ -105,7 +105,7 @@ mem_alnreg_v mem_align1(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *
 	extern void mem_mark_primary_se(const mem_opt_t *opt, int n, mem_alnreg_t *a, int64_t id);
 	mem_alnreg_v ar;
 	char *seq;
-	seq = malloc(l_seq);
+	seq = (char*)malloc(l_seq);
 	memcpy(seq, seq_, l_seq); // makes a copy of seq_
 	ar = mem_align1_core(opt, bwt, bns, pac, l_seq, seq, 0);
 	mem_mark_primary_se(opt, ar.n, ar.a, lrand48());
@@ -127,8 +127,8 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 	kstring_t *aln = 0, str = {0,0,0};
 	char **XA = 0, *has_alt;
 
-	cnt = calloc(a->n, sizeof(int));
-	has_alt = calloc(a->n, 1);
+	cnt = (int*)calloc(a->n, sizeof(int));
+	has_alt = (char*)calloc(a->n, 1);
 	for (i = 0, tot = 0; i < a->n; ++i) {
 		r = get_pri_idx(opt->XA_drop_ratio, a->a, i);
 		if (r >= 0) {
@@ -137,7 +137,7 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		}
 	}
 	if (tot == 0) goto end_gen_alt;
-	aln = calloc(a->n, sizeof(kstring_t));
+	aln = (kstring_t*)calloc(a->n, sizeof(kstring_t));
 	for (i = 0; i < a->n; ++i) {
 		mem_aln_t t;
 		if ((r = get_pri_idx(opt->XA_drop_ratio, a->a, i)) < 0) continue;
@@ -160,7 +160,7 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		free(t.cigar);
 		kputsn(str.s, str.l, &aln[r]);
 	}
-	XA = calloc(a->n, sizeof(char*));
+	XA = (char**)calloc(a->n, sizeof(char*));
 	for (k = 0; k < a->n; ++k)
 		XA[k] = aln[k].s;
 

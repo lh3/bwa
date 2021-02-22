@@ -69,7 +69,7 @@ static void *process(void *shared, int step, void *_data)
 	if (step == 0) {
 		ktp_data_t *ret;
 		int64_t size = 0;
-		ret = calloc(1, sizeof(ktp_data_t));
+		ret = (ktp_data_t*)calloc(1, sizeof(ktp_data_t));
 		ret->seqs = bseq_read(aux->actual_chunk_size, &ret->n_seqs, aux->ks, aux->ks2);
 		if (ret->seqs == 0) {
 			free(ret);
@@ -224,7 +224,7 @@ int main_mem(int argc, char *argv[])
 				FILE *fp;
 				if ((fp = fopen(optarg, "r")) != 0) {
 					char *buf;
-					buf = calloc(1, 0x10000);
+					buf = (char*)calloc(1, 0x10000);
 					while (fgets(buf, 0xffff, fp)) {
 						i = strlen(buf);
 						assert(buf[i-1] == '\n'); // a long line

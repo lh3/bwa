@@ -63,7 +63,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 		 * simply output all hits, but the following samples "rest"
 		 * number of random hits. */
 		rest = n_occ > n_multi + 1? n_multi + 1 : n_occ; // find one additional for ->sa
-		s->multi = calloc(rest, sizeof(bwt_multi1_t));
+		s->multi = (bwt_multi1_t*)calloc(rest, sizeof(bwt_multi1_t));
 		for (k = 0; k < n_aln; ++k) {
 			const bwt_aln1_t *q = aln + k;
 			if (q->l - q->k + 1 <= rest) {
@@ -257,11 +257,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 		} else {
 			if (s->cigar == 0) {
 				s->n_cigar = 2;
-				s->cigar = calloc(s->n_cigar, sizeof(bwa_cigar_t));
+				s->cigar = (bwa_cigar_t*)calloc(s->n_cigar, sizeof(bwa_cigar_t));
 				s->cigar[0] = __cigar_create(0, s->len);
 			} else {
 				++s->n_cigar;
-				s->cigar = realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
+				s->cigar = (bwa_cigar_t*)realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
 			}
 			s->cigar[s->n_cigar-1] = __cigar_create(3, (s->full_len - s->len));
 		}
@@ -271,11 +271,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 		} else {
 			if (s->cigar == 0) {
 				s->n_cigar = 2;
-				s->cigar = calloc(s->n_cigar, sizeof(bwa_cigar_t));
+				s->cigar = (bwa_cigar_t*)calloc(s->n_cigar, sizeof(bwa_cigar_t));
 				s->cigar[1] = __cigar_create(0, s->len);
 			} else {
 				++s->n_cigar;
-				s->cigar = realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
+				s->cigar = (bwa_cigar_t*)realloc(s->cigar, s->n_cigar * sizeof(bwa_cigar_t));
 				memmove(s->cigar + 1, s->cigar, (s->n_cigar-1) * sizeof(bwa_cigar_t));
 			}
 			s->cigar[0] = __cigar_create(3, (s->full_len - s->len));
