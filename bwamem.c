@@ -474,7 +474,7 @@ int mem_sort_dedup_patch(const mem_opt_t *opt, const bntseq_t *bns, const uint8_
 			int64_t or_, oq, mr, mq;
 			int score, w;
 			if (q->qe == q->qb) continue; // a[j] has been excluded
-			or = q->re - p->rb; // overlap length on the reference
+			or_ = q->re - p->rb; // overlap length on the reference
 			oq = q->qb < p->qb? q->qe - p->qb : p->qe - q->qb; // overlap length on the query
 			mr = q->re - q->rb < p->re - p->rb? q->re - q->rb : p->re - p->rb; // min ref len in alignment
 			mq = q->qe - q->qb < p->qe - p->qb? q->qe - q->qb : p->qe - p->qb; // min qry len in alignment

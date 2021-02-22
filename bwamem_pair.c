@@ -72,9 +72,10 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
 {
 	int i, d, max;
+	typedef kvec_t(int) kvec_int_t;
 	uint64_v isize[4];
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
-	memset(isize, 0, sizeof(kvec_t(int)) * 4);
+	memset(isize, 0, sizeof(kvec_int_t) * 4);
 	for (i = 0; i < n>>1; ++i) {
 		int dir;
 		int64_t is;
