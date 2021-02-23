@@ -43,6 +43,8 @@
 #define BWTALGO_BWTSW 2
 #define BWTALGO_IS    3
 
+#define BWA_DBG_QNAME 0x1
+
 typedef struct {
 	bwt_t    *bwt; // FM-index
 	bntseq_t *bns; // information on the reference sequences
@@ -58,7 +60,7 @@ typedef struct {
 	char *name, *comment, *seq, *qual, *sam;
 } bseq1_t;
 
-extern int bwa_verbose;
+extern int bwa_verbose, bwa_dbg;
 extern char bwa_rg_id[256];
 
 #ifdef __cplusplus

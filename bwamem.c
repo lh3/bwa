@@ -1223,10 +1223,12 @@ static void worker2(void *data, int i, int tid)
 		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
 		if (w->opt->flag & MEM_F_PRIMARY5) mem_reorder_primary5(w->opt->T, &w->regs[i]);
 		mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
+		fprintf(stderr, "Q\t%s\t%.3f\n", w->seqs[i].name, peakrss() / 1073741824.0);
 		free(w->regs[i].a);
 	} else {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read pair '%s' <=====\n", w->seqs[i<<1|0].name);
 		mem_sam_pe(w->opt, w->bns, w->pac, w->pes, (w->n_processed>>1) + i, &w->seqs[i<<1], &w->regs[i<<1]);
+		fprintf(stderr, "Q\t%s\t%.3f\n", w->seqs[i<<1|0].name, peakrss() / 1073741824.0);
 		free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 	}
 }
