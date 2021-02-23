@@ -1205,11 +1205,13 @@ static void worker1(void *data, int i, int tid)
 	if (!(w->opt->flag&MEM_F_PE)) {
 		if (bwa_verbose >= 4) printf("=====> Processing read '%s' <=====\n", w->seqs[i].name);
 		w->regs[i] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i].l_seq, w->seqs[i].seq, w->aux[tid]);
+		fprintf(stderr, "Q1\t%s\t%.3f\t%d\n", w->seqs[i].name, peakrss() / 1073741824.0, tid);
 	} else {
 		if (bwa_verbose >= 4) printf("=====> Processing read '%s'/1 <=====\n", w->seqs[i<<1|0].name);
 		w->regs[i<<1|0] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|0].l_seq, w->seqs[i<<1|0].seq, w->aux[tid]);
 		if (bwa_verbose >= 4) printf("=====> Processing read '%s'/2 <=====\n", w->seqs[i<<1|1].name);
 		w->regs[i<<1|1] = mem_align1_core(w->opt, w->bwt, w->bns, w->pac, w->seqs[i<<1|1].l_seq, w->seqs[i<<1|1].seq, w->aux[tid]);
+		fprintf(stderr, "Q1\t%s\t%.3f\t%d\n", w->seqs[i<<1|0].name, peakrss() / 1073741824.0, tid);
 	}
 }
 
@@ -1223,12 +1225,12 @@ static void worker2(void *data, int i, int tid)
 		mem_mark_primary_se(w->opt, w->regs[i].n, w->regs[i].a, w->n_processed + i);
 		if (w->opt->flag & MEM_F_PRIMARY5) mem_reorder_primary5(w->opt->T, &w->regs[i]);
 		mem_reg2sam(w->opt, w->bns, w->pac, &w->seqs[i], &w->regs[i], 0, 0);
-		fprintf(stderr, "Q\t%s\t%.3f\n", w->seqs[i].name, peakrss() / 1073741824.0);
+		fprintf(stderr, "Q2\t%s\t%.3f\n", w->seqs[i].name, peakrss() / 1073741824.0);
 		free(w->regs[i].a);
 	} else {
 		if (bwa_verbose >= 4) printf("=====> Finalizing read pair '%s' <=====\n", w->seqs[i<<1|0].name);
 		mem_sam_pe(w->opt, w->bns, w->pac, w->pes, (w->n_processed>>1) + i, &w->seqs[i<<1], &w->regs[i<<1]);
-		fprintf(stderr, "Q\t%s\t%.3f\n", w->seqs[i<<1|0].name, peakrss() / 1073741824.0);
+		fprintf(stderr, "Q2\t%s\t%.3f\n", w->seqs[i<<1|0].name, peakrss() / 1073741824.0);
 		free(w->regs[i<<1|0].a); free(w->regs[i<<1|1].a);
 	}
 }
