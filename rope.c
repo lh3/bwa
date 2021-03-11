@@ -64,7 +64,7 @@ rope_t *rope_init(int max_nodes, int block_len)
 	rope->root = (rpnode_t*)mp_alloc((mempool_t*)rope->node);
 	rope->root->n = 1;
 	rope->root->is_bottom = 1;
-	rope->root->p = (rpnode_s*)mp_alloc((mempool_t*)rope->leaf);
+	rope->root->p = (rpnode_t*)mp_alloc((mempool_t*)rope->leaf);
 	return rope;
 }
 
@@ -90,7 +90,7 @@ static inline rpnode_t *split_node(rope_t *rope, rpnode_t *u, rpnode_t *v)
 		memmove(v + 2, v + 1, sizeof(rpnode_t) * (u->n - i - 1));
 	++u->n; w = v + 1;
 	memset(w, 0, sizeof(rpnode_t));
-	w->p = (rpnode_s*)mp_alloc((mempool_t*)(u->is_bottom? rope->leaf : rope->node));
+	w->p = (rpnode_t*)mp_alloc((mempool_t*)(u->is_bottom? rope->leaf : rope->node));
 	if (u->is_bottom) { // we are at the bottom level; $v->p is a string instead of a node
 		uint8_t *p = (uint8_t*)v->p, *q = (uint8_t*)w->p;
 		rle_split(p, q);
@@ -286,7 +286,7 @@ rpnode_t *rope_restore_node(const rope_t *r, FILE *fp, int64_t c[6])
 	if (is_bottom) {
 		for (i = 0; i < n; ++i) {
 			uint16_t *q;
-			p[i].p = (rpnode_s*)mp_alloc((mempool_t*)r->leaf);
+			p[i].p = (rpnode_t*)mp_alloc((mempool_t*)r->leaf);
 			q = rle_nptr(p[i].p);
 			fread(p[i].c, 8, 6, fp);
 			fread(q, 2, 1, fp);
