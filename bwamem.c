@@ -932,7 +932,7 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputsn("\tMD:Z:", 6, str); kputs((char*)(p->cigar + p->n_cigar), str);
 	}
 	if (m && m->n_cigar) { kputsn("\tMC:Z:", 6, str); add_cigar(opt, m, str, which); }
-    if (m) { kputsn("\tMQ:i:", 6, str); kputw(m->mapq, str); }
+    if (m && opt->flag & MEM_F_MS) { kputsn("\tMQ:i:", 6, str); kputw(m->mapq, str); }
     if (m && opt->flag & MEM_F_MS) { kputsn("\tms:i:", 6, str); kputw(ms, str); }
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
