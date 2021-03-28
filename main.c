@@ -58,7 +58,7 @@ static int usage()
 	fprintf(stderr, "\n");
 	fprintf(stderr, "Program: bwa (alignment via Burrows-Wheeler transformation)\n");
 	fprintf(stderr, "Version: %s\n", PACKAGE_VERSION);
-	fprintf(stderr, "Contact: Heng Li <lh3@sanger.ac.uk>\n\n");
+	fprintf(stderr, "Contact: Heng Li <hli@ds.dfci.harvard.edu>\n\n");
 	fprintf(stderr, "Usage:   bwa <command> [options]\n\n");
 	fprintf(stderr, "Command: index         index sequences in the FASTA format\n");
 	fprintf(stderr, "         mem           BWA-MEM algorithm\n");
@@ -67,7 +67,7 @@ static int usage()
 	fprintf(stderr, "         aln           gapped/ungapped alignment\n");
 	fprintf(stderr, "         samse         generate alignment (single ended)\n");
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
-	fprintf(stderr, "         bwasw         BWA-SW for long queries\n");
+	fprintf(stderr, "         bwasw         BWA-SW for long queries (DEPRECATED)\n");
 	fprintf(stderr, "\n");
 	fprintf(stderr, "         shm           manage indices in shared memory\n");
 	fprintf(stderr, "         fa2pac        convert FASTA to PAC format\n");
