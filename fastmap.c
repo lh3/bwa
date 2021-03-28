@@ -156,7 +156,7 @@ int main_mem(int argc, char *argv[])
 
 	aux.opt = opt = mem_opt_init();
 	memset(&opt0, 0, sizeof(mem_opt_t));
-	while ((c = getopt(argc, argv, "51qpaMCSPVYjuk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:F:")) >= 0) {
+	while ((c = getopt(argc, argv, "351qpaMCSPVYjuk:c:v:s:r:t:R:A:B:O:E:U:w:L:d:T:Q:D:m:I:N:o:f:W:x:G:h:y:K:X:H:F:")) >= 0) {
 		if (c == 'k') opt->min_seed_len = atoi(optarg), opt0.min_seed_len = 1;
 		else if (c == '1') no_mt_io = 1;
 		else if (c == 'x') mode = optarg;
@@ -176,6 +176,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == '5') opt->flag |= MEM_F_PRIMARY5 | MEM_F_KEEP_SUPP_MAPQ; // always apply MEM_F_KEEP_SUPP_MAPQ with -5
 		else if (c == 'q') opt->flag |= MEM_F_KEEP_SUPP_MAPQ;
 		else if (c == 'u') opt->flag |= MEM_F_XB;
+        else if (c == '3') opt->flag |= MEM_F_MS; 
 		else if (c == 'c') opt->max_occ = atoi(optarg), opt0.max_occ = 1;
 		else if (c == 'd') opt->zdrop = atoi(optarg), opt0.zdrop = 1;
 		else if (c == 'v') bwa_verbose = atoi(optarg);
@@ -308,7 +309,8 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "       -C            append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "       -V            output the reference FASTA header in the XR tag\n");
 		fprintf(stderr, "       -Y            use soft clipping for supplementary alignments\n");
-		fprintf(stderr, "       -M            mark shorter split hits as secondary\n\n");
+		fprintf(stderr, "       -M            mark shorter split hits as secondary\n");
+		fprintf(stderr, "       -3            output 'ms' and 'MQ' tag for samtools markdup usage\n");
 		fprintf(stderr, "       -I FLOAT[,FLOAT[,INT[,INT]]]\n");
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");

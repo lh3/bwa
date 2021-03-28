@@ -45,6 +45,7 @@
 #define OUTLIER_BOUND 2.0
 #define MAPPING_BOUND 3.0
 #define MAX_STDDEV    4.0
+#define MD_MIN_QUALITY 15
 
 static inline int mem_infer_dir(int64_t l_pac, int64_t b1, int64_t b2, int64_t *dist)
 {
@@ -268,7 +269,7 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 	return ret;
 }
 
-void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m);
+void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m, int ms);
 void mem_reorder_primary5(int T, mem_alnreg_v *a);
 
 #define raw_mapq(diff, a) ((int)(6.02 * (diff) / (a) + .499))
@@ -377,11 +378,20 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				aa[i][n_aa[i]++] = g[i];
 			}
 		}
+        uint32_t mscore1 = 0, mscore2 = 0;
+        if(opt->flag & MEM_F_MS){
+            for(i = 0; i < s[0].l_seq; ++i){
+                if(s[0].qual[i] >= MD_MIN_QUALITY) mscore1 += s[0].qual[i];
+            }
+            for(i = 0; i < s[1].l_seq; ++i){
+                if(s[1].qual[i] >= MD_MIN_QUALITY) mscore2 += s[1].qual[i];
+            }
+        }
 		for (i = 0; i < n_aa[0]; ++i)
-			mem_aln2sam(opt, bns, &str, &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
+			mem_aln2sam(opt, bns, &str, &s[0], n_aa[0], aa[0], i, &h[1], mscore2); // write read1 hits
 		s[0].sam = strdup(str.s); str.l = 0;
 		for (i = 0; i < n_aa[1]; ++i)
-			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
+			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0], mscore1); // write read2 hits
 		s[1].sam = str.s;
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 		// free

@@ -848,7 +848,7 @@ static inline void add_cigar(const mem_opt_t *opt, mem_aln_t *p, kstring_t *str,
 	} else kputc('*', str); // having a coordinate but unaligned (e.g. when copy_mate is true)
 }
 
-void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_)
+void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq1_t *s, int n, const mem_aln_t *list, int which, const mem_aln_t *m_, int ms)
 {
 	int i, l_name;
 	mem_aln_t ptmp = list[which], *p = &ptmp, mtmp, *m = 0; // make a copy of the alignment to convert
@@ -932,6 +932,8 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		kputsn("\tMD:Z:", 6, str); kputs((char*)(p->cigar + p->n_cigar), str);
 	}
 	if (m && m->n_cigar) { kputsn("\tMC:Z:", 6, str); add_cigar(opt, m, str, which); }
+    if (m) { kputsn("\tMQ:i:", 6, str); kputw(m->mapq, str); }
+    if (m && opt->flag & MEM_F_MS) { kputsn("\tms:i:", 6, str); kputw(ms, str); }
 	if (p->score >= 0) { kputsn("\tAS:i:", 6, str); kputw(p->score, str); }
 	if (p->sub >= 0) { kputsn("\tXS:i:", 6, str); kputw(p->sub, str); }
 	if (bwa_rg_id[0]) { kputsn("\tRG:Z:", 6, str); kputs(bwa_rg_id, str); }
@@ -1063,10 +1065,10 @@ void mem_reg2sam(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, 
 		mem_aln_t t;
 		t = mem_reg2aln(opt, bns, pac, s->l_seq, s->seq, 0);
 		t.flag |= extra_flag;
-		mem_aln2sam(opt, bns, &str, s, 1, &t, 0, m);
+		mem_aln2sam(opt, bns, &str, s, 1, &t, 0, m, 0);
 	} else {
 		for (k = 0; k < aa.n; ++k)
-			mem_aln2sam(opt, bns, &str, s, aa.n, aa.a, k, m);
+			mem_aln2sam(opt, bns, &str, s, aa.n, aa.a, k, m, 0);
 		for (k = 0; k < aa.n; ++k) free(aa.a[k].cigar);
 		free(aa.a);
 	}
