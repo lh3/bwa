@@ -1,5 +1,20 @@
-language: c
-compiler:
-  - gcc
-  - clang
-script: make
+matrix:
+  include:
+    - language: c
+      compiler: gcc
+      script: make
+    - language: c
+      compiler: clang
+      script: make
+    - arch: arm64
+      language: c
+      compiler: gcc
+      script: make simde=1
+    - arch: ppc64le
+      language: c
+      compiler: gcc
+      script: make simde=1
+    - arch: s390x
+      language: c
+      compiler: gcc
+      script: make simde=1

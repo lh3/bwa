@@ -15,6 +15,11 @@ INCLUDES=
 LIBS=		-lm -lz -lpthread
 SUBDIRS=	.
 
+ifneq ($(simde),)
+	CFLAGS += -DUSE_SIMDE -DSIMDE_ENABLE_NATIVE_ALIASES -DSIMDE_ENABLE_OPENMP -fopenmp-simd
+	INCLUDES += -Ilib/simde
+endif
+
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
 endif

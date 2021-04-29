@@ -26,7 +26,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#ifdef USE_SIMDE
+#include <simde/x86/sse2.h>
+#else
 #include <emmintrin.h>
+#endif
 #include "ksw.h"
 
 #ifdef USE_MALLOC_WRAPPERS
