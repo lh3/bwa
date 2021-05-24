@@ -78,11 +78,11 @@ void bsw2_destroy(bwtsw2_t *b)
 bwtsw2_t *bsw2_dup_no_cigar(const bwtsw2_t *b)
 {
 	bwtsw2_t *p;
-	p = calloc(1, sizeof(bwtsw2_t));
+	p = (bwtsw2_t*)calloc(1, sizeof(bwtsw2_t));
 	p->max = p->n = b->n;
 	if (b->n) {
 		kroundup32(p->max);
-		p->hits = calloc(p->max, sizeof(bsw2hit_t));
+		p->hits = (bsw2hit_t*)calloc(p->max, sizeof(bsw2hit_t));
 		memcpy(p->hits, b->hits, p->n * sizeof(bsw2hit_t));
 	}
 	return p;
@@ -105,10 +105,10 @@ void bsw2_extend_left(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *_query, int lq
 	int8_t mat[25];
 
 	bwa_fill_scmat(opt->a, opt->b, mat);
-	query = calloc(lq, 1);
+	query = (uint8_t*)calloc(lq, 1);
 	// sort according to the descending order of query end
 	ks_introsort(hit, b->n, b->hits);
-	target = calloc(((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, 1);
+	target = (uint8_t*)calloc(((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, 1);
 	// reverse _query
 	for (i = 0; i < lq; ++i) query[lq - i - 1] = _query[i];
 	// core loop
@@ -149,7 +149,7 @@ void bsw2_extend_rght(const bsw2opt_t *opt, bwtsw2_t *b, uint8_t *query, int lq,
 	int8_t mat[25];
 
 	bwa_fill_scmat(opt->a, opt->b, mat);
-	target = calloc(((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, 1);
+	target = (uint8_t*)calloc(((lq + 1) / 2 * opt->a + opt->r) / opt->r + lq, 1);
 	for (i = 0; i < b->n; ++i) {
 		bsw2hit_t *p = b->hits + i;
 		int lt = ((lq - p->beg + 1) / 2 * opt->a + opt->r) / opt->r + lq;
@@ -197,7 +197,7 @@ static void gen_cigar(const bsw2opt_t *opt, int lq, uint8_t *seq[2], int64_t l_p
 		}
 #endif
 		if (q->cigar && (beg != 0 || end < lq)) { // write soft clipping
-			q->cigar = realloc(q->cigar, 4 * (q->n_cigar + 2));
+			q->cigar = (uint32_t*)realloc(q->cigar, 4 * (q->n_cigar + 2));
 			if (beg != 0) {
 				memmove(q->cigar + 1, q->cigar, q->n_cigar * 4);
 				q->cigar[0] = beg<<4 | 4;
@@ -228,7 +228,7 @@ static void merge_hits(bwtsw2_t *b[2], int l, int is_reverse)
 	int i;
 	if (b[0]->n + b[1]->n > b[0]->max) {
 		b[0]->max = b[0]->n + b[1]->n;
-		b[0]->hits = realloc(b[0]->hits, b[0]->max * sizeof(bsw2hit_t));
+		b[0]->hits = (bsw2hit_t*)realloc(b[0]->hits, b[0]->max * sizeof(bsw2hit_t));
 	}
 	for (i = 0; i < b[1]->n; ++i) {
 		bsw2hit_t *p = b[0]->hits + b[0]->n + i;
@@ -256,9 +256,9 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 	_b = bsw2_core(bns, opt, query, target, pool);
 	bwtl_destroy(query);
 	for (k = 0; k < 2; ++k) {
-		bb[k] = calloc(2, sizeof(void*));
-		bb[k][0] = calloc(1, sizeof(bwtsw2_t));
-		bb[k][1] = calloc(1, sizeof(bwtsw2_t));
+		bb[k] = (bwtsw2_t**)calloc(2, sizeof(bwtsw2_t*));
+		bb[k][0] = (bwtsw2_t*)calloc(1, sizeof(bwtsw2_t));
+		bb[k][1] = (bwtsw2_t*)calloc(1, sizeof(bwtsw2_t));
 	}
 	for (k = 0; k < 2; ++k) { // separate _b into bb[2] based on the strand
 		for (j = 0; j < _b[k]->n; ++j) {
@@ -266,7 +266,7 @@ static bwtsw2_t *bsw2_aln1_core(const bsw2opt_t *opt, const bntseq_t *bns, uint8
 			p = bb[_b[k]->hits[j].is_rev][k];
 			if (p->n == p->max) {
 				p->max = p->max? p->max<<1 : 8;
-				p->hits = realloc(p->hits, p->max * sizeof(bsw2hit_t));
+				p->hits = (bsw2hit_t*)realloc(p->hits, p->max * sizeof(bsw2hit_t));
 			}
 			q = &p->hits[p->n++];
 			*q = _b[k]->hits[j];
@@ -345,7 +345,7 @@ static int fix_cigar(const bntseq_t *bns, bsw2hit_t *p, int n_cigar, uint32_t *c
 		uint32_t *cn;
 		bwtint_t kk = 0;
 		nc = mq[0] = mq[1] = nlen[0] = nlen[1] = 0;
-		cn = calloc(n_cigar + 3, 4);
+		cn = (uint32_t*)calloc(n_cigar + 3, 4);
 		x = coor; y = 0;
 		for (i = j = 0; i < n_cigar; ++i) {
 			int op = cigar[i]&0xf, ln = cigar[i]>>4;
@@ -403,9 +403,9 @@ static void write_aux(const bsw2opt_t *opt, const bntseq_t *bns, int qlen, uint8
 	if (b->n<<1 < b->max) {
 		b->max = b->n;
 		kroundup32(b->max);
-		b->hits = realloc(b->hits, b->max * sizeof(bsw2hit_t));
+		b->hits = (bsw2hit_t*)realloc(b->hits, b->max * sizeof(bsw2hit_t));
 	}
-	b->aux = calloc(b->n, sizeof(bsw2aux_t));
+	b->aux = (bsw2aux_t*)calloc(b->n, sizeof(bsw2aux_t));
 	// generate CIGAR
 	gen_cigar(opt, qlen, seq, bns->l_pac, pac, b, name);
 	// fix CIGAR, generate mapQ, and write chromosomal position
@@ -564,7 +564,7 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 	bsw2opt_t opt;
 	bsw2global_t *pool = bsw2_global_init();
 	bwtsw2_t **buf;
-	buf = calloc(_seq->n, sizeof(void*));
+	buf = (bwtsw2_t**)calloc(_seq->n, sizeof(bwtsw2_t*));
 	for (x = 0; x < _seq->n; ++x) {
 		bsw2seq1_t *p = _seq->seq + x;
 		uint8_t *seq[2], *rseq[2];
@@ -575,10 +575,10 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 		if (pool->max_l < l) { // then enlarge working space for aln_extend_core()
 			int tmp = ((l + 1) / 2 * opt.a + opt.r) / opt.r + l;
 			pool->max_l = l;
-			pool->aln_mem = realloc(pool->aln_mem, (tmp + 2) * 24);
+			pool->aln_mem = (uint8_t*)realloc(pool->aln_mem, (tmp + 2) * 24);
 		}
 		// set seq[2] and rseq[2]
-		seq[0] = calloc(l * 4, 1);
+		seq[0] = (uint8_t*)calloc(l * 4, 1);
 		seq[1] = seq[0] + l;
 		rseq[0] = seq[1] + l; rseq[1] = rseq[0] + l;
 		// convert sequences to 2-bit representation
@@ -591,7 +591,7 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 			rseq[1][i] = c;
 		}
 		if (l - k < opt.t) { // too few unambiguous bases
-			buf[x] = calloc(1, sizeof(bwtsw2_t));
+			buf[x] = (bwtsw2_t*)calloc(1, sizeof(bwtsw2_t));
 			free(seq[0]); continue;
 		}
 		// alignment
@@ -623,7 +623,7 @@ static void bsw2_aln_core(bsw2seq_t *_seq, const bsw2opt_t *_opt, const bntseq_t
 		bsw2seq1_t *p = _seq->seq + x;
 		uint8_t *seq[2];
 		int i;
-		seq[0] = malloc(p->l * 2); seq[1] = seq[0] + p->l;
+		seq[0] = (uint8_t*)malloc(p->l * 2); seq[1] = seq[0] + p->l;
 		for (i = 0; i < p->l; ++i) {
 			int c = nst_nt4_table[(int)p->seq[i]];
 			if (c >= 4) c = (int)(drand48() * 4);
@@ -685,10 +685,10 @@ static void process_seqs(bsw2seq_t *_seq, const bsw2opt_t *opt, const bntseq_t *
 			thread_aux_t *p = data + j;
 			p->tid = j; p->_opt = opt; p->bns = bns; p->is_pe = is_pe;
 			p->pac = pac; p->target = target;
-			p->_seq = calloc(1, sizeof(bsw2seq_t));
+			p->_seq = (bsw2seq_t*)calloc(1, sizeof(bsw2seq_t));
 			p->_seq->max = (_seq->n + opt->n_threads - 1) / opt->n_threads + 1;
 			p->_seq->n = 0;
-			p->_seq->seq = calloc(p->_seq->max, sizeof(bsw2seq1_t));
+			p->_seq->seq = (bsw2seq1_t*)calloc(p->_seq->max, sizeof(bsw2seq1_t));
 		}
 		for (i = 0; i < _seq->n; ++i) { // assign sequences to each thread
 			bsw2seq_t *p = data[(i>>is_pe)%opt->n_threads]._seq;
@@ -733,13 +733,13 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 	bsw2seq_t *_seq;
 	bseq1_t *bseq;
 
-	pac = calloc(bns->l_pac/4+1, 1);
+	pac = (uint8_t*)calloc(bns->l_pac/4+1, 1);
 	for (l = 0; l < bns->n_seqs; ++l)
 		err_printf("@SQ\tSN:%s\tLN:%d\n", bns->anns[l].name, bns->anns[l].len);
 	err_fread_noeof(pac, 1, bns->l_pac/4+1, bns->fp_pac);
 	fp = xzopen(fn, "r");
 	ks = kseq_init(fp);
-	_seq = calloc(1, sizeof(bsw2seq_t));
+	_seq = (bsw2seq_t*)calloc(1, sizeof(bsw2seq_t));
 	if (fn2) {
 		fp2 = xzopen(fn2, "r");
 		ks2 = kseq_init(fp2);
@@ -750,7 +750,7 @@ void bsw2_aln(const bsw2opt_t *opt, const bntseq_t *bns, bwt_t * const target, c
 		if (n > _seq->max) {
 			_seq->max = n;
 			kroundup32(_seq->max);
-			_seq->seq = realloc(_seq->seq, _seq->max * sizeof(bsw2seq1_t));
+			_seq->seq = (bsw2seq1_t*)realloc(_seq->seq, _seq->max * sizeof(bsw2seq1_t));
 		}
 		_seq->n = n;
 		for (i = 0; i < n; ++i) {

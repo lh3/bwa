@@ -72,9 +72,10 @@ static int cal_sub(const mem_opt_t *opt, mem_alnreg_v *r)
 void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4])
 {
 	int i, d, max;
+	typedef kvec_t(int) kvec_int_t;
 	uint64_v isize[4];
 	memset(pes, 0, 4 * sizeof(mem_pestat_t));
-	memset(isize, 0, sizeof(kvec_t(int)) * 4);
+	memset(isize, 0, sizeof(kvec_int_t) * 4);
 	for (i = 0; i < n>>1; ++i) {
 		int dir;
 		int64_t is;
@@ -156,7 +157,7 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 		is_rev = (r>>1 != (r&1)); // whether to reverse complement the mate
 		is_larger = !(r>>1); // whether the mate has larger coordinate
 		if (is_rev) {
-			rev = malloc(l_ms); // this is the reverse complement of $ms
+			rev = (uint8_t*)malloc(l_ms); // this is the reverse complement of $ms
 			for (i = 0; i < l_ms; ++i) rev[l_ms - 1 - i] = ms[i] < 4? 3 - ms[i] : 4;
 			seq = rev;
 		} else seq = (uint8_t*)ms;

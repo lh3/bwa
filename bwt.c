@@ -412,7 +412,7 @@ static bwtint_t fread_fix(FILE *fp, bwtint_t size, void *a)
 	bwtint_t offset = 0;
 	while (size) {
 		int x = bufsize < size? bufsize : size;
-		if ((x = err_fread_noeof(a + offset, 1, x, fp)) == 0) break;
+		if ((x = err_fread_noeof((char*)a + offset, 1, x, fp)) == 0) break;
 		size -= x; offset += x;
 	}
 	return offset;

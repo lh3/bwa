@@ -84,7 +84,7 @@ static int http_open(const char *fn)
 	// set ->http_host
 	for (p = (char*)fn + 7; *p && *p != '/'; ++p);
 	l = p - fn - 7;
-	http_host = calloc(l + 1, 1);
+	http_host = (char*)calloc(l + 1, 1);
 	strncpy(http_host, fn + 7, l);
 	http_host[l] = 0;
 	for (q = http_host; *q && *q != ':'; ++q);
@@ -107,7 +107,7 @@ static int http_open(const char *fn)
 	/* connect; adapted from khttp_connect() in knetfile.c */
 	l = 0;
 	fd = socket_connect(host, port);
-	buf = calloc(bufsz, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
+	buf = (char*)calloc(bufsz, 1); // FIXME: I am lazy... But in principle, 64KB should be large enough.
 	l += snprintf(buf + l, bufsz, "GET %s HTTP/1.0\r\nHost: %s\r\n\r\n",
 				 path, http_host);
 	if (write_bytes(fd, buf, l) != 0) {
@@ -154,7 +154,7 @@ static int kftp_get_response(ftpaux_t *aux)
 	while (read(aux->ctrl_fd, &c, 1)) { // FIXME: this is *VERY BAD* for unbuffered I/O
 		if (n >= aux->max_response) {
 			aux->max_response = aux->max_response? aux->max_response<<1 : 256;
-			aux->response = realloc(aux->response, aux->max_response);
+			aux->response = (char*)realloc(aux->response, aux->max_response);
 		}
 		aux->response[n++] = c;
 		if (c == '\n') {
@@ -189,9 +189,9 @@ static int ftp_open(const char *fn)
 	if (*p != '/') return 0;
 	l = p - fn - 6;
 	port = strdup("21");
-	host = calloc(l + 1, 1);
+	host = (char*)calloc(l + 1, 1);
 	strncpy(host, fn + 6, l);
-	retr = calloc(strlen(p) + 8, 1);
+	retr = (char*)calloc(strlen(p) + 8, 1);
 	sprintf(retr, "RETR %s\r\n", p);
 	
 	/* connect to ctrl */
@@ -268,15 +268,15 @@ void *kopen(const char *fn, int *_fd)
 	koaux_t *aux = 0;
 	*_fd = -1;
 	if (strstr(fn, "http://") == fn) {
-		aux = calloc(1, sizeof(koaux_t));
+		aux = (koaux_t*)calloc(1, sizeof(koaux_t));
 		aux->type = KO_HTTP;
 		aux->fd = http_open(fn);
 	} else if (strstr(fn, "ftp://") == fn) {
-		aux = calloc(1, sizeof(koaux_t));
+		aux = (koaux_t*)calloc(1, sizeof(koaux_t));
 		aux->type = KO_FTP;
 		aux->fd = ftp_open(fn);
 	} else if (strcmp(fn, "-") == 0) {
-		aux = calloc(1, sizeof(koaux_t));
+		aux = (koaux_t*)calloc(1, sizeof(koaux_t));
 		aux->type = KO_STDIN;
 		aux->fd = STDIN_FILENO;
 	} else {
@@ -310,7 +310,7 @@ void *kopen(const char *fn, int *_fd)
 				exit(1);
 			} else { /* parent process */
 				close(pfd[1]);
-				aux = calloc(1, sizeof(koaux_t));
+				aux = (koaux_t*)calloc(1, sizeof(koaux_t));
 				aux->type = KO_PIPE;
 				aux->fd = pfd[0];
 				aux->pid = pid;
@@ -322,7 +322,7 @@ void *kopen(const char *fn, int *_fd)
 			*_fd = open(fn, O_RDONLY);
 #endif
 			if (*_fd >= 0) {
-				aux = calloc(1, sizeof(koaux_t));
+				aux = (koaux_t*)calloc(1, sizeof(koaux_t));
 				aux->type = KO_FILE;
 				aux->fd = *_fd;
 			}
