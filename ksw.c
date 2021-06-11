@@ -26,7 +26,11 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#ifdef __PPC64__
+#include "vec128int.h"
+#else
 #include <emmintrin.h>
+#endif
 #include "ksw.h"
 
 #ifdef USE_MALLOC_WRAPPERS
@@ -115,38 +119,111 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
+#ifdef __PPC64__
 #define __max_16(ret, xx) do { \
-		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 8)); \
-		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 4)); \
-		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 2)); \
-		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 1)); \
-    	(ret) = _mm_extract_epi16((xx), 0) & 0x00ff; \
-	} while (0)
+                (xx) = vec_max16ub((xx), vec_shiftrightbytes1q((xx), 8)); \
+                (xx) = vec_max16ub((xx), vec_shiftrightbytes1q((xx), 4)); \
+                (xx) = vec_max16ub((xx), vec_shiftrightbytes1q((xx), 2)); \
+                (xx) = vec_max16ub((xx), vec_shiftrightbytes1q((xx), 1)); \
+        (ret) = vec_extract8sh((xx), 0) & 0x00ff; \
+        } while (0)
+#else
+#define __max_16(ret, xx) do { \
+                (xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 8)); \
+                (xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 4)); \
+                (xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 2)); \
+                (xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 1)); \
+        (ret) = _mm_extract_epi16((xx), 0) & 0x00ff; \
+        } while (0)
+#endif
 
 	// initialization
 	r = g_defr;
 	minsc = (xtra&KSW_XSUBO)? xtra&0xffff : 0x10000;
 	endsc = (xtra&KSW_XSTOP)? xtra&0xffff : 0x10000;
 	m_b = n_b = 0; b = 0;
-	zero = _mm_set1_epi32(0);
+#ifdef __PPC64__
+	zero = vec_splat4sw(0);
+#else
+	zero = _mm_set1_epi32(0);    /* !!!REP NOT FOUND!!! */ 
+#endif
+#ifdef __PPC64__
+	oe_del = vec_splat16sb(_o_del + _e_del);
+#else
 	oe_del = _mm_set1_epi8(_o_del + _e_del);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	e_del = vec_splat16sb(_e_del);
+#else
 	e_del = _mm_set1_epi8(_e_del);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	oe_ins = vec_splat16sb(_o_ins + _e_ins);
+#else
 	oe_ins = _mm_set1_epi8(_o_ins + _e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	e_ins = vec_splat16sb(_e_ins);
+#else
 	e_ins = _mm_set1_epi8(_e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	shift = vec_splat16sb(q->shift);
+#else
 	shift = _mm_set1_epi8(q->shift);
+   /* NEED INSPECTION */ 
+#endif
 	H0 = q->H0; H1 = q->H1; E = q->E; Hmax = q->Hmax;
 	slen = q->slen;
 	for (i = 0; i < slen; ++i) {
+#ifdef __PPC64__
+		vec_store1q(E + i, zero);
+#else
 		_mm_store_si128(E + i, zero);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+		vec_store1q(H0 + i, zero);
+#else
 		_mm_store_si128(H0 + i, zero);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+		vec_store1q(Hmax + i, zero);
+#else
 		_mm_store_si128(Hmax + i, zero);
+   /* NEED INSPECTION */ 
+#endif
 	}
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, cmp, imax;
 		__m128i e, h, t, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+#ifdef __PPC64__
+		h = vec_load1q(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
+#else
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
-		h = _mm_slli_si128(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
+   /* NEED INSPECTION */ 
+#endif
+		#ifdef __BIG_ENDIAN__
+#ifdef __PPC64__
+			h = vec_shiftrightbytes1q(h, 1);	
+#else
+			h = _mm_srli_si128(h, 1);	
+   /* NEED INSPECTION */ 
+#endif
+		#else
+#ifdef __PPC64__
+			h = vec_shiftleftbytes1q(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
+#else
+			h = _mm_slli_si128(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
+   /* NEED INSPECTION */ 
+#endif
+		#endif
 		for (j = 0; LIKELY(j < slen); ++j) {
 			/* SW cells are computed in the following order:
 			 *   H(i,j)   = max{H(i-1,j-1)+S(i,j), E(i,j), F(i,j)}
@@ -154,35 +231,154 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 			 *   F(i,j+1) = max{H(i,j)-q, F(i,j)-r}
 			 */
 			// compute H'(i,j); note that at the beginning, h=H'(i-1,j-1)
+#ifdef __PPC64__
+			h = vec_addsaturating16ub(h, vec_load1q(S + j));
+#else
 			h = _mm_adds_epu8(h, _mm_load_si128(S + j));
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			h = vec_subtractsaturating16ub(h, shift); // h=H'(i-1,j-1)+S(i,j)
+#else
 			h = _mm_subs_epu8(h, shift); // h=H'(i-1,j-1)+S(i,j)
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			e = vec_load1q(E + j); // e=E'(i,j)
+#else
 			e = _mm_load_si128(E + j); // e=E'(i,j)
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			h = vec_max16ub(h, e);
+#else
 			h = _mm_max_epu8(h, e);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			h = vec_max16ub(h, f); // h=H'(i,j)
+#else
 			h = _mm_max_epu8(h, f); // h=H'(i,j)
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			max = vec_max16ub(max, h); // set max
+#else
 			max = _mm_max_epu8(max, h); // set max
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			vec_store1q(H1 + j, h); // save to H'(i,j)
+#else
 			_mm_store_si128(H1 + j, h); // save to H'(i,j)
+   /* NEED INSPECTION */ 
+#endif
 			// now compute E'(i+1,j)
+#ifdef __PPC64__
+			e = vec_subtractsaturating16ub(e, e_del); // e=E'(i,j) - e_del
+#else
 			e = _mm_subs_epu8(e, e_del); // e=E'(i,j) - e_del
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			t = vec_subtractsaturating16ub(h, oe_del); // h=H'(i,j) - o_del - e_del
+#else
 			t = _mm_subs_epu8(h, oe_del); // h=H'(i,j) - o_del - e_del
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			e = vec_max16ub(e, t); // e=E'(i+1,j)
+#else
 			e = _mm_max_epu8(e, t); // e=E'(i+1,j)
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			vec_store1q(E + j, e); // save to E'(i+1,j)
+#else
 			_mm_store_si128(E + j, e); // save to E'(i+1,j)
+   /* NEED INSPECTION */ 
+#endif
 			// now compute F'(i,j+1)
+#ifdef __PPC64__
+			f = vec_subtractsaturating16ub(f, e_ins);
+#else
 			f = _mm_subs_epu8(f, e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			t = vec_subtractsaturating16ub(h, oe_ins); // h=H'(i,j) - o_ins - e_ins
+#else
 			t = _mm_subs_epu8(h, oe_ins); // h=H'(i,j) - o_ins - e_ins
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			f = vec_max16ub(f, t);
+#else
 			f = _mm_max_epu8(f, t);
+   /* NEED INSPECTION */ 
+#endif
 			// get H'(i-1,j) and prepare for the next j
+#ifdef __PPC64__
+			h = vec_load1q(H0 + j); // h=H'(i-1,j)
+#else
 			h = _mm_load_si128(H0 + j); // h=H'(i-1,j)
+   /* NEED INSPECTION */ 
+#endif
 		}
 		// NB: we do not need to set E(i,j) as we disallow adjecent insertion and then deletion
 		for (k = 0; LIKELY(k < 16); ++k) { // this block mimics SWPS3; NB: H(i,j) updated in the lazy-F loop cannot exceed max
-			f = _mm_slli_si128(f, 1);
+			#ifdef __BIG_ENDIAN__
+#ifdef __PPC64__
+				f = vec_shiftrightbytes1q(f, 1);
+#else
+				f = _mm_srli_si128(f, 1);
+   /* NEED INSPECTION */ 
+#endif
+			#else
+#ifdef __PPC64__
+				f = vec_shiftleftbytes1q(f, 1);
+#else
+				f = _mm_slli_si128(f, 1);
+   /* NEED INSPECTION */ 
+#endif
+			#endif
 			for (j = 0; LIKELY(j < slen); ++j) {
+#ifdef __PPC64__
+				h = vec_load1q(H1 + j);
+#else
 				h = _mm_load_si128(H1 + j);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				h = vec_max16ub(h, f); // h=H'(i,j)
+#else
 				h = _mm_max_epu8(h, f); // h=H'(i,j)
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				vec_store1q(H1 + j, h);
+#else
 				_mm_store_si128(H1 + j, h);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				h = vec_subtractsaturating16ub(h, oe_ins);
+#else
 				h = _mm_subs_epu8(h, oe_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				f = vec_subtractsaturating16ub(f, e_ins);
+#else
 				f = _mm_subs_epu8(f, e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				cmp = vec_extractupperbit16sb(vec_compareeq16sb(vec_subtractsaturating16ub(f, h), zero));
+#else
 				cmp = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_subs_epu8(f, h), zero));
+   /* NEED INSPECTION */ 
+#endif
 				if (UNLIKELY(cmp == 0xffff)) goto end_loop16;
 			}
 		}
@@ -201,7 +397,12 @@ end_loop16:
 		if (imax > gmax) {
 			gmax = imax; te = i; // te is the end position on the target
 			for (j = 0; LIKELY(j < slen); ++j) // keep the H1 vector
+#ifdef __PPC64__
+				vec_store1q(Hmax + j, vec_load1q(H1 + j));
+#else
 				_mm_store_si128(Hmax + j, _mm_load_si128(H1 + j));
+   /* NEED INSPECTION */ 
+#endif
 			if (gmax + q->shift >= 255 || gmax >= endsc) break;
 		}
 		S = H1; H1 = H0; H0 = S; // swap H0 and H1
@@ -236,61 +437,242 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
+#ifdef __PPC64__
 #define __max_8(ret, xx) do { \
-		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 8)); \
-		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 4)); \
-		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 2)); \
-    	(ret) = _mm_extract_epi16((xx), 0); \
-	} while (0)
+                (xx) = vec_max8sh((xx), vec_shiftrightbytes1q((xx), 8)); \
+                (xx) = vec_max8sh((xx), vec_shiftrightbytes1q((xx), 4)); \
+                (xx) = vec_max8sh((xx), vec_shiftrightbytes1q((xx), 2)); \
+        (ret) = vec_extract8sh((xx), 0); \
+        } while (0)
+#else
+#define __max_8(ret, xx) do { \
+                (xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 8)); \
+                (xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 4)); \
+                (xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 2)); \
+        (ret) = _mm_extract_epi16((xx), 0); \
+        } while (0)
+#endif
 
 	// initialization
 	r = g_defr;
 	minsc = (xtra&KSW_XSUBO)? xtra&0xffff : 0x10000;
 	endsc = (xtra&KSW_XSTOP)? xtra&0xffff : 0x10000;
 	m_b = n_b = 0; b = 0;
-	zero = _mm_set1_epi32(0);
+#ifdef __PPC64__
+	zero = vec_splat4sw(0);
+#else
+	zero = _mm_set1_epi32(0);    /* !!!REP NOT FOUND!!! */ 
+#endif
+#ifdef __PPC64__
+	oe_del = vec_splat8sh(_o_del + _e_del);
+#else
 	oe_del = _mm_set1_epi16(_o_del + _e_del);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	e_del = vec_splat8sh(_e_del);
+#else
 	e_del = _mm_set1_epi16(_e_del);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	oe_ins = vec_splat8sh(_o_ins + _e_ins);
+#else
 	oe_ins = _mm_set1_epi16(_o_ins + _e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+	e_ins = vec_splat8sh(_e_ins);
+#else
 	e_ins = _mm_set1_epi16(_e_ins);
+   /* NEED INSPECTION */ 
+#endif
 	H0 = q->H0; H1 = q->H1; E = q->E; Hmax = q->Hmax;
 	slen = q->slen;
 	for (i = 0; i < slen; ++i) {
+#ifdef __PPC64__
+		vec_store1q(E + i, zero);
+#else
 		_mm_store_si128(E + i, zero);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+		vec_store1q(H0 + i, zero);
+#else
 		_mm_store_si128(H0 + i, zero);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+		vec_store1q(Hmax + i, zero);
+#else
 		_mm_store_si128(Hmax + i, zero);
+   /* NEED INSPECTION */ 
+#endif
 	}
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
 		int j, k, imax;
 		__m128i e, t, h, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
+#ifdef __PPC64__
+		h = vec_load1q(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
+#else
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
-		h = _mm_slli_si128(h, 2);
+   /* NEED INSPECTION */ 
+#endif
+		#ifdef __BIG_ENDIAN__
+#ifdef __PPC64__
+			h = vec_shiftrightbytes1q(h, 2);
+#else
+			h = _mm_srli_si128(h, 2);
+   /* NEED INSPECTION */ 
+#endif
+		#else
+#ifdef __PPC64__
+			h = vec_shiftleftbytes1q(h, 2);
+#else
+			h = _mm_slli_si128(h, 2);
+   /* NEED INSPECTION */ 
+#endif
+		#endif
 		for (j = 0; LIKELY(j < slen); ++j) {
+#ifdef __PPC64__
+			h = vec_addsaturating8sh(h, *S++);
+#else
 			h = _mm_adds_epi16(h, *S++);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			e = vec_load1q(E + j);
+#else
 			e = _mm_load_si128(E + j);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			h = vec_max8sh(h, e);
+#else
 			h = _mm_max_epi16(h, e);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			h = vec_max8sh(h, f);
+#else
 			h = _mm_max_epi16(h, f);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			max = vec_max8sh(max, h);
+#else
 			max = _mm_max_epi16(max, h);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			vec_store1q(H1 + j, h);
+#else
 			_mm_store_si128(H1 + j, h);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			e = vec_subtractsaturating8uh(e, e_del);
+#else
 			e = _mm_subs_epu16(e, e_del);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			t = vec_subtractsaturating8uh(h, oe_del);
+#else
 			t = _mm_subs_epu16(h, oe_del);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			e = vec_max8sh(e, t);
+#else
 			e = _mm_max_epi16(e, t);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			vec_store1q(E + j, e);
+#else
 			_mm_store_si128(E + j, e);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			f = vec_subtractsaturating8uh(f, e_ins);
+#else
 			f = _mm_subs_epu16(f, e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			t = vec_subtractsaturating8uh(h, oe_ins);
+#else
 			t = _mm_subs_epu16(h, oe_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			f = vec_max8sh(f, t);
+#else
 			f = _mm_max_epi16(f, t);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+			h = vec_load1q(H0 + j);
+#else
 			h = _mm_load_si128(H0 + j);
+   /* NEED INSPECTION */ 
+#endif
 		}
 		for (k = 0; LIKELY(k < 16); ++k) {
-			f = _mm_slli_si128(f, 2);
+			#ifdef __BIG_ENDIAN__
+#ifdef __PPC64__
+				f = vec_shiftrightbytes1q(f, 2);
+#else
+				f = _mm_srli_si128(f, 2);
+   /* NEED INSPECTION */ 
+#endif
+			#else
+#ifdef __PPC64__
+				f = vec_shiftleftbytes1q(f, 2);
+#else
+				f = _mm_slli_si128(f, 2);
+   /* NEED INSPECTION */ 
+#endif
+			#endif
 			for (j = 0; LIKELY(j < slen); ++j) {
+#ifdef __PPC64__
+				h = vec_load1q(H1 + j);
+#else
 				h = _mm_load_si128(H1 + j);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				h = vec_max8sh(h, f);
+#else
 				h = _mm_max_epi16(h, f);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				vec_store1q(H1 + j, h);
+#else
 				_mm_store_si128(H1 + j, h);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				h = vec_subtractsaturating8uh(h, oe_ins);
+#else
 				h = _mm_subs_epu16(h, oe_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				f = vec_subtractsaturating8uh(f, e_ins);
+#else
 				f = _mm_subs_epu16(f, e_ins);
+   /* NEED INSPECTION */ 
+#endif
+#ifdef __PPC64__
+				if(UNLIKELY(!vec_extractupperbit16sb(vec_comparegt8sh(f, h)))) goto end_loop8;
+#else
 				if(UNLIKELY(!_mm_movemask_epi8(_mm_cmpgt_epi16(f, h)))) goto end_loop8;
+   /* NEED INSPECTION */ 
+#endif
 			}
 		}
 end_loop8:
@@ -307,7 +689,12 @@ end_loop8:
 		if (imax > gmax) {
 			gmax = imax; te = i;
 			for (j = 0; LIKELY(j < slen); ++j)
+#ifdef __PPC64__
+				vec_store1q(Hmax + j, vec_load1q(H1 + j));
+#else
 				_mm_store_si128(Hmax + j, _mm_load_si128(H1 + j));
+   /* NEED INSPECTION */ 
+#endif
 			if (gmax >= endsc) break;
 		}
 		S = H1; H1 = H0; H0 = S;
