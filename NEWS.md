@@ -1198,7 +1198,7 @@ Beta Release 0.1.4 (22 July, 2008)
 Beta Release 0.1.3 (21 July, 2008)
 ----------------------------------
 
-Improve the speed with some tricks on retrieving occurences. The results
+Improve the speed with some tricks on retrieving occurrences. The results
 should be exactly the same as that of 0.1.2.
 
 (0.1.3: 21 July 2008, r382)
