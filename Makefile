@@ -18,6 +18,9 @@ SUBDIRS=	.
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
 endif
+ifeq ($(shell uname -s),GNU/kFreeBSD)
+	LIBS += -lrt
+endif
 
 .SUFFIXES:.c .o .cc
 

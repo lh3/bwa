@@ -9,6 +9,10 @@
 #include <stdio.h>
 #include "bwa.h"
 
+#ifndef PATH_MAX
+#  define PATH_MAX 1024
+#endif
+
 int bwa_shm_stage(bwaidx_t *idx, const char *hint, const char *_tmpfn)
 {
 	const char *name;
