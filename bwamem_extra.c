@@ -155,6 +155,8 @@ char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac
 		if (opt->flag & MEM_F_XB) {
 			kputc(',', &str);
 			kputw(t.score, &str);
+			kputc(',', &str);
+			kputw(t.mapq, &str);
 		}
 		kputc(';', &str);
 		free(t.cigar);
