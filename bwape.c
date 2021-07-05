@@ -735,9 +735,10 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 	int c;
 	pe_opt_t *popt;
 	char *prefix, *rg_line = 0;
+	extern int copy_comment;
 
 	popt = bwa_init_pe_opt();
-	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
+	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:C")) >= 0) {
 		switch (c) {
 		case 'r':
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
@@ -751,6 +752,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		case 'c': popt->ap_prior = atof(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'A': popt->force_isize = 1; break;
+		case 'C': copy_comment = 1; break;
 		default: return 1;
 		}
 	}
@@ -768,6 +770,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "         -P       preload index into memory (for base-space reads only)\n");
 		fprintf(stderr, "         -s       disable Smith-Waterman for the unmapped mate\n");
 		fprintf(stderr, "         -A       disable insert size estimate (force -s)\n\n");
+		fprintf(stderr, "         -C       append FASTA/FASTQ comment to SAM output\n");
 		fprintf(stderr, "Notes: 1. For SOLiD reads, <in1.fq> corresponds R3 reads and <in2.fq> to F3.\n");
 		fprintf(stderr, "       2. For reads shorter than 30bp, applying a smaller -o is recommended to\n");
 		fprintf(stderr, "          to get a sensible speed at the cost of pairing accuracy.\n");
