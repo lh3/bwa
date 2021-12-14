@@ -406,10 +406,17 @@ int bwa_idx2mem(bwaidx_t *idx)
 
 void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 {
-	int i, n_SQ = 0;
+	int i, n_HD = 0, n_SQ = 0;
 	extern char *bwa_pg;
+	
 	if (hdr_line) {
+		// check for HD line
 		const char *p = hdr_line;
+		if ((p = strstr(p, "@HD")) != 0) {
+			++n_HD;
+		}	
+		// check for SQ lines
+		p = hdr_line;
 		while ((p = strstr(p, "@SQ\t")) != 0) {
 			if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
 			p += 4;
@@ -423,6 +430,9 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 		}
 	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
 		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
+	if (n_HD == 0) {
+		err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
+	}
 	if (hdr_line) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }
