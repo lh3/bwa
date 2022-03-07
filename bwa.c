@@ -421,7 +421,14 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 			if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
 			p += 4;
 		}
+		// print the header line if @HD is in hdr_line
+		if (n_HD > 0) err_printf("%s\n", hdr_line);
 	}
+	// print a default header line if no @HD has been printed
+	if (n_HD == 0) {
+		err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
+	}
+	// print the @SQ lines right after the @HD line
 	if (n_SQ == 0) {
 		for (i = 0; i < bns->n_seqs; ++i) {
 			err_printf("@SQ\tSN:%s\tLN:%d", bns->anns[i].name, bns->anns[i].len);
@@ -430,10 +437,8 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 		}
 	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
 		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
-	if (n_HD == 0) {
-		err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
-	}
-	if (hdr_line) err_printf("%s\n", hdr_line);
+	// print the header line if header line is defined and is not a @HD (e.g. @CO); do this after the @SQ lines. 
+	if (hdr_line && n_HD == 0) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }
 
