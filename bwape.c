@@ -671,7 +671,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 	}
 
 	// core loop
-	bwa_print_sam_hdr(bns, rg_line);
+	bwa_print_sam_hdr2(bns, prefix, rg_line);
 	while ((seqs[0] = bwa_read_seq(ks[0], 0x40000, &n_seqs, opt0.mode, opt0.trim_qual)) != 0) {
 		int cnt_chg;
 		isize_info_t ii;

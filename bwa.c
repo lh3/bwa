@@ -404,37 +404,110 @@ int bwa_idx2mem(bwaidx_t *idx)
  * SAM header routines *
  ***********************/
 
-void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
+// Remove the first line from lines, possibly printing it
+// (lines is newline-separated but NOT newline-terminated)
+static const char *remove_line(const char *lines, int print)
 {
-	int i, n_HD = 0, n_SQ = 0;
-	extern char *bwa_pg;
-	
-	if (hdr_line) {
-		// check for HD line
-		const char *p = hdr_line;
-		if ((p = strstr(p, "@HD")) != 0) {
-			++n_HD;
-		}	
+	const char *nl = strchr(lines, '\n');
+	if (nl) {
+		if (print) err_printf("%.*s\n", (int)(nl - lines), lines);
+		return nl+1;
+	}
+	else {
+		if (print) err_printf("%s\n", lines);
+		return NULL;
+	}
+}
+
+// Return 1 iff there are any @SQ header lines
+static int has_SQ(const char *lines)
+{
+	if (lines == NULL) return 0;
+	return strncmp(lines, "@SQ\t", 4) == 0 || strstr(lines, "\n@SQ\t");
+}
+
+// Count the number of @SQ header lines
+static int count_SQ(const char *lines)
+{
+	int n_SQ = 0;
+	if (lines) {
+		const char *p = lines;
 		// check for SQ lines
-		p = hdr_line;
 		while ((p = strstr(p, "@SQ\t")) != 0) {
-			if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
+			if (p == lines || *(p-1) == '\n') ++n_SQ;
 			p += 4;
 		}
 	}
-	if (n_SQ == 0) {
+	return n_SQ;
+}
+
+static void print_sam_hdr(const bntseq_t *bns, const char *bns_hdr, const char *hdr_line)
+{
+	int i, n_HD = 0, n_SQ = count_SQ(hdr_line);
+
+	// Print the user's @HD line (if present), or the index's, or a default
+	// (As a byproduct, remove any @HD lines from both user and index headers)
+	if (hdr_line && strncmp(hdr_line, "@HD\t", 4) == 0) {
+		hdr_line = remove_line(hdr_line, n_HD == 0);
+		n_HD++;
+	}
+	if (bns_hdr && strncmp(bns_hdr, "@HD\t", 4) == 0) {
+		bns_hdr = remove_line(bns_hdr, n_HD == 0);
+		n_HD++;
+	}
+	if (n_HD == 0) err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
+
+	// If neither the user's nor the index's headers provide @SQ lines, generate them
+	if (n_SQ == 0 && !has_SQ(bns_hdr)) {
 		for (i = 0; i < bns->n_seqs; ++i) {
 			err_printf("@SQ\tSN:%s\tLN:%d", bns->anns[i].name, bns->anns[i].len);
 			if (bns->anns[i].is_alt) err_printf("\tAH:*\n");
 			else err_fputc('\n', stdout);
 		}
-	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
-		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
-	if (n_HD == 0) {
-		err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
 	}
+
+	if (n_SQ != 0 && n_SQ != bns->n_seqs && bwa_verbose >= 2)
+		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
+
+	if (bns_hdr) err_printf("%s\n", bns_hdr);
 	if (hdr_line) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
+}
+
+void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
+{
+	print_sam_hdr(bns, NULL, hdr_line);
+}
+
+void bwa_print_sam_hdr2(const bntseq_t *bns, const char *prefix, const char *hdr_line)
+{
+	kstring_t str = { 0, 0, NULL };
+	char *bns_hdr = NULL;
+
+	// Ignore index .hdr file entirely if the user's headers provide @SQ lines
+	if (!has_SQ(hdr_line)) {
+		FILE *fp;
+		// Otherwise read the .hdr file if present
+		ksprintf(&str, "%s.hdr", prefix);
+		if ((fp = fopen(str.s, "r")) != NULL) {
+			int c, n_SQ;
+			str.l = 0;
+			while ((c = getc(fp)) != EOF)
+				if (c != '\r') kputc(c, &str);
+			fclose(fp);
+
+			while (str.l > 0 && str.s[str.l-1] == '\n') str.l--;
+			str.s[str.l] = '\0';
+			if (str.l > 0) bns_hdr = str.s;
+
+			n_SQ = count_SQ(str.s);
+			if (n_SQ != 0 && n_SQ != bns->n_seqs && bwa_verbose >= 2)
+				fprintf(stderr, "[W::%s] %d @SQ lines provided in \"%s.hdr\"; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, prefix, bns->n_seqs);
+		}
+	}
+
+	print_sam_hdr(bns, bns_hdr, hdr_line);
+	free(str.s);
 }
 
 static char *bwa_escape(char *s)

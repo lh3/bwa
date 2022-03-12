@@ -390,7 +390,7 @@ int main_mem(int argc, char *argv[])
 			opt->flag |= MEM_F_PE;
 		}
 	}
-	bwa_print_sam_hdr(aux.idx->bns, hdr_line);
+	bwa_print_sam_hdr2(aux.idx->bns, argv[optind], hdr_line);
 	aux.actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
 	kt_pipeline(no_mt_io? 1 : 2, process, &aux, 3);
 	free(hdr_line);
