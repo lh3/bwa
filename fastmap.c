@@ -319,7 +319,7 @@ int main_mem(int argc, char *argv[])
 		fprintf(stderr, "                     specify the mean, standard deviation (10%% of the mean if absent), max\n");
 		fprintf(stderr, "                     (4 sigma from the mean if absent) and min of the insert size distribution.\n");
 		fprintf(stderr, "                     FR orientation only. [inferred]\n");
-		fprintf(stderr, "       -u            output XB instead of XA; XB is XA with the alignment score added.\n");
+		fprintf(stderr, "       -u            output XB instead of XA; XB is XA with the alignment score and mapping quality added.\n");
 		fprintf(stderr, "\n");
 		fprintf(stderr, "Note: Please read the man page for detailed description of the command line and options.\n");
 		fprintf(stderr, "\n");
