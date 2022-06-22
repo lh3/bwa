@@ -30,6 +30,8 @@
 #include <emmintrin.h>
 #elif defined __ARM_NEON
 #include "neon_sse.h"
+#else
+#include "scalar_sse.h"
 #endif
 #include "ksw.h"
 
@@ -139,6 +141,10 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 #elif defined __ARM_NEON
 #define __max_16(ret, xx) (ret) = vmaxvq_u8((xx))
 #define allzero_16(xx) (vmaxvq_u8((xx)) == 0)
+
+#else
+#define __max_16(ret, xx) (ret) = m128i_max_u8((xx))
+#define allzero_16(xx) (m128i_allzero((xx)))
 #endif
 
 	// initialization
@@ -267,6 +273,10 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 #elif defined __ARM_NEON
 #define __max_8(ret, xx) (ret) = vmaxvq_s16(vreinterpretq_s16_u8((xx)))
 #define allzero_0f_8(xx) (vmaxvq_u16(vreinterpretq_u16_u8((xx))) == 0)
+
+#else
+#define __max_8(ret, xx) (ret) = m128i_max_s16((xx))
+#define allzero_0f_8(xx) (m128i_allzero((xx)))
 #endif
 
 	// initialization
