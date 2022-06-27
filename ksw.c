@@ -26,7 +26,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
-#if defined __x86_64__
+#if defined __SSE2__
 #include <emmintrin.h>
 #elif defined __ARM_NEON
 #include "neon_sse.h"
@@ -126,7 +126,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
-#if defined __x86_64__
+#if defined __SSE2__
 #define __max_16(ret, xx) do { \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 4)); \
@@ -259,7 +259,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
-#if defined __x86_64__
+#if defined __SSE2__
 #define __max_8(ret, xx) do { \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 4)); \
