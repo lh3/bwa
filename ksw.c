@@ -416,6 +416,7 @@ int ksw_extend2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 		if (beg < i - w) beg = i - w;
 		if (end > i + w + 1) end = i + w + 1;
 		if (end > qlen) end = qlen;
+		if (beg >= end) break; // in case of reversing beg and end
 		// compute the first column
 		if (beg == 0) {
 			h1 = h0 - (o_del + e_del * (i + 1));
