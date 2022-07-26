@@ -593,7 +593,7 @@ int ksw_global2(int qlen, const uint8_t *query, int tlen, const uint8_t *target,
 			int j_beg = i > w? i - w : 0;
 			int j_end = i + w + 1 < qlen? i + w + 1 : qlen;
 			j = (k - j_beg);
-			if (j < j_beg || j >= j_end)	break;
+			if (j >= (j_end-j_beg))	break;
 			which = z[(long)i * n_col + j] >> (which<<1) & 3;
 			if (which == 0)      cigar = push_cigar(&n_cigar, &m_cigar, cigar, 0, 1), --i, --k;
 			else if (which == 1) cigar = push_cigar(&n_cigar, &m_cigar, cigar, 2, 1), --i;
