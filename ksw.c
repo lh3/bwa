@@ -26,7 +26,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
+#if defined __SSE2__
 #include <emmintrin.h>
+#elif defined __ARM_NEON
+#include "neon_sse.h"
+#else
+#include "scalar_sse.h"
+#endif
 #include "ksw.h"
 
 #ifdef USE_MALLOC_WRAPPERS
@@ -108,6 +114,11 @@ kswq_t *ksw_qinit(int size, int qlen, const uint8_t *query, int m, const int8_t 
 	return q;
 }
 
+#if defined __ARM_NEON
+// This macro implicitly uses each function's `zero` local variable
+#define _mm_slli_si128(a, n) (vextq_u8(zero, (a), 16 - (n)))
+#endif
+
 kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del, int _o_ins, int _e_ins, int xtra) // the first gap costs -(_o+_e)
 {
 	int slen, i, m_b, n_b, te = -1, gmax = 0, minsc, endsc;
@@ -115,6 +126,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
+#if defined __SSE2__
 #define __max_16(ret, xx) do { \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 4)); \
@@ -122,6 +134,18 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 1)); \
     	(ret) = _mm_extract_epi16((xx), 0) & 0x00ff; \
 	} while (0)
+
+// Given entries with arbitrary values, return whether they are all 0x00
+#define allzero_16(xx) (_mm_movemask_epi8(_mm_cmpeq_epi8((xx), zero)) == 0xffff)
+
+#elif defined __ARM_NEON
+#define __max_16(ret, xx) (ret) = vmaxvq_u8((xx))
+#define allzero_16(xx) (vmaxvq_u8((xx)) == 0)
+
+#else
+#define __max_16(ret, xx) (ret) = m128i_max_u8((xx))
+#define allzero_16(xx) (m128i_allzero((xx)))
+#endif
 
 	// initialization
 	r = g_defr;
@@ -143,7 +167,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 	}
 	// the core loop
 	for (i = 0; i < tlen; ++i) {
-		int j, k, cmp, imax;
+		int j, k, imax;
 		__m128i e, h, t, f = zero, max = zero, *S = q->qp + target[i] * slen; // s is the 1st score vector
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 1); // h=H(i-1,-1); << instead of >> because x64 is little-endian
@@ -182,8 +206,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 				_mm_store_si128(H1 + j, h);
 				h = _mm_subs_epu8(h, oe_ins);
 				f = _mm_subs_epu8(f, e_ins);
-				cmp = _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_subs_epu8(f, h), zero));
-				if (UNLIKELY(cmp == 0xffff)) goto end_loop16;
+				if (UNLIKELY(allzero_16(_mm_subs_epu8(f, h)))) goto end_loop16;
 			}
 		}
 end_loop16:
@@ -236,12 +259,25 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
+#if defined __SSE2__
 #define __max_8(ret, xx) do { \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 4)); \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 2)); \
     	(ret) = _mm_extract_epi16((xx), 0); \
 	} while (0)
+
+// Given entries all either 0x0000 or 0xffff, return whether they are all 0x0000
+#define allzero_0f_8(xx) (!_mm_movemask_epi8((xx)))
+
+#elif defined __ARM_NEON
+#define __max_8(ret, xx) (ret) = vmaxvq_s16(vreinterpretq_s16_u8((xx)))
+#define allzero_0f_8(xx) (vmaxvq_u16(vreinterpretq_u16_u8((xx))) == 0)
+
+#else
+#define __max_8(ret, xx) (ret) = m128i_max_s16((xx))
+#define allzero_0f_8(xx) (m128i_allzero((xx)))
+#endif
 
 	// initialization
 	r = g_defr;
@@ -267,7 +303,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 		h = _mm_load_si128(H0 + slen - 1); // h={2,5,8,11,14,17,-1,-1} in the above example
 		h = _mm_slli_si128(h, 2);
 		for (j = 0; LIKELY(j < slen); ++j) {
-			h = _mm_adds_epi16(h, *S++);
+			h = _mm_adds_epi16(h, _mm_load_si128(S++));
 			e = _mm_load_si128(E + j);
 			h = _mm_max_epi16(h, e);
 			h = _mm_max_epi16(h, f);
@@ -290,7 +326,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 				_mm_store_si128(H1 + j, h);
 				h = _mm_subs_epu16(h, oe_ins);
 				f = _mm_subs_epu16(f, e_ins);
-				if(UNLIKELY(!_mm_movemask_epi8(_mm_cmpgt_epi16(f, h)))) goto end_loop8;
+				if(UNLIKELY(allzero_0f_8(_mm_cmpgt_epi16(f, h)))) goto end_loop8;
 			}
 		}
 end_loop8:

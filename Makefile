@@ -78,7 +78,7 @@ fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
 is.o: malloc_wrap.h
 kopen.o: malloc_wrap.h
 kstring.o: kstring.h malloc_wrap.h
-ksw.o: ksw.h malloc_wrap.h
+ksw.o: ksw.h neon_sse.h scalar_sse.h malloc_wrap.h
 main.o: kstring.h malloc_wrap.h utils.h
 malloc_wrap.o: malloc_wrap.h
 maxk.o: bwa.h bntseq.h bwt.h bwamem.h kseq.h malloc_wrap.h
