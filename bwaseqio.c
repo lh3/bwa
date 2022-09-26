@@ -205,7 +205,7 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 		seq_reverse(p->len, p->rseq, is_comp);
 		p->name = strdup((const char*)seq->name.s);
 		{ // trim /[12]$
-			int t = strlen(p->name);
+			int t = seq->name.l;
 			if (t > 2 && p->name[t-2] == '/' && (p->name[t-1] == '1' || p->name[t-1] == '2')) p->name[t-2] = '\0';
 		}
 		if (n_seqs == n_needed) break;
