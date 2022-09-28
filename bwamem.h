@@ -70,7 +70,7 @@ typedef struct {
 	int max_occ;            // skip a seed if its occurence is larger than this value
 	int max_chain_gap;      // do not chain seed if it is max_chain_gap-bp away from the closest seed
 	int n_threads;          // number of threads
-	int chunk_size;         // process chunk_size-bp sequences in a batch
+	int64_t chunk_size;     // process chunk_size-bp sequences in a batch
 	float mask_level;       // regard a hit as redundant if the overlap with another better hit is over mask_level times the min length of the two hits
 	float drop_ratio;       // drop a chain if its seed coverage is below drop_ratio times the seed coverage of a better chain overlapping with the small chain
 	float XA_drop_ratio;    // when counting hits for the XA tag, ignore alignments with score < XA_drop_ratio * max_score; only effective for the XA tag
@@ -158,7 +158,7 @@ extern "C" {
 	 * @param pes0   insert-size info; if NULL, infer from data; if not NULL, it should be an array with 4 elements,
 	 *               corresponding to each FF, FR, RF and RR orientation. See mem_pestat() for more info.
 	 */
-	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0);
+	void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0, int **global_ins_size_dist);
 
 	/**
 	 * Find the aligned regions for one query sequence
@@ -204,8 +204,8 @@ extern "C" {
 	 * @param regs   region array of size $n; 2i-th and (2i+1)-th elements constitute a pair
 	 * @param pes    inferred insert size distribution (output)
 	 */
-	void mem_pestat(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4]);
-
+	void mem_pestat(const mem_opt_t *opt, int **ins_size_dist, mem_pestat_t pes[4]);
+	void mem_pestat_store(const mem_opt_t *opt, int64_t l_pac, int n, const mem_alnreg_v *regs, mem_pestat_t pes[4], int **global_ins_size_dist);
 #ifdef __cplusplus
 }
 #endif
