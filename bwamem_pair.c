@@ -205,11 +205,12 @@ int mem_matesw(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	return n;
 }
 
-int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2], int n_pri[2])
+int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_pestat_t pes[4], bseq1_t s[2], mem_alnreg_v a[2], int id, int *sub, int *n_sub, int z[2], pair64_v *zv, int n_pri[2])
 {
 	pair64_v v, u;
 	int r, i, k, y[4], ret; // y[] keeps the last hit
 	int64_t l_pac = bns->l_pac;
+	
 	kv_init(v); kv_init(u);
 	for (r = 0; r < 2; ++r) { // loop through read number
 		for (i = 0; i < n_pri[r]; ++i) {
@@ -223,7 +224,10 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 	}
 	ks_introsort_128(v.n, v.a);
 	y[0] = y[1] = y[2] = y[3] = -1;
-	//for (i = 0; i < v.n; ++i) printf("[%d]\t%d\t%c%ld\n", i, (int)(v.a[i].y&1)+1, "+-"[v.a[i].y>>1&1], (long)v.a[i].x);
+	
+	if(bwa_verbose >= 5)
+		for (i = 0; i < v.n; ++i) printf("[%d]\t%d\t%c%ld\n", i, (int)(v.a[i].y&1)+1, "+-"[v.a[i].y>>1&1], (long)v.a[i].x);
+	
 	for (i = 0; i < v.n; ++i) {
 		for (r = 0; r < 2; ++r) { // loop through direction
 			int dir = r<<1 | (v.a[i].y>>1&1), which;
@@ -256,9 +260,53 @@ int mem_pair(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, cons
 		tmp = tmp > opt->o_del + opt->e_del? tmp : opt->o_del + opt->e_del;
 		tmp = tmp > opt->o_ins + opt->e_ins? tmp : opt->o_ins + opt->e_ins;
 		ks_introsort_128(u.n, u.a);
+ 
+		if(bwa_verbose >= 5) {
+			for (i = 0; i < u.n; ++i) {
+				int j = u.a[i].y >> 32; 
+				int k = u.a[i].y << 32 >> 32;
+				int q = v.a[j].y<<32>>34;
+				int r = v.a[k].y<<32>>34;
+				int o = u.a[i].x >> 32;
+				printf("[%d]\t%d\t%c%ld  (%d,%d) => (%d,%d) => %d \n", 
+					i, (int)(u.a[i].y&1)+1, "+-"[u.a[i].y>>1&1], (long)u.a[i].x,
+					j,k,q,r,o);
+			}
+		}
+
+		int prev_o = -1;
+		for(i = u.n-1; i >= 0; i--) {
+			int j = u.a[i].y >> 32; 
+			int k = u.a[i].y << 32 >> 32;
+			int q = v.a[j].y<<32>>34;
+			int r = v.a[k].y<<32>>34;
+			int o = u.a[i].x >> 32;
+
+			if(prev_o == -1) {
+				prev_o = o;
+			} 
+
+			if(prev_o == o) {
+				pair64_t p;
+				if( v.a[j].y&1 ) {
+					p.x = r;
+					p.y = q;
+				} else {
+					p.x = q;
+					p.y = r;
+				}
+				kv_push(pair64_t, *zv, p);
+				continue;
+			} else {
+				break;
+			}
+		}
+
 		i = u.a[u.n-1].y >> 32; k = u.a[u.n-1].y << 32 >> 32;
 		z[v.a[i].y&1] = v.a[i].y<<32>>34; // index of the best pair
 		z[v.a[k].y&1] = v.a[k].y<<32>>34;
+		if(bwa_verbose >= 5)
+			printf(" mem_pair: %d : u.y:(%ld)  i,k:(%d,%d)  v:(%ld,%ld)  z:(%d,%d) \n", __LINE__, u.a[u.n-1].y, i, k, v.a[i].y, v.a[k].y, z[0], z[1]);
 		ret = u.a[u.n-1].x >> 32;
 		*sub = u.n > 1? u.a[u.n-2].x>>32 : 0;
 		for (i = (long)u.n - 2, *n_sub = 0; i >= 0; --i)
@@ -281,9 +329,11 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	extern char **mem_gen_alt(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, const mem_alnreg_v *a, int l_query, const char *query);
 
 	int n = 0, i, j, z[2], o, subo, n_sub, extra_flag = 1, n_pri[2], n_aa[2];
+	pair64_v zv;
 	kstring_t str;
 	mem_aln_t h[2], g[2], aa[2][2];
 
+	kv_init(zv);
 	str.l = str.m = 0; str.s = 0;
 	memset(h, 0, sizeof(mem_aln_t) * 2);
 	memset(g, 0, sizeof(mem_aln_t) * 2);
@@ -308,7 +358,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 	}
 	if (opt->flag&MEM_F_NOPAIRING) goto no_pairing;
 	// pairing single-end hits
-	if (n_pri[0] && n_pri[1] && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z, n_pri)) > 0) {
+	if (n_pri[0] && n_pri[1] && (o = mem_pair(opt, bns, pac, pes, s, a, id, &subo, &n_sub, z, &zv, n_pri)) > 0) {
 		int is_multi[2], q_pe, score_un, q_se[2];
 		char **XA[2];
 		// check if an end has multiple hits even after mate-SW
@@ -317,9 +367,18 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				if (a[i].a[j].secondary < 0 && a[i].a[j].score >= opt->T) break;
 			is_multi[i] = j < n_pri[i]? 1 : 0;
 		}
+		if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : pairs: n_pri:(%d,%d)  is_multi:(%d,%d)  opt->T: %d  a[i].a[j].score:(%d,%d)  z:(%d,%d)  \n", __LINE__, 
+					n_pri[0], n_pri[1], is_multi[0], is_multi[1], opt->T, a[0].a[n_pri[0]-1].score, a[1].a[n_pri[1]-1].score, z[0], z[1] );
 		if (is_multi[0] || is_multi[1]) goto no_pairing; // TODO: in rare cases, the true hit may be long but with low score
 		// compute mapQ for the best SE hit
 		score_un = a[0].a[0].score + a[1].a[0].score - opt->pen_unpaired;
+	
+		if(bwa_verbose >= 5) {
+			for(i = 0; i < zv.n; i++) {
+				printf(" mem_sam_pe: %d : %d : (%ld,%ld)  \n", __LINE__, i, zv.a[i].x, zv.a[i].y);
+			}
+		}
+
 		//q_pe = o && subo < o? (int)(MEM_MAPQ_COEF * (1. - (double)subo / o) * log(a[0].a[z[0]].seedcov + a[1].a[z[1]].seedcov) + .499) : 0;
 		subo = subo > score_un? subo : score_un;
 		q_pe = raw_mapq(o - subo, opt->a);
@@ -342,11 +401,20 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			// cap at the tandem repeat score
 			q_se[0] = q_se[0] < raw_mapq(c[0]->score - c[0]->csub, opt->a)? q_se[0] : raw_mapq(c[0]->score - c[0]->csub, opt->a);
 			q_se[1] = q_se[1] < raw_mapq(c[1]->score - c[1]->csub, opt->a)? q_se[1] : raw_mapq(c[1]->score - c[1]->csub, opt->a);
+		
+			if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : c:(%s:%ld-%ld , %s:%ld-%ld)   \n", __LINE__, 
+						bns->anns[c[0]->rid].name, c[0]->rb-bns->anns[c[0]->rid].offset+1, c[0]->re-bns->anns[c[0]->rid].offset+1, 
+						bns->anns[c[1]->rid].name, c[1]->rb-bns->anns[c[1]->rid].offset+1, c[1]->re-bns->anns[c[1]->rid].offset+1);
 		} else { // the unpaired alignment is preferred
 			z[0] = z[1] = 0;
+			kv_resize(pair64_t, zv, 1);
+			zv.a[0].x = zv.a[0].y = 0;
+			zv.n = 1;
 			q_se[0] = mem_approx_mapq_se(opt, &a[0].a[0]);
 			q_se[1] = mem_approx_mapq_se(opt, &a[1].a[0]);
 		}
+		
+		/*
 		for (i = 0; i < 2; ++i) {
 			int k = a[i].a[z[i]].secondary_all;
 			if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
@@ -384,6 +452,72 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			mem_aln2sam(opt, bns, &str, &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
 		s[1].sam = str.s;
 		if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
+		*/	
+		kstring_t strs[2];
+		strs[0].l = strs[0].m = 0; strs[0].s = 0;
+		strs[1].l = strs[1].m = 0; strs[1].s = 0;
+		int zvi;
+		for(zvi = 0; zvi < zv.n; zvi++) {
+			pair64_t czp = zv.a[zvi];
+			uint64_t *cz = (uint64_t*)&czp; 
+
+			if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : zvi:%d  cz:(%ld,%ld) \n", __LINE__, zvi, cz[0], cz[1]);
+
+			for (i = 0; i < 2; ++i) {
+				if (a[i].a[cz[i]].secondary >= 0) {
+					a[i].a[cz[i]].sub = a[i].a[a[i].a[cz[i]].secondary].score;
+					a[i].a[cz[i]].secondary = -2;
+				}
+			}
+
+			for (i = 0; i < 2; ++i) {
+				int k = a[i].a[cz[i]].secondary_all;
+				if (bwa_verbose >= 5)
+					printf(" mem_sam_pe: %d : i:%d  cz[i]:%ld  k:%d  n_pri:%d   sec:%d \n", 
+						__LINE__, i, cz[i], k, n_pri[i], a[i].a[k].secondary_all );
+				if (k >= 0 && k < n_pri[i]) { // switch secondary and primary if both of them are non-ALT
+					assert(a[i].a[k].secondary_all < 0);
+					for (j = 0; j < a[i].n; ++j)
+						if (a[i].a[j].secondary_all == k || j == k)
+							a[i].a[j].secondary_all = cz[i];
+					a[i].a[cz[i]].secondary_all = -1;
+				}
+			}
+			if (!(opt->flag & MEM_F_ALL)) {
+				for (i = 0; i < 2; ++i)
+					XA[i] = mem_gen_alt(opt, bns, pac, &a[i], s[i].l_seq, s[i].seq);
+			} else XA[0] = XA[1] = 0;
+			// write SAM
+			n_aa[0] = n_aa[1] = 0;
+			for (i = 0; i < 2; ++i) {
+				if (bwa_verbose >= 5) printf(" mem_sam_pe: %d : i:%d  cz:%ld  a.n:%ld  \n", __LINE__, i, cz[i], a[i].n );
+				h[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, &a[i].a[cz[i]]);
+				h[i].mapq = q_se[i];
+				h[i].flag |= 0x40<<i | extra_flag;
+				h[i].XA = XA[i]? XA[i][cz[i]] : 0;
+				aa[i][n_aa[i]++] = h[i];
+				if (n_pri[i] < a[i].n) { // the read has ALT hits
+						mem_alnreg_t *p = &a[i].a[n_pri[i]];
+						if (p->score < opt->T || p->secondary >= 0 || !p->is_alt) continue;
+						g[i] = mem_reg2aln(opt, bns, pac, s[i].l_seq, s[i].seq, p);
+						g[i].flag |= 0x800 | 0x40<<i | extra_flag;
+						g[i].XA = XA[i]? XA[i][n_pri[i]] : 0;
+						aa[i][n_aa[i]++] = g[i];
+				}
+			}
+			if (bwa_verbose >= 5) 
+				printf(" mem_sam_pe: %d : cz:(%ld,%ld)  n_aa:(%d,%d)  h.flag:(%d,%d)   \n", 
+					__LINE__, cz[0],cz[1], n_aa[0],n_aa[1], h[0].flag,h[1].flag );
+
+			for (i = 0; i < n_aa[0]; ++i)
+				mem_aln2sam(opt, bns, &strs[0], &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
+			for (i = 0; i < n_aa[1]; ++i)
+				mem_aln2sam(opt, bns, &strs[1], &s[1], n_aa[1], aa[1], i, &h[0]); // write read2 hits
+			if (strcmp(s[0].name, s[1].name) != 0) 
+				err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
+		} // end zv loop
+		s[0].sam = strs[0].s;
+		s[1].sam = strs[1].s;
 		// free
 		for (i = 0; i < 2; ++i) {
 			free(h[i].cigar); free(g[i].cigar);
@@ -391,6 +525,7 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 			for (j = 0; j < a[i].n; ++j) free(XA[i][j]);
 			free(XA[i]);
 		}
+		kv_destroy(zv);
 	} else goto no_pairing;
 	return n;
 
@@ -415,5 +550,6 @@ no_pairing:
 	mem_reg2sam(opt, bns, pac, &s[1], &a[1], 0x81|extra_flag, &h[0]);
 	if (strcmp(s[0].name, s[1].name) != 0) err_fatal(__func__, "paired reads have different names: \"%s\", \"%s\"\n", s[0].name, s[1].name);
 	free(h[0].cigar); free(h[1].cigar);
+	kv_destroy(zv);
 	return n;
 }
