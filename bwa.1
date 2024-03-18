@@ -85,7 +85,7 @@ Identifies reference sequences that are alternative alleles, and provides
 alignment information that can be used to lift ALT hits over to corresponding
 positions within the primary assembly.
 .TP
-.IR prefix .hdr
+.IR prefix ".hdr or " baseprefix .dict
 Provides SAM headers to be used as the mapping output's headers, instead of
 the default simple `@HD' and `@SQ' headers. This can be used to add descriptive
 fields to the `@SQ' headers output: species, assembly, alternative names (which
@@ -325,7 +325,9 @@ added via
 .B -H
 include any `@SQ' headers, the
 .IR db.prefix .hdr
-file (if it exists) will be ignored. [null]
+and
+.IR db.baseprefix .dict
+files (if either exist) will be ignored. [null]
 .TP
 .BI -o \ FILE
 Write the output SAM file to

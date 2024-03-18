@@ -484,12 +484,22 @@ void bwa_print_sam_hdr2(const bntseq_t *bns, const char *prefix, const char *hdr
 	kstring_t str = { 0, 0, NULL };
 	char *bns_hdr = NULL;
 
-	// Ignore index .hdr file entirely if the user's headers provide @SQ lines
+	// Ignore index .hdr/.dict file entirely if the user's headers provide @SQ lines
 	if (!has_SQ(hdr_line)) {
 		FILE *fp;
 		// Otherwise read the .hdr file if present
 		ksprintf(&str, "%s.hdr", prefix);
-		if ((fp = fopen(str.s, "r")) != NULL) {
+		fp = fopen(str.s, "r");
+		if (!fp) { // Otherwise also try .dict if present
+			size_t l;
+			str.l -= 4;
+			if (str.l >= 3 && strncmp(&str.s[str.l-3], ".gz", 3) == 0) str.l -= 3;
+			for (l = str.l; l > 0 && str.s[l-1] != '/'; l--)
+				if (str.s[l-1] == '.') { str.l = l-1; break; }
+			ksprintf(&str, ".dict");
+			fp = fopen(str.s, "r");
+		}
+		if (fp) {
 			int c, n_SQ;
 			str.l = 0;
 			while ((c = getc(fp)) != EOF)
