@@ -1,3 +1,18 @@
+Release 0.7.18 (14 April 2024)
+------------------------------
+
+Notable changes:
+
+ * Support ARM64 (#359)
+ * Output SAM header line (#336)
+ * Added the XB tag to output alignment score and mapping quality
+ * Fixed a compiling error with GCC 10 (#267)
+ * Avoid potential buffer overflow (#232)
+
+(0.7.18: 14 April 2024, r1243)
+
+
+
 Release 0.7.17 (23 October 2017)
 --------------------------------
 
