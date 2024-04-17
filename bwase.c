@@ -531,7 +531,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		exit(1);
 	}
 	err_fread_noeof(&opt, sizeof(gap_opt_t), 1, fp_sa);
-	bwa_print_sam_hdr(bns, rg_line);
+	bwa_print_sam_hdr2(bns, prefix, rg_line);
 	// set ks
 	ks = bwa_open_reads(opt.mode, fn_fa);
 	// core loop
