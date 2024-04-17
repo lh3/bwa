@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 
 #ifdef USE_MALLOC_WRAPPERS
 #  include "malloc_wrap.h"
@@ -110,6 +111,21 @@ static inline int kputl(long c, kstring_t *s)
 	return 0;
 }
 
-int ksprintf(kstring_t *s, const char *fmt, ...);
+int bwa_kvsprintf(kstring_t *s, const char *fmt, va_list ap);
+
+static inline int ksprintf(kstring_t *s, const char *fmt, ...)
+{
+	va_list ap;
+	int l;
+	va_start(ap, fmt);
+	l = bwa_kvsprintf(s, fmt, ap);
+	va_end(ap);
+	return l;
+}
+
+static inline int kvsprintf(kstring_t *s, const char *fmt, va_list ap)
+{
+	return bwa_kvsprintf(s, fmt, ap);
+}
 
 #endif
