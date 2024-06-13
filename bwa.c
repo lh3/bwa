@@ -76,10 +76,10 @@ static inline void kseq2bseq1(const kseq_t *ks, bseq1_t *s)
 	s->l_seq = ks->seq.l;
 }
 
-bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
+bseq1_t *bseq_read(int64_t chunk_size, int *n_, void *ks1_, void *ks2_)
 {
 	kseq_t *ks = (kseq_t*)ks1_, *ks2 = (kseq_t*)ks2_;
-	int size = 0, m, n;
+	int64_t size = 0, m, n;
 	bseq1_t *seqs;
 	m = n = 0; seqs = 0;
 	while (kseq_read(ks) >= 0) {
@@ -101,7 +101,7 @@ bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_)
 			seqs[n].id = n;
 			size += seqs[n++].l_seq;
 		}
-		if (size >= chunk_size && (n&1) == 0) break;
+		if (chunk_size && size >= chunk_size && (n&1) == 0) break;
 	}
 	if (size == 0) { // test if the 2nd file is finished
 		if (ks2 && kseq_read(ks2) >= 0)

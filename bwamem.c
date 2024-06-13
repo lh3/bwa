@@ -883,12 +883,12 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		if (p->rid == m->rid) kputc('=', str);
 		else kputs(bns->anns[m->rid].name, str);
 		kputc('\t', str);
-		kputl(m->pos + 1, str); kputc('\t', str);
+		kputl(m->pos + 1, str); kputc('\t', str); // MPOS
 		if (p->rid == m->rid) {
 			int64_t p0 = p->pos + (p->is_rev? get_rlen(p->n_cigar, p->cigar) - 1 : 0);
 			int64_t p1 = m->pos + (m->is_rev? get_rlen(m->n_cigar, m->cigar) - 1 : 0);
 			if (m->n_cigar == 0 || p->n_cigar == 0) kputc('0', str);
-			else kputl(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str);
+			else kputl(-(p0 - p1 + (p0 > p1? 1 : p0 < p1? -1 : 0)), str); // TLEN
 		} else kputc('0', str);
 	} else kputsn("*\t0\t0", 5, str);
 	kputc('\t', str);
@@ -1232,7 +1232,7 @@ static void worker2(void *data, int i, int tid)
 	}
 }
 
-void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0)
+void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bns, const uint8_t *pac, int64_t n_processed, int n, bseq1_t *seqs, const mem_pestat_t *pes0, int **global_ins_size_dist)
 {
 	extern void kt_for(int n_threads, void (*func)(void*,int,int), void *data, int n);
 	worker_t w;
@@ -1255,7 +1255,7 @@ void mem_process_seqs(const mem_opt_t *opt, const bwt_t *bwt, const bntseq_t *bn
 	free(w.aux);
 	if (opt->flag&MEM_F_PE) { // infer insert sizes if not provided
 		if (pes0) memcpy(pes, pes0, 4 * sizeof(mem_pestat_t)); // if pes0 != NULL, set the insert-size distribution as pes0
-		else mem_pestat(opt, bns->l_pac, n, w.regs, pes); // otherwise, infer the insert size distribution from data
+		else mem_pestat_store(opt, bns->l_pac, n, w.regs, pes, global_ins_size_dist); // otherwise, infer the insert size distribution from data and store the distribution in global_ins_size_dist
 	}
 	kt_for(opt->n_threads, worker2, &w, (opt->flag&MEM_F_PE)? n>>1 : n); // generate alignment
 	free(w.regs);
