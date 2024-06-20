@@ -67,7 +67,7 @@ extern char bwa_rg_id[256];
 extern "C" {
 #endif
 
-	bseq1_t *bseq_read(int chunk_size, int *n_, void *ks1_, void *ks2_);
+	bseq1_t *bseq_read(int64_t chunk_size, int *n_, void *ks1_, void *ks2_);
 	void bseq_classify(int n, bseq1_t *seqs, int m[2], bseq1_t *sep[2]);
 
 	void bwa_fill_scmat(int a, int b, int8_t mat[25]);
