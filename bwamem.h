@@ -90,9 +90,11 @@ typedef struct {
 	int score;      // best local SW score
 	int truesc;     // actual score corresponding to the aligned region; possibly smaller than $score
 	int sub;        // 2nd best SW score
+	int osub;       // more liberal 2nd best SW score
 	int alt_sc;
 	int csub;       // SW score of a tandem hit
 	int sub_n;      // approximate number of suboptimal hits
+	int osub_n;     // more liberal approximate number of suboptimal hits
 	int w;          // actual band width used in extension
 	int seedcov;    // length of regions coverged by seeds
 	int secondary;  // index of the parent hit shadowing the current hit; <0 if primary
@@ -120,7 +122,11 @@ typedef struct { // This struct is only used for the convenience of API.
 	uint32_t *cigar; // CIGAR in the BAM encoding: opLen<<4|op; op to integer mapping: MIDSH=>01234
 	char *XA;        // alternative mappings
 
-	int score, sub, alt_sc;
+	int score, sub, osub, alt_sc;
+	float seedcov, pair_seedcov;
+	int sub_n, osub_n, pair_score, pair_sub, pair_nsub;
+	float frac_rep, pair_frac_rep;
+	int seedlen0, n_comp;
 } mem_aln_t;
 
 #ifdef __cplusplus
