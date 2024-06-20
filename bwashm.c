@@ -132,7 +132,7 @@ int bwa_shm_test(const char *hint)
 	cnt = (uint16_t*)shm;
 	for (i = 0, p = shm + 4; i < cnt[0]; ++i) {
 		if (strcmp(p + 8, name) == 0) return 1;
-		p += strlen(p) + 9;
+		p += strlen(p + 8) + 9;
 	}
 	return 0;
 }
