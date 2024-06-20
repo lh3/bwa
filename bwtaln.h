@@ -64,7 +64,7 @@ typedef struct {
 } bwt_multi1_t;
 
 typedef struct {
-	char *name;
+	char *name, *comment;
 	ubyte_t *seq, *rseq, *qual;
 	uint32_t len:20, strand:1, type:2, dummy:1, extra_flag:8;
 	uint32_t n_mm:8, n_gapo:8, n_gape:8, mapQ:8;
