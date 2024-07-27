@@ -234,18 +234,20 @@ static char **cmd2argv(const char *cmd)
 	int i, beg, end, argc;
 	char **argv, *str;
 	end = strlen(cmd);
-	for (i = end - 1; i >= 0; --i)
+	for (i = end - 1; i > -1; --i)
 		if (!isspace(cmd[i])) break;
 	end = i + 1;
 	for (beg = 0; beg < end; ++beg)
 		if (!isspace(cmd[beg])) break;
 	if (beg == end) return 0;
-	for (i = beg + 1, argc = 0; i < end; ++i)
+	//for (i = beg + 1, argc = 0; i < end; ++i)
+   argc = 0;
+	for (i = beg + 1; i < end; ++i)
 		if (isspace(cmd[i]) && !isspace(cmd[i-1]))
 			++argc;
 	argv = (char**)calloc(argc + 2, sizeof(void*));
 	argv[0] = str = (char*)calloc(end - beg + 1, 1);
-	strncpy(argv[0], cmd + beg, end - beg);
+	strncpy(argv[0], cmd + beg, (size_t)(end - beg));
 	for (i = argc = 1; i < end - beg; ++i)
 		if (isspace(str[i])) str[i] = 0;
 		else if (str[i] && str[i-1] == 0) argv[argc++] = &str[i];

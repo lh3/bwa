@@ -83,12 +83,14 @@ static inline void gap_pop(gap_stack_t *stack, gap_entry_t *e)
 	} else if (stack->n_entries == 0) stack->best = stack->n_stacks;
 }
 
-static inline void gap_shadow(int x, int len, bwtint_t max, int last_diff_pos, bwt_width_t *w)
-{
+//static inline void gap_shadow(int x, int len, bwtint_t max, int last_diff_pos, bwt_width_t *w)
+//len is unused
+static inline void gap_shadow(int x, bwtint_t max, int last_diff_pos, bwt_width_t *w)
+{ 
 	int i, j;
 	for (i = j = 0; i < last_diff_pos; ++i) {
-		if (w[i].w > x) w[i].w -= x;
-		else if (w[i].w == x) {
+		if ((int)w[i].w > x) w[i].w -= x;
+		else if ((int)w[i].w == x) {
 			w[i].bid = 1;
 			w[i].w = max - (++j);
 		} // else should not happen
@@ -140,7 +142,7 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 		gap_pop(stack, &e); // get the best entry
 		k = e.k; l = e.l; // SA interval
 		i = e.info&0xffff; // length
-		if (!(opt->mode & BWA_MODE_NONSTOP) && e.info>>21 > best_score + opt->s_mm) break; // no need to proceed
+		if (!(opt->mode & BWA_MODE_NONSTOP) && (int)e.info>>21 > best_score + opt->s_mm) break; // no need to proceed
 
 		m = max_diff - (e.n_mm + e.n_gapo);
 		if (opt->mode & BWA_MODE_GAPE) m -= e.n_gape;
@@ -180,7 +182,8 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 			}
 			if (do_add) { // append
 				bwt_aln1_t *p;
-				gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos, width);
+				//gap_shadow(l - k + 1, len, bwt->seq_len, e.last_diff_pos, width);
+				gap_shadow(l - k + 1, bwt->seq_len, e.last_diff_pos, width);
 				if (n_aln == m_aln) {
 					m_aln <<= 1;
 					aln = (bwt_aln1_t*)realloc(aln, m_aln * sizeof(bwt_aln1_t));
@@ -231,7 +234,7 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 					gap_push(stack, i, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, e.n_ins + 1, e.n_del, STATE_I, 1, opt);
 			} else if (e.state == STATE_D) { // extention of a deletion
 				if (e.n_gape < opt->max_gape) { // gap extention is allowed
-					if (e.n_gape + e.n_gapo < max_diff || occ < opt->max_del_occ) {
+					if (e.n_gape + e.n_gapo < max_diff || (int)occ < opt->max_del_occ) {
 						for (j = 0; j != 4; ++j) {
 							k = bwt->L2[j] + cnt_k[j] + 1;
 							l = bwt->L2[j] + cnt_l[j];

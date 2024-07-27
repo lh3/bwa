@@ -171,18 +171,18 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 			}
 		}
 		if (is_64 && seq->qual.l)
-			for (i = 0; i < seq->qual.l; ++i) seq->qual.s[i] -= 31;
-		if (seq->seq.l <= l_bc) continue; // sequence length equals or smaller than the barcode length
+			for (i = 0; i < (int)seq->qual.l; ++i) seq->qual.s[i] -= 31;
+		if ((int)seq->seq.l <= l_bc) continue; // sequence length equals or smaller than the barcode length
 		p = &seqs[n_seqs++];
 		if (l_bc) { // then trim barcode
 			for (i = 0; i < l_bc; ++i)
 				p->bc[i] = (seq->qual.l && seq->qual.s[i]-33 < BARCODE_LOW_QUAL)? tolower(seq->seq.s[i]) : toupper(seq->seq.s[i]);
 			p->bc[i] = 0;
-			for (; i < seq->seq.l; ++i)
+			for (; i < (int)seq->seq.l; ++i)
 				seq->seq.s[i - l_bc] = seq->seq.s[i];
 			seq->seq.l -= l_bc; seq->seq.s[seq->seq.l] = 0;
 			if (seq->qual.l) {
-				for (i = l_bc; i < seq->qual.l; ++i)
+				for (i = l_bc; i < (int)seq->qual.l; ++i)
 					seq->qual.s[i - l_bc] = seq->qual.s[i];
 				seq->qual.l -= l_bc; seq->qual.s[seq->qual.l] = 0;
 			}

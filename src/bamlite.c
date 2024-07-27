@@ -92,7 +92,7 @@ bam_header_t *bam_header_read(bamFile fp)
 	if (bam_read(fp, &header->l_text, 4) != 4) goto fail; 
 	if (bam_is_be) bam_swap_endian_4p(&header->l_text);
 	header->text = (char*)calloc(header->l_text + 1, 1);
-	if (bam_read(fp, header->text, header->l_text) != header->l_text) goto fail;
+	if (bam_read(fp, header->text, header->l_text) != (int)header->l_text) goto fail;
 	if (bam_read(fp, &header->n_targets, 4) != 4) goto fail;
 	if (bam_is_be) bam_swap_endian_4p(&header->n_targets);
 	// read reference sequence names and lengths

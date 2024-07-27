@@ -66,7 +66,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 		s->multi = calloc(rest, sizeof(bwt_multi1_t));
 		for (k = 0; k < n_aln; ++k) {
 			const bwt_aln1_t *q = aln + k;
-			if (q->l - q->k + 1 <= rest) {
+			if ((int)(q->l - q->k + 1) <= rest) {
 				bwtint_t l;
 				for (l = q->k; l <= q->l; ++l) {
 					s->multi[z].pos = l;
@@ -115,10 +115,10 @@ bwtint_t bwa_sa2pos(const bntseq_t *bns, const bwt_t *bwt, bwtint_t sapos, int r
 	int is_rev;
 	*strand = 0; // initialise strand to 0 otherwise we could return without setting it
 	pos_f = bwt_sa(bwt, sapos); // position on the forward-reverse coordinate
-	if (pos_f < bns->l_pac && bns->l_pac < pos_f + ref_len) return (bwtint_t)-1;
+	if (pos_f < (bwtint_t)bns->l_pac && bns->l_pac < (int)(pos_f + ref_len)) return (bwtint_t)-1;
 	pos_f = bns_depos(bns, pos_f, &is_rev); // position on the forward strand; this may be the first base or the last base
 	*strand = !is_rev;
-	if (is_rev) pos_f = pos_f + 1 < ref_len? 0 : pos_f - ref_len + 1; // position of the first base
+	if (is_rev) pos_f = (int)pos_f + 1 < ref_len? 0 : pos_f - ref_len + 1; // position of the first base
 	return pos_f; // FIXME: it is possible that pos_f < bns->anns[ref_id].offset
 }
 
@@ -177,7 +177,7 @@ bwa_cigar_t *bwa_refine_gapped_core(bwtint_t l_pac, const ubyte_t *pacseq, int l
 
 	bwa_fill_scmat(1, 3, mat);
 	rb = *_rb; re = rb + len + ref_shift;
-	assert(re <= l_pac);
+	assert(re <= (int64_t)l_pac);
 	rseq = bns_get_seq(l_pac, pacseq, rb, re, &rlen);
 	assert(re - rb == rlen);
 	w = abs((int)rlen - len) * 1.5;
@@ -233,7 +233,7 @@ char *bwa_cal_md1(int n_cigar, bwa_cigar_t *cigar, int len, bwtint_t pos, ubyte_
 			}
 		}
 	} else { // no gaps
-		for (z = u = 0; z < (bwtint_t)len && x+z < l_pac; ++z) {
+		for (z = u = 0; z < (int)len && x+z < l_pac; ++z) {
 			c = pacseq[(x+z)>>2] >> ((~(x+z)&3)<<1) & 3;
 			if (c > 3 || seq[y+z] > 3 || c != seq[y+z]) {
 				ksprintf(str, "%d", u);
@@ -359,7 +359,7 @@ int64_t pos_end_multi(const bwt_multi1_t *p, int len) // analogy to pos_end()
 static int64_t pos_5(const bwa_seq_t *p)
 {
 	if (p->type != BWA_TYPE_NO_MATCH)
-		return p->strand? pos_end(p) : p->pos;
+		return p->strand? (int64_t)pos_end(p) : (int64_t)p->pos;
 	return -1;
 }
 
@@ -399,7 +399,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 
 		// get seqid
 		nn = bns_cnt_ambi(bns, p->pos, j, &seqid);
-		if (p->type != BWA_TYPE_NO_MATCH && p->pos + j - bns->anns[seqid].offset > bns->anns[seqid].len)
+		if (p->type != BWA_TYPE_NO_MATCH && (int32_t)p->pos + j - bns->anns[seqid].offset > bns->anns[seqid].len)
 			flag |= SAM_FSU; // flag UNMAP as this alignment bridges two adjacent reference sequences
 
 		// update flag and print it

@@ -21,6 +21,7 @@ extern "C" {
 	#define rle_rank1a(block, x, cx, ec) rle_rank2a(block, x, -1, cx, 0, ec)
 
 	void rle_print(const uint8_t *block, int expand);
+   extern const uint8_t rle_auxtab[8];
 
 #ifdef __cplusplus
 }
@@ -29,8 +30,6 @@ extern "C" {
 /******************
  *** 43+3 codec ***
  ******************/
-
-extern const uint8_t rle_auxtab[8];
 
 #define RLE_MIN_SPACE 18
 #define rle_nptr(block) ((uint16_t*)(block))

@@ -26,7 +26,7 @@ int bwa_shm_stage(bwaidx_t *idx, const char *hint, const char *_tmpfn)
 		to_init = 1;
 	}
 	if (shmid < 0) return -1;
-	ftruncate(shmid, BWA_CTL_SIZE);
+	ftruncate(shmid, BWA_CTL_SIZE); // return value not used
 	shm = mmap(0, BWA_CTL_SIZE, PROT_READ|PROT_WRITE, MAP_SHARED, shmid, 0);
 	cnt = (uint16_t*)shm;
 	if (to_init) {

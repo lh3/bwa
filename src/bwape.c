@@ -165,8 +165,8 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 	// here v>=u. When ii is set, we check insert size with ii; otherwise with opt->max_isize
 #define __pairing_aux(u,v) do { \
 		bwtint_t l = (v).x + p[(v).y&1]->len - ((u).x); \
-		if ((u).x != (uint64_t)-1 && (v).x > (u).x && l >= max_len \
-			&& ((ii->high && l <= ii->high_bayesian) || (ii->high == 0 && l <= opt->max_isize))) \
+		if ((u).x != (uint64_t)-1 && (v).x > (u).x && (int)l >= max_len \
+			&& ((ii->high && l <= ii->high_bayesian) || (ii->high == 0 && (int)l <= opt->max_isize))) \
 		{ \
 			uint64_t s = d->aln[(v).y&1].a[(v).y>>2].score + d->aln[(u).y&1].a[(u).y>>2].score; \
 			s *= 10; \
@@ -196,7 +196,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 	ks_introsort_128(d->arr.n, d->arr.a);
 	for (j = 0; j < 2; ++j) last_pos[j][0].x = last_pos[j][0].y = last_pos[j][1].x = last_pos[j][1].y = (uint64_t)-1;
 	if (opt->type == BWA_PET_STD) {
-		for (i = 0; i < d->arr.n; ++i) {
+		for (i = 0; i < (int)d->arr.n; ++i) {
 			pair64_t x = d->arr.a[i];
 			int strand = x.y>>1&1;
 			if (strand == 1) { // reverse strand, then check
@@ -219,7 +219,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 		//fprintf(stderr, "%d, %d\n", o_n, subo_n);
 		if (o_n == 1) {
 			if (subo_score == (uint64_t)-1) mapQ_p = 29; // no sub-optimal pair
-			else if ((subo_score>>32) - (o_score>>32) > s_mm * 10) mapQ_p = 23; // poor sub-optimal pair
+			else if ((int)(subo_score>>32) - (int)(o_score>>32) > s_mm * 10) mapQ_p = 23; // poor sub-optimal pair
 			else {
 				int n = subo_n > 255? 255 : subo_n;
 				mapQ_p = ((subo_score>>32) - (o_score>>32)) / 2 - g_log_n[n];
@@ -284,7 +284,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 			p[j]->n_multi = 0;
 			p[j]->extra_flag |= SAM_FPD | (j == 0? SAM_FR1 : SAM_FR2);
 			err_fread_noeof(&n_aln, 4, 1, fp_sa[j]);
-			if (n_aln > kv_max(d->aln[j]))
+			if (n_aln > (int)kv_max(d->aln[j]))
 				kv_resize(bwt_aln1_t, d->aln[j], n_aln);
 			d->aln[j].n = n_aln;
 			err_fread_noeof(d->aln[j].a, sizeof(bwt_aln1_t), n_aln, fp_sa[j]);
@@ -325,13 +325,13 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 			long long n_occ[2];
 			for (j = 0; j < 2; ++j) {
 				n_occ[j] = 0;
-				for (k = 0; k < d->aln[j].n; ++k)
+				for (k = 0; k < (int)d->aln[j].n; ++k)
 					n_occ[j] += d->aln[j].a[k].l - d->aln[j].a[k].k + 1;
 			}
 			if (n_occ[0] > opt->max_occ || n_occ[1] > opt->max_occ) continue;
 			d->arr.n = 0;
 			for (j = 0; j < 2; ++j) {
-				for (k = 0; k < d->aln[j].n; ++k) {
+				for (k = 0; k < (int)d->aln[j].n; ++k) {
 					bwt_aln1_t *r = d->aln[j].a + k;
 					bwtint_t l;
 					if (0 && r->l - r->k + 1 >= MIN_HASH_WIDTH) { // then check hash table
@@ -349,7 +349,7 @@ int bwa_cal_pac_pos_pe(const bntseq_t *bns, const char *prefix, bwt_t *const _bw
 								z->a[l - r->k] |= strand;
 							}
 						}
-						for (l = 0; l < kh_val(g_hash, iter).n; ++l) {
+						for (l = 0; l < (int)kh_val(g_hash, iter).n; ++l) {
 							x.x = kh_val(g_hash, iter).a[l]>>1;
 							x.y = k<<2 | (kh_val(g_hash, iter).a[l]&1)<<1 | j;
 							kv_push(pair64_t, d->arr, x);
@@ -419,13 +419,13 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	bwa_fill_scmat(1, 3, mat);
 	// check whether there are too many N's
 	if (reglen < SW_MIN_MATCH_LEN || (int64_t)l_pac - *beg < len) return 0;
-	for (k = 0, x = 0; k < len; ++k)
+	for (k = 0, x = 0; (int)k < len; ++k)
 		if (seq[k] >= 4) ++x;
 	if ((float)x/len >= 0.25 || len - x < SW_MIN_MATCH_LEN) return 0;
 
 	// get reference subsequence
 	ref_seq = (ubyte_t*)calloc(reglen, 1);
-	for (k = *beg, l = 0; l < reglen && k < l_pac; ++k)
+	for (k = *beg, l = 0; (int)l < reglen && k < l_pac; ++k)
 		ref_seq[l++] = pacseq[k>>2] >> ((~k&3)<<1) & 3;
 
 	// do alignment
@@ -433,7 +433,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	r = ksw_align(len, (uint8_t*)seq, l, ref_seq, 5, mat, 5, 1, xtra, 0);
 	gscore = ksw_global(r.qe - r.qb + 1, &seq[r.qb], r.te - r.tb + 1, &ref_seq[r.tb], 5, mat, 5, 1, 50, n_cigar, &cigar32);
 	cigar = (bwa_cigar_t*)cigar32;
-	for (k = 0; k < *n_cigar; ++k)
+	for (k = 0; (int)k < *n_cigar; ++k)
 		cigar[k] = __cigar_create((cigar32[k]&0xf), (cigar32[k]>>4));
 
 	if (r.score < SW_MIN_MATCH_LEN || r.score2 == r.score || gscore != r.score) { // poor hit or tandem hits or weird alignment
@@ -442,7 +442,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 	}
 
 	// check whether the alignment is good enough
-	for (k = 0, x = y = 0; k < *n_cigar; ++k) {
+	for (k = 0, x = y = 0; (int)k < *n_cigar; ++k) {
 		bwa_cigar_t c = cigar[k];
 		if (__cigar_op(c) == FROM_M) x += __cigar_len(c), y += __cigar_len(c);
 		else if (__cigar_op(c) == FROM_D) x += __cigar_len(c);
@@ -474,7 +474,7 @@ bwa_cigar_t *bwa_sw_core(bwtint_t l_pac, const ubyte_t *pacseq, int len, const u
 		int n_mm, n_gapo, n_gape;
 		n_mm = n_gapo = n_gape = 0;
 		x = r.tb; y = r.qb;
-		for (k = 0; k < *n_cigar; ++k) {
+		for (k = 0; (int)k < *n_cigar; ++k) {
 			bwa_cigar_t c = cigar[k];
 			if (__cigar_op(c) == FROM_M) {
 				for (l = 0; l < (__cigar_len(c)); ++l)
@@ -533,7 +533,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 				(_a) = (int64_t)_pref->pos + _pref->len - ii->avg - 3 * ii->std - _pmate->len * 0.5; \
 				(_b) = (_a) + 6 * ii->std + 2 * _pmate->len;			\
 				if ((_a) < 0) (_a) = 0;									\
-				if ((_b) > _pref->pos) (_b) = _pref->pos;				\
+				if ((_b) > (int64_t)_pref->pos) (_b) = _pref->pos;				\
 			} while (0)
 			
 #define __set_fixed(_pref, _pmate, _beg, _cnt) do {						\
@@ -594,7 +594,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 				mapQ = abs(p[1]->mapQ - p[0]->mapQ);
 			} else if (cigar[0]) k = 0, mapQ = p[1]->mapQ;
 			else if (cigar[1]) k = 1, mapQ = p[0]->mapQ;
-			if (k >= 0 && p[k]->pos != beg[k]) {
+			if (k >= 0 && (int64_t)p[k]->pos != beg[k]) {
 				++n_mapped[is_singleton];
 				{ // recalculate mapping quality
 					int tmp = (int)p[1-k]->mapQ - p[k]->mapQ/2 - 8;
