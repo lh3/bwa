@@ -61,6 +61,7 @@ typedef struct {
 	int ref_shift;
 	bwtint_t pos;
 	bwa_cigar_t *cigar;
+	char *md;
 } bwt_multi1_t;
 
 typedef struct {

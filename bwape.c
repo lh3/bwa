@@ -621,7 +621,7 @@ ubyte_t *bwa_paired_sw(const bntseq_t *bns, const ubyte_t *_pacseq, int n_seqs, 
 	return pacseq;
 }
 
-void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt, const char *rg_line)
+void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const fn_fa[2], pe_opt_t *popt, const char *rg_line, int with_md)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
 	int i, j, n_seqs;
@@ -692,7 +692,7 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 		fprintf(stderr, "[bwa_sai2sam_pe_core] refine gapped alignments... ");
 		for (j = 0; j < 2; ++j)
-			bwa_refine_gapped(bns, n_seqs, seqs[j], pacseq);
+			bwa_refine_gapped(bns, n_seqs, seqs[j], pacseq, with_md);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 		if (pac == 0) free(pacseq);
 
@@ -732,12 +732,12 @@ void bwa_sai2sam_pe_core(const char *prefix, char *const fn_sa[2], char *const f
 
 int bwa_sai2sam_pe(int argc, char *argv[])
 {
-	int c;
+	int c, with_md = 0;
 	pe_opt_t *popt;
 	char *prefix, *rg_line = 0;
 
 	popt = bwa_init_pe_opt();
-	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:")) >= 0) {
+	while ((c = getopt(argc, argv, "a:o:sPn:N:c:f:Ar:d")) >= 0) {
 		switch (c) {
 		case 'r':
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
@@ -751,6 +751,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		case 'c': popt->ap_prior = atof(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
 		case 'A': popt->force_isize = 1; break;
+		case 'd': with_md = 1; break;
 		default: return 1;
 		}
 	}
@@ -768,6 +769,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "         -P       preload index into memory (for base-space reads only)\n");
 		fprintf(stderr, "         -s       disable Smith-Waterman for the unmapped mate\n");
 		fprintf(stderr, "         -A       disable insert size estimate (force -s)\n\n");
+		fprintf(stderr, "         -d       output the MD to each alignment in the XA tag, otherwise use \".\"\n\n");
 		fprintf(stderr, "Notes: 1. For SOLiD reads, <in1.fq> corresponds R3 reads and <in2.fq> to F3.\n");
 		fprintf(stderr, "       2. For reads shorter than 30bp, applying a smaller -o is recommended to\n");
 		fprintf(stderr, "          to get a sensible speed at the cost of pairing accuracy.\n");
@@ -778,7 +780,7 @@ int bwa_sai2sam_pe(int argc, char *argv[])
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
 		return 1;
 	}
-	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt, rg_line);
+	bwa_sai2sam_pe_core(prefix, argv + optind + 1, argv + optind+3, popt, rg_line, with_md);
 	free(prefix); free(popt);
 	return 0;
 }

@@ -284,11 +284,11 @@ void bwa_correct_trimmed(bwa_seq_t *s)
 	s->len = s->full_len;
 }
 
-void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq)
+void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t *_pacseq, int with_md)
 {
 	ubyte_t *pacseq;
 	int i, j, k;
-	kstring_t *str;
+	kstring_t *str = (kstring_t*)calloc(1, sizeof(kstring_t));
 
 	if (!_pacseq) {
 		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
@@ -305,7 +305,18 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 				q->cigar = bwa_refine_gapped_core(bns->l_pac, pacseq, s->len, q->strand? s->rseq : s->seq, q->ref_shift, &q->pos, &n_cigar);
 				q->n_cigar = n_cigar;
 				if (q->cigar) s->multi[k++] = *q;
-			} else s->multi[k++] = *q;
+			} else {
+				s->multi[k++] = *q;
+				if (with_md) { // create the cigar, needed for bwa_cal_md1 below
+					q->n_cigar = 1;
+					q->cigar = calloc(q->n_cigar, sizeof(uint32_t));
+					q->cigar[0] = __cigar_create(FROM_M, s->len);
+				}
+			}
+			if (with_md) {
+				int nm;
+				q->md = bwa_cal_md1(q->n_cigar, q->cigar, s->len, q->pos, q->strand? s->rseq : s->seq, bns->l_pac, pacseq, str, &nm);
+			}
 		}
 		s->n_multi = k; // this squeezes out gapped alignments which failed the CIGAR generation
 		if (s->type == BWA_TYPE_NO_MATCH || s->type == BWA_TYPE_MATESW || s->n_gapo == 0) continue;
@@ -313,7 +324,6 @@ void bwa_refine_gapped(const bntseq_t *bns, int n_seqs, bwa_seq_t *seqs, ubyte_t
 		if (s->cigar == 0) s->type = BWA_TYPE_NO_MATCH;
 	}
 	// generate MD tag
-	str = (kstring_t*)calloc(1, sizeof(kstring_t));
 	for (i = 0; i != n_seqs; ++i) {
 		bwa_seq_t *s = seqs + i;
 		if (s->type != BWA_TYPE_NO_MATCH) {
@@ -504,7 +514,7 @@ void bwase_initialize()
 	for (i = 1; i != 256; ++i) g_log_n[i] = (int)(4.343 * log(i) + 0.5);
 }
 
-void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ, const char *rg_line)
+void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_fa, int n_occ, const char *rg_line, int with_md)
 {
 	extern bwa_seqio_t *bwa_open_reads(int mode, const char *fn_fa);
 	int i, n_seqs, m_aln;
@@ -557,7 +567,7 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		fprintf(stderr, "[bwa_aln_core] refine gapped alignments... ");
-		bwa_refine_gapped(bns, n_seqs, seqs, 0);
+		bwa_refine_gapped(bns, n_seqs, seqs, 0, with_md);
 		fprintf(stderr, "%.2f sec\n", (float)(clock() - t) / CLOCKS_PER_SEC); t = clock();
 
 		fprintf(stderr, "[bwa_aln_core] print alignments... ");
@@ -578,11 +588,12 @@ void bwa_sai2sam_se_core(const char *prefix, const char *fn_sa, const char *fn_f
 
 int bwa_sai2sam_se(int argc, char *argv[])
 {
-	int c, n_occ = 3;
+	int c, n_occ = 3, with_md = 0;
 	char *prefix, *rg_line = 0;
-	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
+	while ((c = getopt(argc, argv, "hdn:f:r:")) >= 0) {
 		switch (c) {
 		case 'h': break;
+		case 'd': with_md = 1; break;
 		case 'r':
 			if ((rg_line = bwa_set_rg(optarg)) == 0) return 1;
 			break;
@@ -593,14 +604,14 @@ int bwa_sai2sam_se(int argc, char *argv[])
 	}
 
 	if (optind + 3 > argc) {
-		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
+		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-d] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
 		return 1;
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {
 		fprintf(stderr, "[%s] fail to locate the index\n", __func__);
 		return 1;
 	}
-	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line);
+	bwa_sai2sam_se_core(prefix, argv[optind+1], argv[optind+2], n_occ, rg_line, with_md);
 	free(prefix);
 	return 0;
 }
