@@ -21,7 +21,7 @@ int g_log_n[256];
 
 void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_main, int n_multi)
 {
-	int i, cnt, best;
+	int i, k, cnt, best;
 	if (n_aln == 0) {
 		s->type = BWA_TYPE_NO_MATCH;
 		s->c1 = s->c2 = 0;
@@ -47,14 +47,14 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 		s->type = s->c1 > 1? BWA_TYPE_REPEAT : BWA_TYPE_UNIQUE;
 	}
 
+	for (k = s->n_occ = 0; k < n_aln; ++k) {
+		const bwt_aln1_t *q = aln + k;
+		s->n_occ += q->l - q->k + 1;
+	}
 	if (n_multi) {
-		int k, rest, n_occ, z = 0;
-		for (k = n_occ = 0; k < n_aln; ++k) {
-			const bwt_aln1_t *q = aln + k;
-			n_occ += q->l - q->k + 1;
-		}
+		int rest, z = 0;
 		if (s->multi) free(s->multi);
-		if (n_occ > n_multi + 1) { // if there are too many hits, generate none of them
+		if (s->n_occ > n_multi + 1) { // if there are too many hits, generate none of them
 			s->multi = 0; s->n_multi = 0;
 			return;
 		}
@@ -62,7 +62,7 @@ void bwa_aln2seq_core(int n_aln, const bwt_aln1_t *aln, bwa_seq_t *s, int set_ma
 		 * here. In principle, due to the requirement above, we can
 		 * simply output all hits, but the following samples "rest"
 		 * number of random hits. */
-		rest = n_occ > n_multi + 1? n_multi + 1 : n_occ; // find one additional for ->sa
+		rest = s->n_occ > n_multi + 1? n_multi + 1 : s->n_occ; // find one additional for ->sa
 		s->multi = calloc(rest, sizeof(bwt_multi1_t));
 		for (k = 0; k < n_aln; ++k) {
 			const bwt_aln1_t *q = aln + k;
@@ -477,6 +477,7 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				}
 			}
 		}
+		err_printf("\tHN:i:%d", p->n_occ);
 		err_putchar('\n');
 	} else { // this read has no match
 		//ubyte_t *s = p->strand? p->rseq : p->seq;

@@ -76,6 +76,7 @@ typedef struct {
 	// multiple hits
 	int n_multi;
 	bwt_multi1_t *multi;
+	int n_occ; // total # of hits found, not just those reported in XA, output in HN
 	// alignment information
 	bwtint_t sa, pos;
 	uint64_t c1:28, c2:28, seQ:8; // number of top1 and top2 hits; single-end mapQ
