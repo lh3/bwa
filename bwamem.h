@@ -66,8 +66,8 @@ typedef struct {
 	int min_chain_weight;
 	int max_chain_extend;
 	float split_factor;     // split into a seed if MEM is longer than min_seed_len*split_factor
-	int split_width;        // split into a seed if its occurence is smaller than this value
-	int max_occ;            // skip a seed if its occurence is larger than this value
+	int split_width;        // split into a seed if its occurrence is smaller than this value
+	int max_occ;            // skip a seed if its occurrence is larger than this value
 	int max_chain_gap;      // do not chain seed if it is max_chain_gap-bp away from the closest seed
 	int n_threads;          // number of threads
 	int chunk_size;         // process chunk_size-bp sequences in a batch
