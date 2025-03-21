@@ -69,7 +69,7 @@ if (arguments.length == getopt.ind) {
 	print("");
 	print("Note: The output is TAB delimited with each GT line consisting of allele1, allele2,");
 	print("      #mismatches/gaps on primary exons, #mismatches/gaps on other exons and #exons");
-	print("      used in typing. If unusure, use the first GT line as the final genotype.\n");
+	print("      used in typing. If unsure, use the first GT line as the final genotype.\n");
 	exit(1);
 }
 
