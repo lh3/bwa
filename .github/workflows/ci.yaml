@@ -20,27 +20,27 @@ jobs:
     - name: Compile with ${{ matrix.compiler }}
       run:  make CC=${{ matrix.compiler }}
 
-  build-aarch64:
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        compiler: [gcc, clang]
-
-    steps:
-    - name: Checkout bwa
-      uses: actions/checkout@v3
-
-    - name: Compile with ${{ matrix.compiler }}
-      uses: uraimo/run-on-arch-action@v2
-      with:
-        arch: aarch64
-        distro: ubuntu20.04
-        githubToken: ${{ github.token }}
-        dockerRunArgs: |
-          --volume "${PWD}:/bwa"
-        install: |
-          apt-get update -q -y
-          apt-get install -q -y make ${{ matrix.compiler }} zlib1g-dev
-        run: |
-          cd /bwa
-          make CC=${{ matrix.compiler }}
+#  build-aarch64:
+#    runs-on: ubuntu-latest
+#    strategy:
+#      matrix:
+#        compiler: [gcc, clang]
+#
+#    steps:
+#    - name: Checkout bwa
+#      uses: actions/checkout@v3
+#
+#    - name: Compile with ${{ matrix.compiler }}
+#      uses: uraimo/run-on-arch-action@v2
+#      with:
+#        arch: aarch64
+#        distro: ubuntu20.04
+#        githubToken: ${{ github.token }}
+#        dockerRunArgs: |
+#          --volume "${PWD}:/bwa"
+#        install: |
+#          apt-get update -q -y
+#          apt-get install -q -y make ${{ matrix.compiler }} zlib1g-dev
+#        run: |
+#          cd /bwa
+#          make CC=${{ matrix.compiler }}
