@@ -423,6 +423,8 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 		}
 	}
 	if (n_HD == 0) err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
+	else if (bwa_verbose >= 2)
+		fprintf(stderr, "[W::%s] please don't include @HD with option -H. Continue anyway.\n", __func__);
 	if (n_SQ == 0) {
 		for (i = 0; i < bns->n_seqs; ++i) {
 			err_printf("@SQ\tSN:%s\tLN:%d", bns->anns[i].name, bns->anns[i].len);
