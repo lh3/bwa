@@ -422,6 +422,7 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 			p += 4;
 		}
 	}
+	if (n_HD == 0) err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
 	if (n_SQ == 0) {
 		for (i = 0; i < bns->n_seqs; ++i) {
 			err_printf("@SQ\tSN:%s\tLN:%d", bns->anns[i].name, bns->anns[i].len);
@@ -430,9 +431,6 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 		}
 	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
 		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
-	if (n_HD == 0) {
-		err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
-	}
 	if (hdr_line) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }
