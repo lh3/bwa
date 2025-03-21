@@ -165,7 +165,7 @@ static int pairing(bwa_seq_t *p[2], pe_data_t *d, const pe_opt_t *opt, int s_mm,
 	// here v>=u. When ii is set, we check insert size with ii; otherwise with opt->max_isize
 #define __pairing_aux(u,v) do { \
 		bwtint_t l = (v).x + p[(v).y&1]->len - ((u).x); \
-		if ((u).x != (uint64_t)-1 && (v).x > (u).x && l >= max_len \
+		if ((u).x != (uint64_t)-1 && (v).x >= (u).x && l >= max_len \
 			&& ((ii->high && l <= ii->high_bayesian) || (ii->high == 0 && l <= opt->max_isize))) \
 		{ \
 			uint64_t s = d->aln[(v).y&1].a[(v).y>>2].score + d->aln[(u).y&1].a[(u).y>>2].score; \
