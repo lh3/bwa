@@ -17,19 +17,22 @@ SUBDIRS=	.
 ifeq ($(shell uname -s),Linux)
 	LIBS += -lrt
 endif
+ifeq ($(shell uname -s),GNU/kFreeBSD)
+	LIBS += -lrt
+endif
 
 .SUFFIXES:.c .o .cc
 
 .c.o:
-		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $< -o $@
+		$(CC) -c $(CFLAGS) $(DFLAGS) $(INCLUDES) $(CPPFLAGS) $< -o $@
 
 all:$(PROG)
 
 bwa:libbwa.a $(AOBJS) main.o
-		$(CC) $(CFLAGS) $(DFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
+		$(CC) $(CFLAGS) $(LDFLAGS) $(AOBJS) main.o -o $@ -L. -lbwa $(LIBS)
 
 bwamem-lite:libbwa.a example.o
-		$(CC) $(CFLAGS) $(DFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
+		$(CC) $(CFLAGS) $(LDFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
@@ -38,7 +41,7 @@ clean:
 		rm -f gmon.out *.o a.out $(PROG) *~ *.a
 
 depend:
-	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) -- *.c )
+	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) $(CPPFLAGS) -- *.c )
 
 # DO NOT DELETE THIS LINE -- make depend depends on it.
 
@@ -76,7 +79,7 @@ fastmap.o: bwa.h bntseq.h bwt.h bwamem.h kvec.h malloc_wrap.h utils.h kseq.h
 is.o: malloc_wrap.h
 kopen.o: malloc_wrap.h
 kstring.o: kstring.h malloc_wrap.h
-ksw.o: ksw.h malloc_wrap.h
+ksw.o: ksw.h neon_sse.h scalar_sse.h malloc_wrap.h
 main.o: kstring.h malloc_wrap.h utils.h
 malloc_wrap.o: malloc_wrap.h
 maxk.o: bwa.h bntseq.h bwt.h bwamem.h kseq.h malloc_wrap.h

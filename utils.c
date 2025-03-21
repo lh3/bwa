@@ -1,6 +1,8 @@
 /* The MIT License
 
-   Copyright (c) 2008 Genome Research Ltd (GRL).
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -22,8 +24,6 @@
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 */
-
-/* Contact: Heng Li <lh3@sanger.ac.uk> */
 #define FSYNC_ON_FLUSH
 
 #include <stdio.h>
@@ -279,17 +279,28 @@ int err_gzclose(gzFile file)
  * Timer *
  *********/
 
-double cputime()
+double cputime(void)
 {
 	struct rusage r;
 	getrusage(RUSAGE_SELF, &r);
 	return r.ru_utime.tv_sec + r.ru_stime.tv_sec + 1e-6 * (r.ru_utime.tv_usec + r.ru_stime.tv_usec);
 }
 
-double realtime()
+double realtime(void)
 {
 	struct timeval tp;
 	struct timezone tzp;
 	gettimeofday(&tp, &tzp);
 	return tp.tv_sec + tp.tv_usec * 1e-6;
+}
+
+long peakrss(void)
+{
+	struct rusage r;
+	getrusage(RUSAGE_SELF, &r);
+#ifdef __linux__
+	return r.ru_maxrss * 1024;
+#else
+	return r.ru_maxrss;
+#endif
 }

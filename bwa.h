@@ -1,3 +1,29 @@
+/* The MIT License
+
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+*/
 #ifndef BWA_H_
 #define BWA_H_
 
@@ -17,6 +43,8 @@
 #define BWTALGO_BWTSW 2
 #define BWTALGO_IS    3
 
+#define BWA_DBG_QNAME 0x1
+
 typedef struct {
 	bwt_t    *bwt; // FM-index
 	bntseq_t *bns; // information on the reference sequences
@@ -32,7 +60,7 @@ typedef struct {
 	char *name, *comment, *seq, *qual, *sam;
 } bseq1_t;
 
-extern int bwa_verbose;
+extern int bwa_verbose, bwa_dbg;
 extern char bwa_rg_id[256];
 
 #ifdef __cplusplus

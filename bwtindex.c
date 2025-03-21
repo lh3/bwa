@@ -1,6 +1,8 @@
 /* The MIT License
 
-   Copyright (c) 2008 Genome Research Ltd (GRL).
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -22,9 +24,6 @@
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 */
-
-/* Contact: Heng Li <lh3@sanger.ac.uk> */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -235,7 +234,7 @@ int bwa_index(int argc, char *argv[]) // the "index" command
 		fprintf(stderr, "         -6        index files named as <in.fasta>.64.* instead of <in.fasta>.* \n");
 		fprintf(stderr, "\n");
 		fprintf(stderr,	"Warning: `-a bwtsw' does not work for short genomes, while `-a is' and\n");
-		fprintf(stderr, "         `-a div' do not work not for long genomes.\n\n");
+		fprintf(stderr, "         `-a div' do not work for long genomes.\n\n");
 		return 1;
 	}
 	if (prefix == 0) {

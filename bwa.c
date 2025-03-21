@@ -1,3 +1,29 @@
+/* The MIT License
+
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
+
+   Permission is hereby granted, free of charge, to any person obtaining
+   a copy of this software and associated documentation files (the
+   "Software"), to deal in the Software without restriction, including
+   without limitation the rights to use, copy, modify, merge, publish,
+   distribute, sublicense, and/or sell copies of the Software, and to
+   permit persons to whom the Software is furnished to do so, subject to
+   the following conditions:
+
+   The above copyright notice and this permission notice shall be
+   included in all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+   BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+   ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+   CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+   SOFTWARE.
+*/
 #include <string.h>
 #include <stdio.h>
 #include <zlib.h>
@@ -14,6 +40,7 @@
 #endif
 
 int bwa_verbose = 3;
+int bwa_dbg = 0;
 char bwa_rg_id[256];
 char *bwa_pg;
 
@@ -379,10 +406,17 @@ int bwa_idx2mem(bwaidx_t *idx)
 
 void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 {
-	int i, n_SQ = 0;
+	int i, n_HD = 0, n_SQ = 0;
 	extern char *bwa_pg;
+	
 	if (hdr_line) {
+		// check for HD line
 		const char *p = hdr_line;
+		if ((p = strstr(p, "@HD")) != 0) {
+			++n_HD;
+		}	
+		// check for SQ lines
+		p = hdr_line;
 		while ((p = strstr(p, "@SQ\t")) != 0) {
 			if (p == hdr_line || *(p-1) == '\n') ++n_SQ;
 			p += 4;
@@ -396,6 +430,9 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 		}
 	} else if (n_SQ != bns->n_seqs && bwa_verbose >= 2)
 		fprintf(stderr, "[W::%s] %d @SQ lines provided with -H; %d sequences in the index. Continue anyway.\n", __func__, n_SQ, bns->n_seqs);
+	if (n_HD == 0) {
+		err_printf("@HD\tVN:1.5\tSO:unsorted\tGO:query\n");
+	}
 	if (hdr_line) err_printf("%s\n", hdr_line);
 	if (bwa_pg) err_printf("%s\n", bwa_pg);
 }

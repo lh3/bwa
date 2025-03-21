@@ -1,6 +1,8 @@
 /* The MIT License
 
-   Copyright (c) 2008 Genome Research Ltd (GRL).
+   Copyright (c) 2018-     Dana-Farber Cancer Institute
+                 2009-2018 Broad Institute, Inc.
+                 2008-2009 Genome Research Ltd. (GRL)
 
    Permission is hereby granted, free of charge, to any person obtaining
    a copy of this software and associated documentation files (the
@@ -22,9 +24,6 @@
    CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
    SOFTWARE.
 */
-
-/* Contact: Heng Li <lh3@sanger.ac.uk> */
-
 #ifndef LH3_UTILS_H
 #define LH3_UTILS_H
 
@@ -85,8 +84,9 @@ extern "C" {
 	int err_fclose(FILE *stream);
 	int err_gzclose(gzFile file);
 
-	double cputime();
-	double realtime();
+	double cputime(void);
+	double realtime(void);
+	long peakrss(void);
 
 	void ks_introsort_64 (size_t n, uint64_t *a);
 	void ks_introsort_128(size_t n, pair64_t *a);

@@ -1,3 +1,18 @@
+Release 0.7.18 (14 April 2024)
+------------------------------
+
+Notable changes:
+
+ * Support ARM64 (#359)
+ * Output SAM header line (#336)
+ * Added the XB tag to output alignment score and mapping quality
+ * Fixed a compiling error with GCC 10 (#267)
+ * Avoid potential buffer overflow (#232)
+
+(0.7.18: 14 April 2024, r1243)
+
+
+
 Release 0.7.17 (23 October 2017)
 --------------------------------
 
@@ -1198,7 +1213,7 @@ Beta Release 0.1.4 (22 July, 2008)
 Beta Release 0.1.3 (21 July, 2008)
 ----------------------------------
 
-Improve the speed with some tricks on retrieving occurences. The results
+Improve the speed with some tricks on retrieving occurrences. The results
 should be exactly the same as that of 0.1.2.
 
 (0.1.3: 21 July 2008, r382)

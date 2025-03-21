@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/lh3/bwa.svg?branch=dev)](https://travis-ci.org/lh3/bwa)
+[![Build Status](https://github.com/lh3/bwa/actions/workflows/ci.yaml/badge.svg)](https://github.com/lh3/bwa/actions)
 [![SourceForge Downloads](https://img.shields.io/sourceforge/dt/bio-bwa.svg?label=SF%20downloads)](https://sourceforge.net/projects/bio-bwa/files/?source=navbar)
 [![GitHub Downloads](https://img.shields.io/github/downloads/lh3/bwa/total.svg?style=flat&label=GitHub%20downloads)](https://github.com/lh3/bwa/releases)
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/bwa.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/bwa)
