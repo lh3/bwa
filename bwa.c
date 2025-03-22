@@ -412,9 +412,10 @@ void bwa_print_sam_hdr(const bntseq_t *bns, const char *hdr_line)
 	if (hdr_line) {
 		// check for HD line
 		const char *p = hdr_line;
-		if ((p = strstr(p, "@HD")) != 0) {
-			++n_HD;
-		}	
+		while ((p = strstr(p, "@HD\t")) != 0) {
+			if (p == hdr_line || *(p-1) == '\n') ++n_HD;
+			p += 4;
+		}
 		// check for SQ lines
 		p = hdr_line;
 		while ((p = strstr(p, "@SQ\t")) != 0) {

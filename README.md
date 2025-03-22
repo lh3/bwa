@@ -6,8 +6,7 @@
 **Note: [minimap2][minimap2] has replaced BWA-MEM for __PacBio and Nanopore__ read
 alignment.** It retains all major BWA-MEM features, but is ~50 times as fast,
 more versatile, more accurate and produces better base-level alignment.
-A beta version of [BWA-MEM2][bwa-mem2] has been released for short-read mapping.
-BWA-MEM2 is about twice as fast as BWA-MEM and outputs near identical alignments.
+[BWA-MEM2][bwa-mem2] is 50-100% faster than BWA-MEM and outputs identical alignments.
 
 [minimap2]: https://github.com/lh3/minimap2
 [bwa-mem2]: https://github.com/bwa-mem2/bwa-mem2
