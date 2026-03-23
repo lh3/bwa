@@ -218,6 +218,7 @@ typedef struct __kstring_t {
 	typedef struct {							\
 		kstring_t name, comment, seq, qual;		\
 		int last_char;							\
+        int is_buffered;        /* NEW */       \
 		kstream_t *f;							\
 	} kseq_t;
 
