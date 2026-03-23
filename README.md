@@ -84,6 +84,8 @@ do not have plan to submit it to a peer-reviewed journal in the near future.
 6. [Does BWA work with ALT contigs in the GRCh38 release?](#altctg)
 7. [Can I just run BWA-MEM against GRCh38+ALT without post-processing?](#postalt)
 8. [Why does BWA use a lot of memory?](#largemem)
+9. [Why are some paired-end reads missing pair flags with mixed SE/PE input?](#smartpair)
+
 
 #### <a name="type"></a>1. What types of data does BWA work with?
 
@@ -173,6 +175,16 @@ However, in a coordinate-sorted FASTQ file, a whole batch could consist of centr
 Such a batch will take a lot more memory and time to map; the insert size estimate will be distorted as well.
 General rule: ***NEVER*** use Picard SamToFastq on coordiate-sorted BAM;
 use samtools [collate+fastq][remap] instead.
+
+#### <a name="smartpair"></a>9. Why are some paired-end reads missing pair flags with mixed SE/PE input?
+
+When using smart-pairing with a mix of single-end and paired-end reads,
+BWA reads a fixed number of records per chunk **before** evaluating pairing.
+If a paired-end read spans a chunk boundary (i.e. read 1 and read 2 fall in
+different chunks), the pair flags (`0x1`, `0x2`, `0x8`) will not be set correctly.
+
+**Workaround:** separate SE and PE reads into different files and align them
+independently, then merge the resulting BAMs with `samtools merge`.
 
 [remap]: https://lh3.github.io/2021/07/06/remapping-an-aligned-bam
 [1]: http://en.wikipedia.org/wiki/GNU_General_Public_License
