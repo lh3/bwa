@@ -270,6 +270,18 @@ Usage:
 Verified: `bwa gpualn` .sai md5 == golden (eecf35c1); `bwa gpualn -S` SAM records == `bwa samse`;
 @PG is proper bwa provenance (ID:bwa). CPU-only `bwa` regression-checked (no gpualn, no CUDA link).
 
+## Validation vs the PRODUCTION BAM (/home/dnastorage/aDNApipeline/AVA1B_aln/)
+Reference: `AVA1B_aln.short.bam` = production `bwa aln -l 1024 -n 0.01 -o 2` + `samse` + sort, built
+with bwa **0.7.18-r1243-dirty** on the same 3,948,528 reads (20,701 mapped, 0.52%). Compared to
+`bwa gpualn -S` output (this tree): extracted mapped records, dropped the RG:Z tag (production used
+a different @RG ID), sorted by QNAME:
+- mapped count identical (20,701 vs 20,701); mapped read SET identical (same QNAMEs) -> no read
+  changed mapped/unmapped status.
+- **ALL 20,701 mapped records + ALL tags (FLAG/RNAME/POS/MAPQ/CIGAR, XT/NM/X0/X1/XM/XO/XG/MD)
+  byte-identical.** Holds across the 0.7.18-dirty -> 0.7.19 gap (aln/bwtgap core unchanged).
+Only the @RG ID and the SAM @PG line differ -- nothing in the alignments. End-to-end equivalence to
+the production pipeline confirmed.
+
 ## STATUS: GOAL ACHIEVED
 GPU `bwa aln` (BWA-backtrack) for ancient DNA at `-l 1024 -n 0.01 -o 2`, single-end:
 **~5x the 16-core CPU on a full real file, byte-identical .sai, GPU-bound at the FM-index ceiling.**
