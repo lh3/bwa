@@ -81,7 +81,11 @@ int main(int argc, char **argv)
 	fprintf(stderr, "[A] random Occ4: %llu probes\n", (unsigned long long)n_occ);
 	std::vector<uint64_t> hk(n_occ);
 	uint64_t seed = 0x9e3779b97f4a7c15ULL;
-	for (uint64_t i=0;i<n_occ;i++) hk[i] = xorshift64(&seed) % (bwt->seq_len + 1); /* [0,seq_len] */
+	/* FMTEST_KRANGE caps the probed k-range to test L1/L2/HBM working-set effects (locality ceiling) */
+	uint64_t krange = getenv("FMTEST_KRANGE") ? strtoull(getenv("FMTEST_KRANGE"),NULL,10) : (bwt->seq_len + 1);
+	if (krange > bwt->seq_len + 1) krange = bwt->seq_len + 1;
+	fprintf(stderr, "[A] k-range = %llu (%.1f MB of BWT touched)\n", (unsigned long long)krange, krange/4.0/1e6);
+	for (uint64_t i=0;i<n_occ;i++) hk[i] = xorshift64(&seed) % krange;
 	uint64_t *d_ks=NULL, *d_out=NULL;
 	CK(cudaMalloc(&d_ks, n_occ*sizeof(uint64_t)));
 	CK(cudaMalloc(&d_out, n_occ*4*sizeof(uint64_t)));
