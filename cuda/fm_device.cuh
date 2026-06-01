@@ -109,4 +109,36 @@ __device__ __forceinline__ int d_bwt_match_exact(const fmidx_dev fm,
 	return (int)(l - k + 1);
 }
 
+/* mirror of bwt_match_exact_alt(): backward search of str[0..len-1] starting from a
+ * given SA interval (*k0,*l0). Returns interval size or 0; updates *k0,*l0 on match. */
+__device__ __forceinline__ int d_bwt_match_exact_alt(const fmidx_dev fm,
+                                                      const uint8_t *str, int len,
+                                                      uint64_t *k0, uint64_t *l0)
+{
+	uint64_t k = *k0, l = *l0, ok, ol;
+	for (int i = len - 1; i >= 0; --i) {
+		uint8_t c = str[i];
+		if (c > 3) return 0;
+		ok = d_bwt_occ1(fm.bwt, fm.primary, k - 1, c);
+		ol = d_bwt_occ1(fm.bwt, fm.primary, l,     c);
+		k = c_L2[c] + ok + 1;
+		l = c_L2[c] + ol;
+		if (k > l) return 0;
+	}
+	*k0 = k; *l0 = l;
+	return (int)(l - k + 1);
+}
+
+/* mirror of int_log2() in bwtgap.c */
+__device__ __forceinline__ int d_int_log2(uint32_t v)
+{
+	int c = 0;
+	if (v & 0xffff0000u) { v >>= 16; c |= 16; }
+	if (v & 0xff00) { v >>= 8; c |= 8; }
+	if (v & 0xf0)   { v >>= 4; c |= 4; }
+	if (v & 0xc)    { v >>= 2; c |= 2; }
+	if (v & 0x2) c |= 1;
+	return c;
+}
+
 #endif /* FM_DEVICE_CUH */

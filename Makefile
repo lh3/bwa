@@ -48,6 +48,11 @@ NVCCFLAGS?=	-O3 -std=c++14 -arch=$(CUDA_ARCH) -lineinfo
 fmtest:libbwa.a cuda/fmtest.cu cuda/fm_device.cuh
 		$(NVCC) $(NVCCFLAGS) -I. cuda/fmtest.cu -o $@ -L. -lbwa $(LIBS)
 
+# dfstest also needs the CPU aln objects (real bwt_match_gap / bwt_cal_width / read I/O)
+DFSDEPS=	bwtgap.o bwtaln.o bwaseqio.o bamlite.o
+dfstest:libbwa.a $(DFSDEPS) cuda/dfstest.cu cuda/fm_device.cuh
+		$(NVCC) $(NVCCFLAGS) -I. cuda/dfstest.cu $(DFSDEPS) -o $@ -L. -lbwa $(LIBS)
+
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 

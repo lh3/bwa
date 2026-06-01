@@ -1,0 +1,293 @@
+/* Phase 2 step 1: bit-exact device DFS (hit-detection) for bwa aln.
+ *
+ * The device DFS reproduces bwt_match_gap's bounded search tree and reports, per read,
+ * whether ANY hit exists within the initial diff bound (has_hit). Rationale (see
+ * ../CUDA_PORT_PLAN.md sec 6a): for reads that never reach a hit -- and when the
+ * max_entries cap is never hit -- best-first and DFS enumerate the identical node set,
+ * so existence-of-hit on the GPU == (n_aln>0) on the CPU. The ~0.5% reads with hits are
+ * reconciled by the exact CPU bwt_match_gap to yield a bit-exact .sai.
+ *
+ * Host side reuses bwa's real read I/O + preprocessing (bwt_cal_width, complement, per-read
+ * max_diff) so the GPU and CPU see identical (seq, width, opt).
+ *
+ * Build: make dfstest
+ * Run:   ./dfstest <ref.fa> <reads.fq> [golden.sai]
+ *        replicates `bwa aln -l 1024 -n 0.01 -o 2 -t 16`.
+ */
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <cstdint>
+#include <vector>
+#include <cuda_runtime.h>
+
+extern "C" {
+#include "bwt.h"
+#include "bwtaln.h"
+#include "bwtgap.h"
+int bwt_cal_width(const bwt_t *bwt, int len, const ubyte_t *str, bwt_width_t *width); /* not in a header */
+}
+
+#define FM_DEVICE_DEFINE_CONST
+#include "fm_device.cuh"
+
+#define CK(call) do { cudaError_t e_ = (call); if (e_ != cudaSuccess) { \
+	fprintf(stderr, "CUDA error %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e_)); \
+	exit(1); } } while (0)
+
+#define STATE_M 0
+#define STATE_I 1
+#define STATE_D 2
+
+/* compact DFS node (detection needs no scores / ins-del counts / last_diff_pos) */
+struct DFSEntry { uint64_t k, l; int i; uint8_t n_mm, n_gapo, n_gape, state; };
+
+/* per-read parameters that vary (the rest are kernel scalars, identical for all reads) */
+struct ReadParam { uint32_t seq_off, w_off; int len, max_diff; };
+
+/* ---- the device DFS: returns 1 if any hit exists within the initial bound ---- */
+__device__ int d_dfs_has_hit(const fmidx_dev fm, const uint8_t *seq, int len,
+                             const uint64_t *w_w, const int *w_bid, int max_diff,
+                             int max_gapo, int max_gape, int mode, int indel_end_skip,
+                             int max_del_occ, DFSEntry *stk, int cap, int *overflow)
+{
+	int nN = 0;
+	for (int j = 0; j < len; ++j) if (seq[j] > 3) ++nN;
+	if (nN > max_diff) return 0;
+
+	int sp = 0;
+	stk[sp].k = 0; stk[sp].l = fm.seq_len; stk[sp].i = len;
+	stk[sp].n_mm = stk[sp].n_gapo = stk[sp].n_gape = 0; stk[sp].state = STATE_M; ++sp;
+
+	while (sp > 0) {
+		DFSEntry e = stk[--sp];
+		uint64_t k = e.k, l = e.l; int i = e.i;
+		int m = max_diff - (e.n_mm + e.n_gapo);
+		if (mode & BWA_MODE_GAPE) m -= e.n_gape;
+		if (m < 0) continue;
+		if (i > 0 && m < w_bid[i-1]) continue;
+
+		int hit_found = 0;
+		if (i == 0) hit_found = 1;
+		else if (m == 0 && (e.state == STATE_M || (mode & BWA_MODE_GAPE) || e.n_gape == max_gape)) {
+			uint64_t kk = k, ll = l;
+			if (d_bwt_match_exact_alt(fm, seq, i, &kk, &ll)) hit_found = 1;
+			else continue;
+		}
+		if (hit_found) return 1; /* existence is all we need */
+
+		--i;
+		uint64_t cntk[4], cntl[4];
+		d_bwt_2occ4(fm.bwt, fm.primary, k - 1, l, cntk, cntl);
+		uint64_t occ = l - k + 1;
+		int allow_diff = 1, allow_M = 1;
+		if (i > 0) {
+			if (w_bid[i-1] > m - 1) allow_diff = 0;
+			else if (w_bid[i-1] == m-1 && w_bid[i] == m-1 && w_w[i-1] == w_w[i]) allow_M = 0;
+		}
+		int tmp = (mode & BWA_MODE_LOGGAP) ? d_int_log2(e.n_gape + e.n_gapo)/2 + 1
+		                                   : e.n_gapo + e.n_gape;
+		#define PUSH(_i,_k,_l,_mm,_go,_ge,_st) do { \
+			if (sp >= cap) { *overflow = 1; return 1; /* fail-safe: flag for CPU reprocess */ } \
+			stk[sp].k=(_k); stk[sp].l=(_l); stk[sp].i=(_i); \
+			stk[sp].n_mm=(_mm); stk[sp].n_gapo=(_go); stk[sp].n_gape=(_ge); stk[sp].state=(_st); ++sp; \
+		} while (0)
+
+		if (allow_diff && i >= indel_end_skip + tmp && len - i >= indel_end_skip + tmp) {
+			if (e.state == STATE_M) {
+				if (e.n_gapo < max_gapo) {
+					PUSH(i, k, l, e.n_mm, e.n_gapo + 1, e.n_gape, STATE_I); /* insertion */
+					for (int j = 0; j < 4; ++j) {                          /* deletion */
+						uint64_t nk = c_L2[j] + cntk[j] + 1, nl = c_L2[j] + cntl[j];
+						if (nk <= nl) PUSH(i + 1, nk, nl, e.n_mm, e.n_gapo + 1, e.n_gape, STATE_D);
+					}
+				}
+			} else if (e.state == STATE_I) {
+				if (e.n_gape < max_gape)
+					PUSH(i, k, l, e.n_mm, e.n_gapo, e.n_gape + 1, STATE_I);
+			} else { /* STATE_D */
+				if (e.n_gape < max_gape && (e.n_gape + e.n_gapo < max_diff || occ < (uint64_t)max_del_occ)) {
+					for (int j = 0; j < 4; ++j) {
+						uint64_t nk = c_L2[j] + cntk[j] + 1, nl = c_L2[j] + cntl[j];
+						if (nk <= nl) PUSH(i + 1, nk, nl, e.n_mm, e.n_gapo, e.n_gape + 1, STATE_D);
+					}
+				}
+			}
+		}
+		if (allow_diff && allow_M) {
+			for (int j = 1; j <= 4; ++j) {
+				int c = (seq[i] + j) & 3;
+				int is_mm = (j != 4 || seq[i] > 3);
+				uint64_t nk = c_L2[c] + cntk[c] + 1, nl = c_L2[c] + cntl[c];
+				if (nk <= nl) PUSH(i, nk, nl, e.n_mm + is_mm, e.n_gapo, e.n_gape, STATE_M);
+			}
+		} else if (seq[i] < 4) {
+			int c = seq[i] & 3;
+			uint64_t nk = c_L2[c] + cntk[c] + 1, nl = c_L2[c] + cntl[c];
+			if (nk <= nl) PUSH(i, nk, nl, e.n_mm, e.n_gapo, e.n_gape, STATE_M);
+		}
+		#undef PUSH
+	}
+	return 0;
+}
+
+__global__ void k_dfs(fmidx_dev fm, const uint8_t *seq, const uint64_t *w_w, const int *w_bid,
+                      const ReadParam *rp, int nreads, int max_gapo, int max_gape, int mode,
+                      int indel_end_skip, int max_del_occ, DFSEntry *stkpool, int cap,
+                      uint8_t *has_hit, int *overflow)
+{
+	int slot = blockIdx.x * blockDim.x + threadIdx.x;
+	int P = gridDim.x * blockDim.x;
+	DFSEntry *stk = stkpool + (size_t)slot * cap;
+	for (int r = slot; r < nreads; r += P) {
+		ReadParam p = rp[r];
+		has_hit[r] = (uint8_t)d_dfs_has_hit(fm, seq + p.seq_off, p.len,
+			w_w + p.w_off, w_bid + p.w_off, p.max_diff,
+			max_gapo, max_gape, mode, indel_end_skip, max_del_occ, stk, cap, overflow);
+	}
+}
+
+/* ---- write a .sai exactly like bwa_aln_core ---- */
+static void write_sai(const char *fn, const gap_opt_t *opt, int n, int *n_aln, bwt_aln1_t **aln)
+{
+	FILE *f = fopen(fn, "wb");
+	fwrite(SAI_MAGIC, 1, 4, f);
+	fwrite(opt, sizeof(gap_opt_t), 1, f);
+	for (int i = 0; i < n; ++i) {
+		fwrite(&n_aln[i], 4, 1, f);
+		if (n_aln[i]) fwrite(aln[i], sizeof(bwt_aln1_t), n_aln[i], f);
+	}
+	fclose(f);
+}
+
+static int md5cmp(const char *a, const char *b)
+{
+	char cmd[2048]; snprintf(cmd, sizeof cmd, "md5sum '%s' '%s'", a, b);
+	fprintf(stderr, "  "); fflush(stderr); return system(cmd);
+}
+
+int main(int argc, char **argv)
+{
+	if (argc < 3) { fprintf(stderr, "usage: %s <ref.fa> <reads.fq> [golden.sai]\n", argv[0]); return 1; }
+	const char *prefix = argv[1], *reads_fn = argv[2], *golden = argc > 3 ? argv[3] : NULL;
+
+	/* opt for: bwa aln -l 1024 -n 0.01 -o 2 -t 16 */
+	gap_opt_t *opt = gap_init_opt();
+	opt->seed_len = 1024; opt->fnr = 0.01; opt->max_diff = -1; opt->max_gapo = 2; opt->n_threads = 16;
+
+	char bwt_fn[4096]; snprintf(bwt_fn, sizeof bwt_fn, "%s.bwt", prefix);
+	fprintf(stderr, "[load] %s\n", bwt_fn);
+	bwt_t *bwt = bwt_restore_bwt(bwt_fn);
+	if (!bwt) { fprintf(stderr, "failed to load bwt\n"); return 1; }
+
+	/* upload index + constants */
+	uint32_t *d_bwt = NULL;
+	CK(cudaMalloc(&d_bwt, bwt->bwt_size * sizeof(uint32_t)));
+	CK(cudaMemcpy(d_bwt, bwt->bwt, bwt->bwt_size * sizeof(uint32_t), cudaMemcpyHostToDevice));
+	CK(cudaMemcpyToSymbol(c_cnt_table, bwt->cnt_table, sizeof(uint32_t) * 256));
+	CK(cudaMemcpyToSymbol(c_L2, bwt->L2, sizeof(uint64_t) * 5));
+	fmidx_dev fm{ d_bwt, bwt->primary, bwt->seq_len };
+
+	/* read ALL reads in one batch (sub10k < 0x40000), exactly as the driver would */
+	bwa_seqio_t *ks = bwa_seq_open(reads_fn);
+	int n_seqs = 0;
+	bwa_seq_t *seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt->mode, opt->trim_qual);
+	bwa_seq_close(ks);
+	fprintf(stderr, "[reads] %d\n", n_seqs);
+
+	/* replicate bwa_cal_sa_reg_gap preprocessing + CPU reference */
+	gap_opt_t local_opt = *opt;
+	int max_len = 0; for (int i = 0; i < n_seqs; ++i) if (seqs[i].len > max_len) max_len = seqs[i].len;
+	if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff(max_len, BWA_AVG_ERR, opt->fnr);
+	if (local_opt.max_diff < local_opt.max_gapo) local_opt.max_gapo = local_opt.max_diff;
+	gap_stack_t *stack = gap_init_stack(local_opt.max_diff, local_opt.max_gapo, local_opt.max_gape, &local_opt);
+
+	std::vector<uint8_t> seq_flat; std::vector<uint64_t> w_flat; std::vector<int> bid_flat;
+	std::vector<ReadParam> rp(n_seqs);
+	std::vector<int> n_aln_cpu(n_seqs);
+	std::vector<bwt_aln1_t*> aln_cpu(n_seqs, NULL);
+	bwt_width_t *w = NULL; int max_w = 0;
+
+	for (int i = 0; i < n_seqs; ++i) {
+		bwa_seq_t *p = &seqs[i];
+		if (max_w < p->len) { max_w = p->len; w = (bwt_width_t*)realloc(w, (max_w + 1) * sizeof(bwt_width_t)); }
+		memset(w, 0, (p->len + 1) * sizeof(bwt_width_t));
+		bwt_cal_width(bwt, p->len, p->seq, w);
+		if (opt->fnr > 0.0) local_opt.max_diff = bwa_cal_maxdiff(p->len, BWA_AVG_ERR, opt->fnr);
+		local_opt.seed_len = opt->seed_len < p->len ? opt->seed_len : 0x7fffffff;
+		for (int j = 0; j < p->len; ++j) p->seq[j] = p->seq[j] > 3 ? 4 : 3 - p->seq[j]; /* complement */
+
+		/* record inputs for the GPU (identical seq + width + per-read max_diff) */
+		rp[i].seq_off = seq_flat.size(); rp[i].w_off = w_flat.size();
+		rp[i].len = p->len; rp[i].max_diff = local_opt.max_diff;
+		for (int j = 0; j < p->len; ++j) seq_flat.push_back(p->seq[j]);
+		for (int j = 0; j <= p->len; ++j) { w_flat.push_back(w[j].w); bid_flat.push_back(w[j].bid); }
+
+		/* CPU reference (len <= seed_len so seed_w is NULL, matching the driver) */
+		int na = 0;
+		bwt_width_t *seed_w = p->len <= opt->seed_len ? (bwt_width_t*)0 : (bwt_width_t*)0; /* always NULL here */
+		aln_cpu[i] = bwt_match_gap(bwt, p->len, p->seq, w, seed_w, &local_opt, &na, stack);
+		n_aln_cpu[i] = na;
+	}
+	free(w);
+
+	/* check 1: CPU-only .sai == golden (validates the harness replicates the driver) */
+	write_sai("/tmp/dfstest.cpu.sai", opt, n_seqs, n_aln_cpu.data(), aln_cpu.data());
+	long n_hit_cpu = 0; for (int i = 0; i < n_seqs; ++i) if (n_aln_cpu[i] > 0) ++n_hit_cpu;
+	fprintf(stderr, "[cpu] reads with hits: %ld (%.2f%%)\n", n_hit_cpu, 100.0 * n_hit_cpu / n_seqs);
+	if (golden) { fprintf(stderr, "[check1] CPU-only .sai vs golden:\n"); md5cmp("/tmp/dfstest.cpu.sai", golden); }
+
+	/* ---- GPU DFS ---- */
+	uint8_t *d_seq; uint64_t *d_ww; int *d_wbid; ReadParam *d_rp; uint8_t *d_hit; int *d_ovf;
+	CK(cudaMalloc(&d_seq, seq_flat.size()));
+	CK(cudaMalloc(&d_ww, w_flat.size() * 8));
+	CK(cudaMalloc(&d_wbid, bid_flat.size() * 4));
+	CK(cudaMalloc(&d_rp, n_seqs * sizeof(ReadParam)));
+	CK(cudaMalloc(&d_hit, n_seqs));
+	CK(cudaMalloc(&d_ovf, 4)); CK(cudaMemset(d_ovf, 0, 4));
+	CK(cudaMemcpy(d_seq, seq_flat.data(), seq_flat.size(), cudaMemcpyHostToDevice));
+	CK(cudaMemcpy(d_ww, w_flat.data(), w_flat.size() * 8, cudaMemcpyHostToDevice));
+	CK(cudaMemcpy(d_wbid, bid_flat.data(), bid_flat.size() * 4, cudaMemcpyHostToDevice));
+	CK(cudaMemcpy(d_rp, rp.data(), n_seqs * sizeof(ReadParam), cudaMemcpyHostToDevice));
+
+	int blockDim = 64, nblocks = 128, P = blockDim * nblocks, cap = 8192;
+	DFSEntry *d_stk; size_t poolsz = (size_t)P * cap * sizeof(DFSEntry);
+	fprintf(stderr, "[gpu] DFS pool: %d slots x %d entries = %.0f MB\n", P, cap, poolsz / 1e6);
+	CK(cudaMalloc(&d_stk, poolsz));
+
+	cudaEvent_t t0, t1; CK(cudaEventCreate(&t0)); CK(cudaEventCreate(&t1));
+	CK(cudaEventRecord(t0));
+	k_dfs<<<nblocks, blockDim>>>(fm, d_seq, d_ww, d_wbid, d_rp, n_seqs,
+		local_opt.max_gapo, local_opt.max_gape, local_opt.mode, local_opt.indel_end_skip,
+		local_opt.max_del_occ, d_stk, cap, d_hit, d_ovf);
+	CK(cudaEventRecord(t1)); CK(cudaEventSynchronize(t1)); CK(cudaGetLastError());
+	float ms = 0; CK(cudaEventElapsedTime(&ms, t0, t1));
+
+	std::vector<uint8_t> has_hit(n_seqs); int ovf = 0;
+	CK(cudaMemcpy(has_hit.data(), d_hit, n_seqs, cudaMemcpyDeviceToHost));
+	CK(cudaMemcpy(&ovf, d_ovf, 4, cudaMemcpyDeviceToHost));
+	fprintf(stderr, "[gpu] DFS time %.1f ms  (%.0f reads/s)  stack_overflow=%d\n",
+		ms, n_seqs / (ms / 1e3), ovf);
+
+	/* check 3: has_hit vs CPU n_aln>0 */
+	long fn = 0, fp = 0, gpu_hit = 0;
+	for (int i = 0; i < n_seqs; ++i) {
+		if (has_hit[i]) ++gpu_hit;
+		int cpu = n_aln_cpu[i] > 0;
+		if (cpu && !has_hit[i]) { if (fn < 10) fprintf(stderr, "  FALSE-NEG read %d (cpu n_aln=%d)\n", i, n_aln_cpu[i]); ++fn; }
+		if (!cpu && has_hit[i]) ++fp; /* harmless: CPU reprocess yields n_aln=0 */
+	}
+	fprintf(stderr, "[check3] gpu has_hit=%ld  false_neg=%ld (MUST be 0)  false_pos=%ld (harmless)\n",
+		gpu_hit, fn, fp);
+
+	/* check 2: hybrid .sai (GPU gates; CPU aln only for flagged reads) == golden */
+	std::vector<int> n_aln_hyb(n_seqs, 0);
+	std::vector<bwt_aln1_t*> aln_hyb(n_seqs, NULL);
+	for (int i = 0; i < n_seqs; ++i)
+		if (has_hit[i]) { n_aln_hyb[i] = n_aln_cpu[i]; aln_hyb[i] = aln_cpu[i]; }
+	write_sai("/tmp/dfstest.hybrid.sai", opt, n_seqs, n_aln_hyb.data(), aln_hyb.data());
+	if (golden) { fprintf(stderr, "[check2] hybrid .sai vs golden:\n"); md5cmp("/tmp/dfstest.hybrid.sai", golden); }
+
+	fprintf(stderr, "[result] %s\n", (fn == 0) ? "DFS hit-detection is COMPLETE (no false negatives)" : "FAIL: false negatives present");
+	return fn == 0 ? 0 : 2;
+}
