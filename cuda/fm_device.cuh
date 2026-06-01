@@ -1,0 +1,112 @@
+/* Phase 1: device-side BWA FM-index (Occ) primitives.
+ *
+ * Faithful CUDA mirrors of bwt_occ4 / bwt_2occ4 / bwt_occ / bwt_match_exact
+ * from bwt.c, operating directly on the existing on-disk BWT layout:
+ *   - bwt->bwt is a uint32 array of 64-byte buckets (one cache line each):
+ *       [ 4 x uint64 Occ checkpoints ][ 8 x uint32 packed 2-bit BWT (128 bases) ]
+ *   - OCC_INTERVAL = 128 (OCC_INTV_SHIFT = 7), so this code assumes that layout
+ *     exactly as bwt.h does.
+ * The suffix array is intentionally NOT needed here: bwa aln emits SA *intervals*,
+ * and SA->coordinate happens later in samse on the host.
+ *
+ * cnt_table[256] and L2[5] live in constant memory (see fm_device.cu definitions).
+ */
+#ifndef FM_DEVICE_CUH
+#define FM_DEVICE_CUH
+
+#include <stdint.h>
+
+#define D_OCC_INTV_MASK 0x7fULL   /* OCC_INTERVAL(128) - 1 */
+
+/* constant-memory tables; defined once in the translation unit that sets
+ * FM_DEVICE_DEFINE_CONST before including this header. */
+#ifdef FM_DEVICE_DEFINE_CONST
+__constant__ uint32_t c_cnt_table[256];
+__constant__ uint64_t c_L2[5];
+#else
+extern __constant__ uint32_t c_cnt_table[256];
+extern __constant__ uint64_t c_L2[5];
+#endif
+
+/* lightweight handle passed to kernels (scalars + device BWT pointer) */
+struct fmidx_dev {
+	const uint32_t *bwt;   /* device copy of bwt->bwt */
+	uint64_t primary;      /* S^{-1}(0) */
+	uint64_t seq_len;      /* number of symbols in the BWT */
+};
+
+/* __occ_aux4: count A/C/G/T in a 32-bit word (16 bases) via the packed cnt_table.
+ * Returns 4 byte-packed counts (A in bits 0-7, C in 8-15, G in 16-23, T in 24-31). */
+__device__ __forceinline__ uint32_t d_occ_aux4(uint32_t b)
+{
+	return c_cnt_table[b & 0xff] + c_cnt_table[(b >> 8) & 0xff]
+	     + c_cnt_table[(b >> 16) & 0xff] + c_cnt_table[b >> 24];
+}
+
+/* mirror of bwt_occ4(): cumulative A/C/G/T counts in BWT[0..k]. */
+__device__ __forceinline__ void d_bwt_occ4(const uint32_t *__restrict__ bwt,
+                                            uint64_t primary, uint64_t k,
+                                            uint64_t cnt[4])
+{
+	if (k == (uint64_t)-1) { cnt[0] = cnt[1] = cnt[2] = cnt[3] = 0; return; }
+	k -= (k >= primary);                         /* $ is not in bwt */
+	const uint32_t *p = bwt + ((k >> 7) << 4);   /* bucket base (bwt_occ_intv) */
+	/* 4 x uint64 checkpoint counts at the bucket head */
+	const uint64_t *pc = (const uint64_t *)p;
+	cnt[0] = __ldg(pc + 0); cnt[1] = __ldg(pc + 1);
+	cnt[2] = __ldg(pc + 2); cnt[3] = __ldg(pc + 3);
+	p += 8;                                       /* skip the 4 uint64 (= 8 uint32) */
+	uint64_t x = 0;
+	const uint32_t *end = p + ((k >> 4) - ((k & ~D_OCC_INTV_MASK) >> 4));
+	for (; p < end; ++p) x += d_occ_aux4(__ldg(p));
+	uint32_t tmp = __ldg(p) & ~((1U << ((~k & 15) << 1)) - 1);
+	x += (uint64_t)d_occ_aux4(tmp) - (~k & 15);
+	cnt[0] += x & 0xff; cnt[1] += (x >> 8) & 0xff;
+	cnt[2] += (x >> 16) & 0xff; cnt[3] += x >> 24;
+}
+
+/* mirror of bwt_2occ4(): Occ4 at both ends of an SA interval.
+ * Correctness-first: two independent occ4 probes (the shared-bucket fast path in
+ * bwt_2occ4 is a pure optimization and yields identical values; added later). */
+__device__ __forceinline__ void d_bwt_2occ4(const uint32_t *__restrict__ bwt,
+                                             uint64_t primary, uint64_t k, uint64_t l,
+                                             uint64_t cntk[4], uint64_t cntl[4])
+{
+	d_bwt_occ4(bwt, primary, k, cntk);
+	d_bwt_occ4(bwt, primary, l, cntl);
+}
+
+/* mirror of bwt_occ() for a single character c. occ4(seq_len) already yields the
+ * total count of c (== L2[c+1]-L2[c]), so no special seq_len branch is needed. */
+__device__ __forceinline__ uint64_t d_bwt_occ1(const uint32_t *__restrict__ bwt,
+                                                uint64_t primary, uint64_t k, int c)
+{
+	if (k == (uint64_t)-1) return 0;
+	uint64_t cnt[4];
+	d_bwt_occ4(bwt, primary, k, cnt);
+	return cnt[c];
+}
+
+/* mirror of bwt_match_exact(): backward search of str[0..len-1].
+ * Returns SA interval size (l-k+1) and the interval in *sa_b/*sa_e, 0 on no match. */
+__device__ __forceinline__ int d_bwt_match_exact(const fmidx_dev fm,
+                                                  const uint8_t *str, int len,
+                                                  uint64_t *sa_b, uint64_t *sa_e)
+{
+	uint64_t k = 0, l = fm.seq_len, ok, ol;
+	for (int i = len - 1; i >= 0; --i) {
+		uint8_t c = str[i];
+		if (c > 3) return 0;                 /* N -> no match */
+		ok = d_bwt_occ1(fm.bwt, fm.primary, k - 1, c);
+		ol = d_bwt_occ1(fm.bwt, fm.primary, l,     c);
+		k = c_L2[c] + ok + 1;
+		l = c_L2[c] + ol;
+		if (k > l) break;
+	}
+	if (k > l) return 0;
+	if (sa_b) *sa_b = k;
+	if (sa_e) *sa_e = l;
+	return (int)(l - k + 1);
+}
+
+#endif /* FM_DEVICE_CUH */

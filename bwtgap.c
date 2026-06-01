@@ -12,6 +12,50 @@
 #define STATE_I 1
 #define STATE_D 2
 
+#ifdef ALN_PROFILE
+/* Phase-0 instrumentation: per-read search-tree size distribution.
+ * Guarded so the normal build and the eventual CUDA port stay clean.
+ * Histograms use log2 bins; updated with GCC atomics (thread-safe under -t N). */
+#include <stdatomic.h>
+#define ALN_PROF_BINS 40
+static atomic_llong g_prof_peak_hist[ALN_PROF_BINS];   // bins of peak stack->n_entries
+static atomic_llong g_prof_pop_hist[ALN_PROF_BINS];    // bins of nodes expanded (pops)
+static atomic_llong g_prof_n_reads, g_prof_n_cap, g_prof_n_zero;
+static atomic_llong g_prof_sum_peak, g_prof_sum_pop, g_prof_max_peak, g_prof_max_pop;
+
+static inline int aln_prof_bin(long long v){ int b=0; while(v){ ++b; v>>=1; } return b<ALN_PROF_BINS?b:ALN_PROF_BINS-1; }
+
+static void aln_prof_record(long long peak, long long pop, int hit_cap, int n_aln)
+{
+	atomic_fetch_add(&g_prof_n_reads, 1);
+	atomic_fetch_add(&g_prof_peak_hist[aln_prof_bin(peak)], 1);
+	atomic_fetch_add(&g_prof_pop_hist[aln_prof_bin(pop)], 1);
+	atomic_fetch_add(&g_prof_sum_peak, peak);
+	atomic_fetch_add(&g_prof_sum_pop, pop);
+	if (hit_cap) atomic_fetch_add(&g_prof_n_cap, 1);
+	if (n_aln == 0) atomic_fetch_add(&g_prof_n_zero, 1);
+	long long m;
+	m = atomic_load(&g_prof_max_peak); while (peak > m && !atomic_compare_exchange_weak(&g_prof_max_peak,&m,peak));
+	m = atomic_load(&g_prof_max_pop);  while (pop  > m && !atomic_compare_exchange_weak(&g_prof_max_pop,&m,pop));
+}
+
+__attribute__((destructor)) static void aln_prof_dump(void)
+{
+	long long n = atomic_load(&g_prof_n_reads);
+	if (!n) return;
+	fprintf(stderr, "\n=== ALN_PROFILE: search-tree size over %lld reads ===\n", n);
+	fprintf(stderr, "reads with 0 hits: %lld (%.1f%%)   reads hitting max_entries cap: %lld (%.2f%%)\n",
+			atomic_load(&g_prof_n_zero), 100.0*atomic_load(&g_prof_n_zero)/n,
+			atomic_load(&g_prof_n_cap), 100.0*atomic_load(&g_prof_n_cap)/n);
+	fprintf(stderr, "peak queue entries: mean %.1f  max %lld\n", (double)atomic_load(&g_prof_sum_peak)/n, atomic_load(&g_prof_max_peak));
+	fprintf(stderr, "nodes expanded/read: mean %.1f  max %lld\n", (double)atomic_load(&g_prof_sum_pop)/n, atomic_load(&g_prof_max_pop));
+	fprintf(stderr, "peak-entries histogram (log2 bin = #entries in [2^(b-1),2^b) ):\n");
+	for (int b=0;b<ALN_PROF_BINS;b++){ long long c=atomic_load(&g_prof_peak_hist[b]); if(c) fprintf(stderr,"  <=2^%-2d (%8lld): %lld\n", b, (b?1LL<<b:0), c); }
+	fprintf(stderr, "nodes-expanded histogram:\n");
+	for (int b=0;b<ALN_PROF_BINS;b++){ long long c=atomic_load(&g_prof_pop_hist[b]); if(c) fprintf(stderr,"  <=2^%-2d (%8lld): %lld\n", b, (b?1LL<<b:0), c); }
+}
+#endif
+
 #define aln_score(m,o,e,p) ((m)*(p)->s_mm + (o)*(p)->s_gapo + (e)*(p)->s_gape)
 
 gap_stack_t *gap_init_stack2(int max_score)
@@ -114,6 +158,9 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 	int best_cnt = 0;
 	int max_entries = 0, j, _j, n_aln, m_aln;
 	bwt_aln1_t *aln;
+#ifdef ALN_PROFILE
+	long long n_pop = 0; int hit_cap = 0;
+#endif
 
 	m_aln = 4; n_aln = 0;
 	aln = (bwt_aln1_t*)calloc(m_aln, sizeof(bwt_aln1_t));
@@ -123,6 +170,9 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 		if (seq[j] > 3) ++_j;
 	if (_j > max_diff) {
 		*_n_aln = n_aln;
+#ifdef ALN_PROFILE
+		aln_prof_record(0, 0, 0, n_aln);
+#endif
 		return aln;
 	}
 
@@ -136,7 +186,12 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 		bwtint_t k, l, cnt_k[4], cnt_l[4], occ;
 
 		if (max_entries < stack->n_entries) max_entries = stack->n_entries;
+#ifdef ALN_PROFILE
+		++n_pop;
+		if (stack->n_entries > opt->max_entries) { hit_cap = 1; break; }
+#else
 		if (stack->n_entries > opt->max_entries) break;
+#endif
 		gap_pop(stack, &e); // get the best entry
 		k = e.k; l = e.l; // SA interval
 		i = e.info&0xffff; // length
@@ -260,5 +315,8 @@ bwt_aln1_t *bwt_match_gap(bwt_t *const bwt, int len, const ubyte_t *seq, bwt_wid
 
 	*_n_aln = n_aln;
 	//fprintf(stderr, "max_entries = %d\n", max_entries);
+#ifdef ALN_PROFILE
+	aln_prof_record(max_entries, n_pop, hit_cap, n_aln);
+#endif
 	return aln;
 }

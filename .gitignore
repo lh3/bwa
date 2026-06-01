@@ -5,3 +5,8 @@ test64
 .*.swp
 Makefile.bak
 bwamem-lite
+# CUDA port
+fmtest
+bwa-prof
+bwtgap_prof.o
+test_data/

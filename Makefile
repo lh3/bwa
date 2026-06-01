@@ -40,11 +40,19 @@ bwa:libbwa.a $(AOBJS) main.o
 bwamem-lite:libbwa.a example.o
 		$(CC) $(CFLAGS) $(LDFLAGS) example.o -o $@ -L. -lbwa $(LIBS)
 
+# ---- CUDA port (Phase 1: device FM-index validation) ----
+NVCC?=		nvcc
+CUDA_ARCH?=	sm_86
+NVCCFLAGS?=	-O3 -std=c++14 -arch=$(CUDA_ARCH) -lineinfo
+
+fmtest:libbwa.a cuda/fmtest.cu cuda/fm_device.cuh
+		$(NVCC) $(NVCCFLAGS) -I. cuda/fmtest.cu -o $@ -L. -lbwa $(LIBS)
+
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
 clean:
-		rm -f gmon.out *.o a.out $(PROG) *~ *.a
+		rm -f gmon.out *.o a.out $(PROG) *~ *.a fmtest
 
 depend:
 	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) $(CPPFLAGS) -- *.c )
