@@ -170,3 +170,23 @@ Remaining levers: (a) shared(small)+global-backing two-level stack -> high occup
 only 4 warps/SM due to the 80 KB shared stack) without flagging, to push the GPU beyond 21k;
 (b) full-file streaming engine with double-buffered batches + reconcile overlapping the next
 kernel (to realize the GPU-bound rate and process the whole 3.95M-read file end-to-end).
+
+### Drain-down + carry register-continue (Lever 1) + the end-to-end ceiling
+Implemented dynamic pop-count: WAVE mode pops up to 32 nodes but only while room=(CAP-sp)/9 allows
+every node's <=9 children (so wave mode NEVER overflows); DRAIN mode (near full) pops 1 and keeps a
+child in registers (carry) so single-chains never touch the stack. Gated carry to sp>=CAP/2 to keep
+the wave ramp-up for normal reads. MAX_CHILDREN confirmed = 9 (state M: 1 ins + 4 del + 4 mm).
+All bit-exact (sub2k false-pos 90->1).
+
+CAP sweep (carry-drain, sub100k, GPU-only): CAP=256 -> 27% flag, 59k r/s (16 warps/SM);
+384 -> 5.6%, 35.7k (12 w/SM); 512 -> 2.2%, 21k (8 w/SM); 768 -> 0.34%, 22.2k (4 w/SM).
+With the overlapped 16-thread reconcile (~444 flagged-reads/s), end-to-end is reconcile-bound for
+small CAP and GPU-bound (~22k) for CAP>=768. **KEY: the high-occupancy small-CAP GPU speed is
+illusory — it punts the bushy reads (2-5%) to the CPU. Those reads cost similarly on GPU (low
+occupancy) or CPU (reconcile), pinning end-to-end at ~22k r/s (~5x the 16-core CPU) regardless of
+CAP.** Default CAP set to 768 (0.34% flag, GPU-bound 22.2k).
+
+To break the ~22k ceiling, the bushy reads must run ON THE GPU AT HIGH OCCUPANCY -> the two-level
+**shared(small, e.g. 256 -> 16 warps/SM) + per-warp global-backing** stack: 95%+ of reads stay in
+shared (59k base rate); the 2-5% bushy reads spill their deep frontier to global (handled on GPU,
+NOT flagged). Only true 2M-budget reads -> CPU. This is the next build.

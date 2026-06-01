@@ -189,19 +189,34 @@ __device__ int d_dfs_has_hit_warp(const fmidx_dev fm, const uint8_t *seq, int le
 	if (lane == 0) { ks[0]=0; ls[0]=fm.seq_len; ns[0]=pack_node(len,0,0,0,STATE_M); }
 	int sp = 1;                       /* warp-uniform stack pointer */
 	unsigned long long nn = 0;
+	int have_carry = 0;               /* lane-0 register-continue node (drain mode) */
+	uint64_t carry_k = 0, carry_l = 0; uint32_t carry_nd = 0;
 	__syncwarp();
 
 	for (;;) {
-		if (sp == 0) { if (lane==0) *nn_out = nn; return 0; }
-		int n_active = sp < 32 ? sp : 32;
-		bool active = lane < n_active;
-		int idx = sp - 1 - lane;       /* this lane's popped node (top of stack) */
-		uint64_t k=0, l=0; int i=0, e_mm=0, e_go=0, e_ge=0, e_st=0;
-		if (active) {
-			k = ks[idx]; l = ls[idx]; uint32_t nd = ns[idx];
-			i = nd & 0x1ff; e_mm=(nd>>9)&0x3f; e_go=(nd>>15)&0xf; e_ge=(nd>>19)&0xf; e_st=(nd>>23)&0x3;
+		if (!have_carry && sp == 0) { if (lane==0) *nn_out = nn; return 0; }
+		/* WAVE MODE: pop a wide batch (up to 32) while there is room for every popped node's
+		 * <=9 children (room-bounded -> wave never overflows). DRAIN MODE: near capacity, pop
+		 * 1 and keep one child in registers (carry) so single-child chains never touch the
+		 * stack, burning frontier depth without growth. Correctness-neutral (has_hit only). */
+		int n_active = have_carry ? 1 : (sp < 32 ? sp : 32);
+		if (!have_carry) {
+			int room = (int)(((long)CAP - sp) / 9);
+			if (n_active > room) n_active = room;
+			if (n_active < 1) n_active = 1;   /* progress; near-full handled by carry/flag below */
 		}
-		sp -= n_active;
+		bool active = lane < n_active;
+		uint64_t k=0, l=0; int i=0, e_mm=0, e_go=0, e_ge=0, e_st=0;
+		if (have_carry) {
+			if (lane == 0) { k=carry_k; l=carry_l; uint32_t nd=carry_nd;
+				i=nd&0x1ff; e_mm=(nd>>9)&0x3f; e_go=(nd>>15)&0xf; e_ge=(nd>>19)&0xf; e_st=(nd>>23)&0x3; }
+			have_carry = 0;
+		} else {
+			int idx = sp - 1 - lane;       /* this lane's popped node (top of stack) */
+			if (active) { k = ks[idx]; l = ls[idx]; uint32_t nd = ns[idx];
+				i = nd & 0x1ff; e_mm=(nd>>9)&0x3f; e_go=(nd>>15)&0xf; e_ge=(nd>>19)&0xf; e_st=(nd>>23)&0x3; }
+			sp -= n_active;
+		}
 		nn += n_active;
 		if (nn > budget) { if (lane==0){ *flagged=1; *nn_out=nn; } return 1; }
 
@@ -266,9 +281,23 @@ __device__ int d_dfs_has_hit_warp(const fmidx_dev fm, const uint8_t *seq, int le
 		for (int d=1; d<32; d<<=1) { int y = __shfl_up_sync(FULL, incl, d); if (lane >= d) incl += y; }
 		int total = __shfl_sync(FULL, incl, 31);
 		int myoff = incl - nc;
-		if (sp + total > CAP) { if (lane==0){ *flagged=1; *nn_out=nn; } return 1; } /* SMem overflow -> CPU */
-		for (int j=0;j<nc;++j){ int d = sp + myoff + j; ks[d]=cck[j]; ls[d]=ccl[j]; ns[d]=ccn[j]; }
-		sp += total;
+		/* DRAIN register-continue: when near-full and processing a single node (only lane 0 has
+		 * children), keep its last child in registers (carry) instead of pushing+re-popping. */
+		bool drain_keep = (n_active == 1) && (sp >= (CAP >> 1));
+		if (drain_keep) {
+			int push_n = total > 0 ? total - 1 : 0;          /* keep 1 child in carry */
+			if (sp + push_n > CAP) { if (lane==0){ *flagged=1; *nn_out=nn; } return 1; }
+			if (lane == 0 && nc > 0) {
+				for (int j=0;j<nc-1;++j){ int d=sp+j; ks[d]=cck[j]; ls[d]=ccl[j]; ns[d]=ccn[j]; }
+				carry_k=cck[nc-1]; carry_l=ccl[nc-1]; carry_nd=ccn[nc-1];
+			}
+			sp += push_n;
+			have_carry = (total > 0) ? 1 : 0;                /* uniform: total is warp-broadcast */
+		} else {
+			if (sp + total > CAP) { if (lane==0){ *flagged=1; *nn_out=nn; } return 1; } /* overflow -> CPU */
+			for (int j=0;j<nc;++j){ int d = sp + myoff + j; ks[d]=cck[j]; ls[d]=ccl[j]; ns[d]=ccn[j]; }
+			sp += total;
+		}
 		__syncwarp();
 	}
 }
@@ -447,7 +476,7 @@ int main(int argc, char **argv)
 	CK(cudaEventRecord(t0));
 	if (strcmp(engine, "warp") == 0) {
 		int wpb = getenv("DFS_WARP_WPB") ? atoi(getenv("DFS_WARP_WPB")) : 4;
-		int CAPW = getenv("DFS_WARP_CAP") ? atoi(getenv("DFS_WARP_CAP")) : 1024;
+		int CAPW = getenv("DFS_WARP_CAP") ? atoi(getenv("DFS_WARP_CAP")) : 768;
 		int bdim = wpb * 32;
 		size_t shbytes = (size_t)wpb * CAPW * (8 + 8 + 4);
 		CK(cudaFuncSetAttribute(k_dfs_warp, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)shbytes));
