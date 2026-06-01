@@ -224,6 +224,26 @@ warp2 GPU has_hit -> MT CPU reconcile of flagged/hit reads -> write records in r
 - => **4.97x end-to-end speedup, BIT-EXACT**: both .sai = 16,852,676 bytes, md5
   `a09a26dd894690031da42a00862f7a3d` (GPU == CPU). Full 3.95M-read file verified byte-identical.
 
+## Phase 3 — FUSED `alnse` (aln+samse, multithreaded) — `bwa-aln-gpu -S`
+Added `-S` (SAM out) + `-r RG` to `cuda/aln_gpu.cu`: fuses aln and samse in one command
+(GeoGenetics-style alnse). No `.sai` on disk; the FASTQ is read ONCE (samse reuses the loaded
+`seqs[]`); `bns`/SA/`pac` loaded once. Per chunk after GPU aln + reconcile:
+- serial `bwa_aln2seq_core` (preserves `drand48` repeat-hit-selection order; the only samse RNG --
+  `lrand48` at bntseq.c:266 is index-build only),
+- **MT** `bwa_cal_pac_pos_core` SA-lookup (RNG-free) across `n_threads`,
+- serial `bwa_refine_gapped` + `bwa_print_sam1` (ordered, bit-exact output).
+Header via `bwa_print_sam_hdr` (@HD/@SQ/@RG) + a `@PG` for bwa-aln-gpu.
+
+Validated: fused SAM **alignment records are byte-identical** to `bwa samse` on the bit-exact `.sai`
+(sub100k md5 `ee2dd6ef…`; header differs only in the expected @PG CL). `... -S | samtools sort` -> BAM.
+
+**FULL FILE fused alnse (3,948,528 reads, RTX 3090): 174.2 s = 22,672 reads/s**, SAM records
+BIT-EXACT vs reference samse (md5 `e2a6e1c9…`). preprocess 1.4s, gpu 153.9s, reconcile 16.8s, io 0.8s.
+The fused run (174 s) is FASTER than aln-only(176s)+separate samse(20s)=196s -- samse folds in for
+free (single FASTQ read, MT SA-lookup, samse compute hidden). vs CPU `bwa aln -t16`+samse = 895 s
+=> **~5.1x end-to-end, one command, no intermediate .sai, byte-identical alignments.**
+Usage: `bwa-aln-gpu -S -r '@RG\t...' ref.fa reads.fq.gz | samtools sort -O bam -o out.bam -`
+
 ## STATUS: GOAL ACHIEVED
 GPU `bwa aln` (BWA-backtrack) for ancient DNA at `-l 1024 -n 0.01 -o 2`, single-end:
 **~5x the 16-core CPU on a full real file, byte-identical .sai, GPU-bound at the FM-index ceiling.**

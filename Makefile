@@ -53,8 +53,9 @@ DFSDEPS=	bwtgap.o bwtaln.o bwaseqio.o bamlite.o
 dfstest:libbwa.a $(DFSDEPS) cuda/dfstest.cu cuda/fm_device.cuh
 		$(NVCC) $(NVCCFLAGS) -I. cuda/dfstest.cu $(DFSDEPS) -o $@ -L. -lbwa $(LIBS)
 
-bwa-aln-gpu:libbwa.a $(DFSDEPS) cuda/aln_gpu.cu cuda/fm_device.cuh cuda/dfs_engine.cuh
-		$(NVCC) $(NVCCFLAGS) -I. cuda/aln_gpu.cu $(DFSDEPS) -o $@ -L. -lbwa $(LIBS)
+ALNDEPS=	$(DFSDEPS) bwase.o
+bwa-aln-gpu:libbwa.a $(ALNDEPS) cuda/aln_gpu.cu cuda/fm_device.cuh cuda/dfs_engine.cuh
+		$(NVCC) $(NVCCFLAGS) -I. cuda/aln_gpu.cu $(ALNDEPS) -o $@ -L. -lbwa $(LIBS)
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
