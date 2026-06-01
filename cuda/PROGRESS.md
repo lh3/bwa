@@ -210,3 +210,28 @@ FM-index (k-step / occ caching) -- diminishing returns. Default CAP_SM=512.
 
 **warp2 is the engine to ship**: same ceiling speed as warp1 but ~0 CPU reconcile tail, which keeps
 the streaming engine clean. Next: full-file streaming (#2) -- the deliverable, not a speed lever.
+
+## Phase 2 step 2 — STREAMING full-file tool `bwa-aln-gpu` — DONE, bit-exact end-to-end
+`cuda/aln_gpu.cu` + `cuda/dfs_engine.cuh` (extracted warp2). Streams the FASTQ in bwa's native
+0x40000-read chunks; per chunk: MT preprocess (bwt_cal_width + complement + per-read max_diff) ->
+warp2 GPU has_hit -> MT CPU reconcile of flagged/hit reads -> write records in read order.
+`make bwa-aln-gpu`; `./bwa-aln-gpu [-l -n -o -t -f] <ref.fa> <in.fq>`.
+
+**FULL FILE (AVA1B.combined.fq.gz, 3,948,528 reads, hs37d5, -l 1024 -n 0.01 -o 2, RTX 3090):**
+- bwa-aln-gpu: **175.9 s = 22,445 reads/s** (preprocess 1.4s, gpu 156.5s, reconcile 16.7s/16thr, io 0.1s);
+  0.531% reconciled on CPU. Output .sai = 16.85 MB.
+- CPU `bwa aln -t 16` golden on the same file: **875 s**.
+- => **4.97x end-to-end speedup, BIT-EXACT**: both .sai = 16,852,676 bytes, md5
+  `a09a26dd894690031da42a00862f7a3d` (GPU == CPU). Full 3.95M-read file verified byte-identical.
+
+## STATUS: GOAL ACHIEVED
+GPU `bwa aln` (BWA-backtrack) for ancient DNA at `-l 1024 -n 0.01 -o 2`, single-end:
+**~5x the 16-core CPU on a full real file, byte-identical .sai, GPU-bound at the FM-index ceiling.**
+Engine: warp-cooperative two-level-stack DFS (`cuda/dfs_engine.cuh`) + MT CPU reconcile of ~0.5%;
+tool: `bwa-aln-gpu` (`cuda/aln_gpu.cu`). The earlier BarraCUDA failure mode (slow with seeding off)
+is resolved: this is fastest precisely in the seeding-off aDNA regime.
+
+Possible future work (optional, diminishing/oncosting returns): double-buffered stream overlap of
+preprocess/reconcile with the kernel (~10% — preprocess+reconcile is only ~18s of 176s); faster
+FM-index (k-step / L2-pinned occ) to lift the ~22k occ4 ceiling; multi-GPU; wrap as a real
+`bwa aln` subcommand/flag in main.c; libdeflate FASTQ decode (not currently a bottleneck, ~1.2s).
