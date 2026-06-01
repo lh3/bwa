@@ -244,6 +244,19 @@ free (single FASTQ read, MT SA-lookup, samse compute hidden). vs CPU `bwa aln -t
 => **~5.1x end-to-end, one command, no intermediate .sai, byte-identical alignments.**
 Usage: `bwa-aln-gpu -S -r '@RG\t...' ref.fa reads.fq.gz | samtools sort -O bam -o out.bam -`
 
+## Phase 3b — CPU/GPU overlap (#5) — DONE, bit-exact
+`cuda/aln_gpu.cu` restructured into a producer/consumer pipeline: the main thread owns the GPU
+(read -> MT preprocess -> upload -> kernel -> download has_hit, serial on one stream so the shared
+global backing is never raced); each chunk is handed to ONE in-order finisher thread that does the
+CPU reconcile + output (.sai or samse), running concurrently with the next chunk's GPU work. Single
+ordered consumer preserves drand48/output order -> bit-exact. (Multi-GPU-ready: replicate the GPU
+producer stage per device + round-robin chunks; keep one ordered finisher.)
+
+Full file (3.95M reads, fused alnse SAM): **174.2 s -> 160.9 s = 24,541 reads/s** (overlap hid ~13s
+of the ~18s CPU tail), records BIT-EXACT (md5 e2a6e1c9). Both modes re-verified bit-exact under the
+pipeline (sub100k .sai eecf35c1, SAM records identical). vs CPU `bwa aln -t16`+samse = 895 s ->
+**~5.56x end-to-end.**
+
 ## STATUS: GOAL ACHIEVED
 GPU `bwa aln` (BWA-backtrack) for ancient DNA at `-l 1024 -n 0.01 -o 2`, single-end:
 **~5x the 16-core CPU on a full real file, byte-identical .sai, GPU-bound at the FM-index ceiling.**

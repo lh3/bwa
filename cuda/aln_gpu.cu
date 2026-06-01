@@ -16,6 +16,9 @@
 #include <vector>
 #include <thread>
 #include <chrono>
+#include <queue>
+#include <mutex>
+#include <condition_variable>
 #include <unistd.h>
 #include <cuda_runtime.h>
 
@@ -42,6 +45,15 @@ extern char *bwa_pg;   /* @PG line printed by bwa_print_sam_hdr if set */
 	fprintf(stderr, "CUDA error %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(e_)); exit(1); } } while (0)
 
 static double now_s() { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); }
+
+/* one chunk's host data, handed from the GPU producer thread to the CPU finisher thread */
+struct Chunk {
+	bwa_seq_t *seqs; int n_seqs;
+	std::vector<ReadParam> rp;
+	std::vector<uint8_t> seq_flat; std::vector<uint64_t> w_flat; std::vector<int> bid_flat;
+	std::vector<uint8_t> has_hit;
+	gap_opt_t base; int stack_maxdiff, max_len;
+};
 
 int main(int argc, char **argv)
 {
@@ -120,114 +132,118 @@ int main(int argc, char **argv)
 	uint8_t *d_hit=NULL; unsigned long long *d_npop=NULL; int *d_wc=NULL, *d_nflag=NULL;
 	size_t cap_seq=0, cap_w=0, cap_n=0;
 
-	long long tot=0, tot_flag=0; double t_pre=0,t_gpu=0,t_rec=0,t_io=0; double t0=now_s();
-	int n_seqs;
-	bwa_seq_t *seqs;
+	long long tot=0, tot_flag=0; double t0=now_s();
+
+	/* ---- CPU/GPU overlap (#5): the main thread owns the GPU (read -> preprocess -> upload ->
+	 * kernel -> download has_hit, serial on one stream so the shared global backing is never
+	 * raced). Each finished chunk is handed to ONE in-order finisher thread that does the CPU
+	 * reconcile + output, running concurrently with the next chunk's GPU work. Single ordered
+	 * consumer => drand48/output order preserved => bit-exact. (For multi-GPU later: replicate the
+	 * GPU producer stage per device and round-robin chunks; the finisher stays a single ordered
+	 * consumer to keep output/RNG order.) ---- */
+	std::mutex qmu; std::condition_variable q_ready, q_free; std::queue<Chunk*> Q; bool done=false;
+	const size_t QCAP = 2;
+	auto finisher = [&](){
+		for (;;) {
+			Chunk *c;
+			{ std::unique_lock<std::mutex> lk(qmu); q_ready.wait(lk, [&]{ return !Q.empty() || done; });
+			  if (Q.empty()) break; c = Q.front(); Q.pop(); }
+			q_free.notify_one();
+			int nseq = c->n_seqs;
+			std::vector<int> idx; for (int i=0;i<nseq;i++) if (c->has_hit[i]) idx.push_back(i);
+			tot_flag += idx.size();
+			std::vector<int> n_aln(nseq,0); std::vector<bwt_aln1_t*> aln(nseq,NULL);
+			std::vector<std::thread> ths;
+			for (int t=0;t<nT;t++) ths.emplace_back([&,t](){
+				gap_stack_t *st = gap_init_stack(c->stack_maxdiff, c->base.max_gapo, c->base.max_gape, &c->base);
+				std::vector<bwt_width_t> w(c->max_len+1);
+				for (size_t x=t;x<idx.size();x+=nT){
+					int i=idx[x], len=c->rp[i].len;
+					for (int j=0;j<=len;j++){ w[j].w=c->w_flat[c->rp[i].w_off+j]; w[j].bid=c->bid_flat[c->rp[i].w_off+j]; }
+					gap_opt_t lo=c->base; lo.max_diff=c->rp[i].max_diff; lo.seed_len = opt->seed_len<len?opt->seed_len:0x7fffffff;
+					int na=0; aln[i]=bwt_match_gap(bwt, len, c->seq_flat.data()+c->rp[i].seq_off, w.data(), (bwt_width_t*)0, &lo, &na, st);
+					n_aln[i]=na;
+				}
+				gap_destroy_stack(st);
+			});
+			for (auto&th:ths) th.join();
+			if (!sam_mode) {
+				for (int i=0;i<nseq;i++){ err_fwrite(&n_aln[i],4,1,out); if (n_aln[i]) err_fwrite(aln[i],sizeof(bwt_aln1_t),n_aln[i],out); free(aln[i]); }
+			} else {
+				for (int i=0;i<nseq;i++){ bwa_aln2seq_core(n_aln[i], aln[i], &c->seqs[i], 1, n_occ); free(aln[i]); }
+				ths.clear();
+				for (int t=0;t<nT;t++) ths.emplace_back([&,t](){
+					for (int i=t;i<nseq;i+=nT){ bwa_seq_t *p=&c->seqs[i];
+						bwa_cal_pac_pos_core(bns, bwt, p, opt->max_diff, opt->fnr);
+						int strand, nm2=0;
+						for (int j=0;j<p->n_multi;j++){ bwt_multi1_t *q=p->multi+j;
+							q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len+q->ref_shift, &strand); q->strand=strand;
+							if (q->pos != p->pos && q->pos != (bwtint_t)-1) p->multi[nm2++]=*q; }
+						p->n_multi=nm2; }
+				});
+				for (auto&th:ths) th.join();
+				bwa_refine_gapped(bns, nseq, c->seqs, pacseq);
+				for (int i=0;i<nseq;i++) bwa_print_sam1(bns, &c->seqs[i], 0, opt->mode, opt->max_top2);
+			}
+			tot += nseq;
+			bwa_free_read_seq(nseq, c->seqs);
+			delete c;
+			fprintf(stderr, "\r[aln-gpu] %lld reads done (%.0f reads/s)   ", tot, tot/(now_s()-t0));
+		}
+	};
+	std::thread cons(finisher);
+
+	int n_seqs; bwa_seq_t *seqs;
 	while ((seqs = bwa_read_seq(ks, 0x40000, &n_seqs, opt->mode, opt->trim_qual)) != 0) {
-		double a = now_s();
-		/* chunk-level opt (matches bwa_cal_sa_reg_gap stack sizing) */
-		gap_opt_t base = *opt; int max_len = 0;
-		for (int i=0;i<n_seqs;i++) if (seqs[i].len > max_len) max_len = seqs[i].len;
-		if (opt->fnr > 0.0) base.max_diff = bwa_cal_maxdiff(max_len, BWA_AVG_ERR, opt->fnr);
-		if (base.max_diff < base.max_gapo) base.max_gapo = base.max_diff;
-		int stack_maxdiff = base.max_diff;
-
-		/* offsets (serial, cheap) */
-		std::vector<ReadParam> rp(n_seqs);
+		Chunk *c = new Chunk();
+		c->seqs = seqs; c->n_seqs = n_seqs; c->base = *opt; c->max_len = 0;
+		for (int i=0;i<n_seqs;i++) if (seqs[i].len > c->max_len) c->max_len = seqs[i].len;
+		if (opt->fnr > 0.0) c->base.max_diff = bwa_cal_maxdiff(c->max_len, BWA_AVG_ERR, opt->fnr);
+		if (c->base.max_diff < c->base.max_gapo) c->base.max_gapo = c->base.max_diff;
+		c->stack_maxdiff = c->base.max_diff;
+		c->rp.resize(n_seqs);
 		size_t so=0, wo=0;
-		for (int i=0;i<n_seqs;i++){ rp[i].seq_off=so; rp[i].w_off=wo; rp[i].len=seqs[i].len; so+=seqs[i].len; wo+=seqs[i].len+1; }
-		std::vector<uint8_t> seq_flat(so); std::vector<uint64_t> w_flat(wo); std::vector<int> bid_flat(wo);
+		for (int i=0;i<n_seqs;i++){ c->rp[i].seq_off=so; c->rp[i].w_off=wo; c->rp[i].len=seqs[i].len; so+=seqs[i].len; wo+=seqs[i].len+1; }
+		c->seq_flat.resize(so); c->w_flat.resize(wo); c->bid_flat.resize(wo); c->has_hit.resize(n_seqs);
 
-		/* MT preprocess: width (pre-complement) + per-read max_diff + complement */
-		std::vector<std::thread> ths;
+		std::vector<std::thread> ths;   /* MT preprocess (width pre-complement + complement into flat) */
 		for (int t=0;t<nT;t++) ths.emplace_back([&,t](){
-			std::vector<bwt_width_t> w(max_len+1);
-			for (int i=t;i<n_seqs;i+=nT){
-				bwa_seq_t *p=&seqs[i];
+			std::vector<bwt_width_t> w(c->max_len+1);
+			for (int i=t;i<n_seqs;i+=nT){ bwa_seq_t *p=&seqs[i];
 				memset(w.data(), 0, (p->len+1)*sizeof(bwt_width_t));
 				bwt_cal_width(bwt, p->len, p->seq, w.data());
-				rp[i].max_diff = (opt->fnr>0.0)? bwa_cal_maxdiff(p->len, BWA_AVG_ERR, opt->fnr) : base.max_diff;
-				/* complement into the flat GPU buffer ONLY; leave p->seq in read-seq orientation
-				 * (samse needs it; reconcile uses seq_flat) */
-				for (int j=0;j<p->len;j++) seq_flat[rp[i].seq_off+j] = p->seq[j]>3?4:3-p->seq[j];
-				for (int j=0;j<=p->len;j++){ w_flat[rp[i].w_off+j]=w[j].w; bid_flat[rp[i].w_off+j]=w[j].bid; }
+				c->rp[i].max_diff = (opt->fnr>0.0)? bwa_cal_maxdiff(p->len, BWA_AVG_ERR, opt->fnr) : c->base.max_diff;
+				for (int j=0;j<p->len;j++) c->seq_flat[c->rp[i].seq_off+j] = p->seq[j]>3?4:3-p->seq[j];
+				for (int j=0;j<=p->len;j++){ c->w_flat[c->rp[i].w_off+j]=w[j].w; c->bid_flat[c->rp[i].w_off+j]=w[j].bid; }
 			}
 		});
 		for (auto&th:ths) th.join();
-		t_pre += now_s()-a; a=now_s();
 
-		/* (re)alloc device buffers */
+		/* GPU stage (serial on main thread) */
 		if (so>cap_seq){ if(d_seq)cudaFree(d_seq); CK(cudaMalloc(&d_seq, so)); cap_seq=so; }
 		if (wo>cap_w){ if(d_ww)cudaFree(d_ww); if(d_wbid)cudaFree(d_wbid); CK(cudaMalloc(&d_ww,wo*8)); CK(cudaMalloc(&d_wbid,wo*4)); cap_w=wo; }
 		if ((size_t)n_seqs>cap_n){ if(d_rp)cudaFree(d_rp); if(d_hit)cudaFree(d_hit); if(d_npop)cudaFree(d_npop);
 			CK(cudaMalloc(&d_rp,n_seqs*sizeof(ReadParam))); CK(cudaMalloc(&d_hit,n_seqs)); CK(cudaMalloc(&d_npop,n_seqs*8)); cap_n=n_seqs; }
 		if (!d_wc){ CK(cudaMalloc(&d_wc,4)); CK(cudaMalloc(&d_nflag,4)); }
-		CK(cudaMemcpy(d_seq, seq_flat.data(), so, cudaMemcpyHostToDevice));
-		CK(cudaMemcpy(d_ww, w_flat.data(), wo*8, cudaMemcpyHostToDevice));
-		CK(cudaMemcpy(d_wbid, bid_flat.data(), wo*4, cudaMemcpyHostToDevice));
-		CK(cudaMemcpy(d_rp, rp.data(), n_seqs*sizeof(ReadParam), cudaMemcpyHostToDevice));
+		CK(cudaMemcpy(d_seq, c->seq_flat.data(), so, cudaMemcpyHostToDevice));
+		CK(cudaMemcpy(d_ww, c->w_flat.data(), wo*8, cudaMemcpyHostToDevice));
+		CK(cudaMemcpy(d_wbid, c->bid_flat.data(), wo*4, cudaMemcpyHostToDevice));
+		CK(cudaMemcpy(d_rp, c->rp.data(), n_seqs*sizeof(ReadParam), cudaMemcpyHostToDevice));
 		CK(cudaMemset(d_wc,0,4)); CK(cudaMemset(d_nflag,0,4));
-
 		k_dfs_warp2<<<nblocks, bdim, shbytes>>>(fm, d_seq, d_ww, d_wbid, d_rp, n_seqs,
-			base.max_gapo, base.max_gape, base.mode, base.indel_end_skip, base.max_del_occ,
+			c->base.max_gapo, c->base.max_gape, c->base.mode, c->base.indel_end_skip, c->base.max_del_occ,
 			CAP_SM, CAP_GL, Gk, Gl, Gn, d_hit, d_wc, d_npop, budget, d_nflag, wpb);
 		CK(cudaDeviceSynchronize()); CK(cudaGetLastError());
-		std::vector<uint8_t> has_hit(n_seqs);
-		CK(cudaMemcpy(has_hit.data(), d_hit, n_seqs, cudaMemcpyDeviceToHost));
-		t_gpu += now_s()-a; a=now_s();
+		CK(cudaMemcpy(c->has_hit.data(), d_hit, n_seqs, cudaMemcpyDeviceToHost));
 
-		/* MT reconcile flagged/hit reads via exact CPU search */
-		std::vector<int> idx; for (int i=0;i<n_seqs;i++) if (has_hit[i]) idx.push_back(i);
-		tot_flag += idx.size();
-		std::vector<int> n_aln(n_seqs,0); std::vector<bwt_aln1_t*> aln(n_seqs,NULL);
-		ths.clear();
-		for (int t=0;t<nT;t++) ths.emplace_back([&,t](){
-			gap_stack_t *st = gap_init_stack(stack_maxdiff, base.max_gapo, base.max_gape, &base);
-			std::vector<bwt_width_t> w(max_len+1);
-			for (size_t x=t;x<idx.size();x+=nT){
-				int i=idx[x], len=rp[i].len;
-				for (int j=0;j<=len;j++){ w[j].w=w_flat[rp[i].w_off+j]; w[j].bid=bid_flat[rp[i].w_off+j]; }
-				gap_opt_t lo=base; lo.max_diff=rp[i].max_diff; lo.seed_len = opt->seed_len<len?opt->seed_len:0x7fffffff;
-				int na=0; aln[i]=bwt_match_gap(bwt, len, seq_flat.data()+rp[i].seq_off, w.data(), (bwt_width_t*)0, &lo, &na, st);
-				n_aln[i]=na;
-			}
-			gap_destroy_stack(st);
-		});
-		for (auto&th:ths) th.join();
-		t_rec += now_s()-a; a=now_s();
-
-		if (!sam_mode) {
-			/* write .sai records in read order (matches bwa_aln_core) */
-			for (int i=0;i<n_seqs;i++){ err_fwrite(&n_aln[i],4,1,out); if (n_aln[i]) err_fwrite(aln[i],sizeof(bwt_aln1_t),n_aln[i],out); free(aln[i]); }
-		} else {
-			/* fused samse: serial aln2seq (drand48 order) -> MT SA-lookup (RNG-free) ->
-			 * serial refine_gapped + print (bit-exact, ordered output). */
-			for (int i=0;i<n_seqs;i++) { bwa_aln2seq_core(n_aln[i], aln[i], &seqs[i], 1, n_occ); free(aln[i]); }
-			ths.clear();
-			for (int t=0;t<nT;t++) ths.emplace_back([&,t](){
-				for (int i=t;i<n_seqs;i+=nT){
-					bwa_seq_t *p=&seqs[i];
-					bwa_cal_pac_pos_core(bns, bwt, p, opt->max_diff, opt->fnr);
-					int strand, nm2=0;
-					for (int j=0;j<p->n_multi;j++){ bwt_multi1_t *q=p->multi+j;
-						q->pos = bwa_sa2pos(bns, bwt, q->pos, p->len+q->ref_shift, &strand); q->strand=strand;
-						if (q->pos != p->pos && q->pos != (bwtint_t)-1) p->multi[nm2++]=*q; }
-					p->n_multi=nm2;
-				}
-			});
-			for (auto&th:ths) th.join();
-			bwa_refine_gapped(bns, n_seqs, seqs, pacseq);
-			for (int i=0;i<n_seqs;i++) bwa_print_sam1(bns, &seqs[i], 0, opt->mode, opt->max_top2);
-		}
-		t_io += now_s()-a;
-		tot += n_seqs;
-		bwa_free_read_seq(n_seqs, seqs);
-		fprintf(stderr, "\r[aln-gpu] %lld reads processed (%.0f reads/s overall)   ", tot, tot/(now_s()-t0));
+		{ std::unique_lock<std::mutex> lk(qmu); q_free.wait(lk, [&]{ return Q.size() < QCAP; }); Q.push(c); }
+		q_ready.notify_one();
 	}
+	{ std::lock_guard<std::mutex> lk(qmu); done = true; } q_ready.notify_one();
+	cons.join();
 	double total = now_s()-t0;
 	fprintf(stderr, "\n[aln-gpu] DONE: %lld reads in %.1f s = %.0f reads/s; flagged->CPU %lld (%.3f%%)\n",
 		tot, total, tot/total, tot_flag, 100.0*tot_flag/tot);
-	fprintf(stderr, "[aln-gpu] time: preprocess %.1fs  gpu %.1fs  reconcile %.1fs  io %.1fs\n", t_pre, t_gpu, t_rec, t_io);
 
 	if (out_fn) fclose(out);
 	bwa_seq_close(ks);
