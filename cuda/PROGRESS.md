@@ -85,6 +85,29 @@ CPU baseline on sub100k, same box: **`bwa aln -t 16` = 23.47 s (4261 r/s)**.
 **~83x** over the naive GPU baseline. Throughput 338M pops/s ~= 38% of the FM-index occ4 ceiling,
 so meaningful headroom remains.
 
-Next levers: `bwt_2occ4` shared-bucket fast path (~halve probes), cut register pressure to raise
-occupancy beyond 7 blk/SM, cheaper exact-match tail, then batch streaming over the full file +
-multi-thread the reconcile. Goal: push well past 2x toward the occ4 ceiling.
+### step-2 optimization log (sub100k, RTX 3090, bit-exact throughout)
+| change | reads/s | note |
+|--------|---------|------|
+| work-budget engine (above) | 8276 | baseline for this log |
+| + `bwt_2occ4` shared-bucket fast path | 8224 | **no change** -> not occ-load bound |
+| maxrregcount 48 (40 warps) | 6445 | **slower** |
+| maxrregcount 40 (48 warps) | 5243 | **slower** -> NOT occupancy/latency bound |
+| + in-register-continue DFS (stack only for siblings, pop only on backtrack) | **9934** | +20%; 69 regs |
+
+Diagnosis (consulted CUDA Ampere tuning guide + NVIDIA forums + Volkov latency-hiding + the 2025
+arXiv "N-Queens GPU iterative DFS" paper): the kernel is **bound by the global-memory DFS stack**,
+not occ loads and not occupancy. Evidence: the 2occ4 fast path didn't help, and *raising* occupancy
+*hurt* (more concurrent threads -> the per-thread live stack working set exceeds the 6 MB L2 ->
+DRAM). The literature is explicit: one-thread-per-task DFS with a global stack scales poorly;
+assign a subtree to a group of threads sharing fast memory, and keep the stack in shared/registers.
+The in-register-continue change applies the register part (descend in registers, push only siblings,
+read stack only on backtrack) for +20%.
+
+Current standing: **9934 reads/s = ~2.3x the 16-core CPU (4261 r/s), ~27x one core (363 r/s),
+99x over the naive GPU baseline (100 r/s); bit-exact.** Throughput ~408M pops/s ~= 45% of the
+occ4 ceiling.
+
+Next big levers (toward "massive"): (1) **one-read-per-warp / subtree-per-warp cooperation** with the
+hot stack in shared memory (the literature's recommended structure; should cut both divergence and
+the L2-thrashing stack); (2) shared-memory hot-stack window backing the global spill; (3) full-file
+streaming with overlapped, multithreaded CPU reconcile. References saved in cuda/REFERENCES.md.

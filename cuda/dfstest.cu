@@ -65,16 +65,25 @@ __device__ int d_dfs_has_hit(const fmidx_dev fm, const uint8_t *seq, int len,
 
 	#define SIDX(d) ((size_t)(d) * P + slot)
 	int sp = 0;
-	sk[SIDX(0)] = 0; sl[SIDX(0)] = fm.seq_len; sn[SIDX(0)] = pack_node(len,0,0,0,STATE_M); ++sp;
+	/* current node held in registers: only SIBLINGS are pushed to the global stack, and
+	 * the stack is read only on backtrack. This removes the push->immediately-pop global
+	 * round-trip that dominated runtime (stack working set was blowing L2). */
+	uint64_t k = 0, l = fm.seq_len;
+	int i = len, e_mm = 0, e_go = 0, e_ge = 0, e_st = STATE_M;
+	bool have_cur = true;
 
-	while (sp > 0) {
-		--sp; ++nn;
-		/* work budget: a read this expensive is one the CPU max_entries cap would bail on;
-		 * flag it for exact CPU reconciliation rather than exhausting it on one GPU thread. */
+	for (;;) {
+		if (!have_cur) {                       /* backtrack: pop a sibling */
+			if (sp == 0) break;
+			--sp;
+			k = sk[SIDX(sp)]; l = sl[SIDX(sp)];
+			uint32_t nd = sn[SIDX(sp)];
+			i = nd & 0x1ff; e_mm = (nd>>9)&0x3f; e_go = (nd>>15)&0xf; e_ge = (nd>>19)&0xf; e_st = (nd>>23)&0x3;
+		}
+		have_cur = false;                      /* consume current; re-set only if we descend */
+		++nn;
 		if (nn > budget) { atomicAdd(nflag, 1); return 1; }
-		uint64_t k = sk[SIDX(sp)], l = sl[SIDX(sp)];
-		uint32_t nd = sn[SIDX(sp)];
-		int i = nd & 0x1ff, e_mm = (nd>>9)&0x3f, e_go = (nd>>15)&0xf, e_ge = (nd>>19)&0xf, e_st = (nd>>23)&0x3;
+
 		int m = max_diff - (e_mm + e_go);
 		if (mode & BWA_MODE_GAPE) m -= e_ge;
 		if (m < 0) continue;
@@ -89,55 +98,65 @@ __device__ int d_dfs_has_hit(const fmidx_dev fm, const uint8_t *seq, int len,
 		}
 		if (hit_found) return 1; /* existence is all we need */
 
-		--i;
+		int xi = i - 1;
 		uint64_t cntk[4], cntl[4];
 		d_bwt_2occ4(fm.bwt, fm.primary, k - 1, l, cntk, cntl);
 		uint64_t occ = l - k + 1;
 		int allow_diff = 1, allow_M = 1;
-		if (i > 0) {
-			if (w_bid[i-1] > m - 1) allow_diff = 0;
-			else if (w_bid[i-1] == m-1 && w_bid[i] == m-1 && w_w[i-1] == w_w[i]) allow_M = 0;
+		if (xi > 0) {
+			if (w_bid[xi-1] > m - 1) allow_diff = 0;
+			else if (w_bid[xi-1] == m-1 && w_bid[xi] == m-1 && w_w[xi-1] == w_w[xi]) allow_M = 0;
 		}
 		int tmp = (mode & BWA_MODE_LOGGAP) ? d_int_log2(e_ge + e_go)/2 + 1 : e_go + e_ge;
-		#define PUSH(_i,_k,_l,_mm,_go,_ge,_st) do { \
-			if (sp >= cap) { *overflow = 1; return 1; /* fail-safe: flag for CPU reprocess */ } \
-			sk[SIDX(sp)]=(_k); sl[SIDX(sp)]=(_l); sn[SIDX(sp)]=pack_node((_i),(_mm),(_go),(_ge),(_st)); ++sp; \
+
+		/* one child stays in registers (the last EMITted, descended into); EMIT pushes
+		 * the previously-staged child so exactly nchild-1 hit the global stack. */
+		bool have_next = false;
+		uint64_t nk_=0, nl_=0; int ni_=0, nmm_=0, ngo_=0, nge_=0, nst_=0;
+		#define EMIT(_i,_k,_l,_mm,_go,_ge,_st) do { \
+			if (have_next) { if (sp >= cap) { *overflow = 1; return 1; } \
+				sk[SIDX(sp)]=nk_; sl[SIDX(sp)]=nl_; sn[SIDX(sp)]=pack_node(ni_,nmm_,ngo_,nge_,nst_); ++sp; } \
+			nk_=(_k); nl_=(_l); ni_=(_i); nmm_=(_mm); ngo_=(_go); nge_=(_ge); nst_=(_st); have_next=true; \
 		} while (0)
 
-		if (allow_diff && i >= indel_end_skip + tmp && len - i >= indel_end_skip + tmp) {
+		if (allow_diff && xi >= indel_end_skip + tmp && len - xi >= indel_end_skip + tmp) {
 			if (e_st == STATE_M) {
 				if (e_go < max_gapo) {
-					PUSH(i, k, l, e_mm, e_go + 1, e_ge, STATE_I); /* insertion */
-					for (int j = 0; j < 4; ++j) {                  /* deletion */
-						uint64_t nk = c_L2[j] + cntk[j] + 1, nl = c_L2[j] + cntl[j];
-						if (nk <= nl) PUSH(i + 1, nk, nl, e_mm, e_go + 1, e_ge, STATE_D);
+					EMIT(xi, k, l, e_mm, e_go + 1, e_ge, STATE_I);          /* insertion */
+					for (int j = 0; j < 4; ++j) {                            /* deletion */
+						uint64_t dk = c_L2[j] + cntk[j] + 1, dl = c_L2[j] + cntl[j];
+						if (dk <= dl) EMIT(xi + 1, dk, dl, e_mm, e_go + 1, e_ge, STATE_D);
 					}
 				}
 			} else if (e_st == STATE_I) {
-				if (e_ge < max_gape)
-					PUSH(i, k, l, e_mm, e_go, e_ge + 1, STATE_I);
+				if (e_ge < max_gape) EMIT(xi, k, l, e_mm, e_go, e_ge + 1, STATE_I);
 			} else { /* STATE_D */
 				if (e_ge < max_gape && (e_ge + e_go < max_diff || occ < (uint64_t)max_del_occ)) {
 					for (int j = 0; j < 4; ++j) {
-						uint64_t nk = c_L2[j] + cntk[j] + 1, nl = c_L2[j] + cntl[j];
-						if (nk <= nl) PUSH(i + 1, nk, nl, e_mm, e_go, e_ge + 1, STATE_D);
+						uint64_t dk = c_L2[j] + cntk[j] + 1, dl = c_L2[j] + cntl[j];
+						if (dk <= dl) EMIT(xi + 1, dk, dl, e_mm, e_go, e_ge + 1, STATE_D);
 					}
 				}
 			}
 		}
 		if (allow_diff && allow_M) {
 			for (int j = 1; j <= 4; ++j) {
-				int c = (seq[i] + j) & 3;
-				int is_mm = (j != 4 || seq[i] > 3);
-				uint64_t nk = c_L2[c] + cntk[c] + 1, nl = c_L2[c] + cntl[c];
-				if (nk <= nl) PUSH(i, nk, nl, e_mm + is_mm, e_go, e_ge, STATE_M);
+				int c = (seq[xi] + j) & 3;
+				int is_mm = (j != 4 || seq[xi] > 3);
+				uint64_t mk = c_L2[c] + cntk[c] + 1, ml = c_L2[c] + cntl[c];
+				if (mk <= ml) EMIT(xi, mk, ml, e_mm + is_mm, e_go, e_ge, STATE_M);
 			}
-		} else if (seq[i] < 4) {
-			int c = seq[i] & 3;
-			uint64_t nk = c_L2[c] + cntk[c] + 1, nl = c_L2[c] + cntl[c];
-			if (nk <= nl) PUSH(i, nk, nl, e_mm, e_go, e_ge, STATE_M);
+		} else if (seq[xi] < 4) {
+			int c = seq[xi] & 3;
+			uint64_t mk = c_L2[c] + cntk[c] + 1, ml = c_L2[c] + cntl[c];
+			if (mk <= ml) EMIT(xi, mk, ml, e_mm, e_go, e_ge, STATE_M);
 		}
-		#undef PUSH
+		#undef EMIT
+
+		if (have_next) {                       /* descend into last-staged child (registers) */
+			k = nk_; l = nl_; i = ni_; e_mm = nmm_; e_go = ngo_; e_ge = nge_; e_st = nst_;
+			have_cur = true;
+		}
 	}
 	#undef SIDX
 	return 0;

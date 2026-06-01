@@ -65,15 +65,36 @@ __device__ __forceinline__ void d_bwt_occ4(const uint32_t *__restrict__ bwt,
 	cnt[2] += (x >> 16) & 0xff; cnt[3] += x >> 24;
 }
 
-/* mirror of bwt_2occ4(): Occ4 at both ends of an SA interval.
- * Correctness-first: two independent occ4 probes (the shared-bucket fast path in
- * bwt_2occ4 is a pure optimization and yields identical values; added later). */
+/* mirror of bwt_2occ4(): Occ4 at both ends of an SA interval, with the shared-bucket
+ * fast path (one bucket load + a single scan) when k and l land in the same 128-base
+ * interval -- the common case as SA intervals shrink during search. */
 __device__ __forceinline__ void d_bwt_2occ4(const uint32_t *__restrict__ bwt,
                                              uint64_t primary, uint64_t k, uint64_t l,
                                              uint64_t cntk[4], uint64_t cntl[4])
 {
-	d_bwt_occ4(bwt, primary, k, cntk);
-	d_bwt_occ4(bwt, primary, l, cntl);
+	uint64_t _k = k - (k >= primary), _l = l - (l >= primary);
+	if ((_k >> 7) != (_l >> 7) || k == (uint64_t)-1 || l == (uint64_t)-1) {
+		d_bwt_occ4(bwt, primary, k, cntk);
+		d_bwt_occ4(bwt, primary, l, cntl);
+		return;
+	}
+	k -= (k >= primary); l -= (l >= primary);
+	const uint32_t *p = bwt + ((k >> 7) << 4);
+	const uint64_t *pc = (const uint64_t *)p;
+	cntk[0] = __ldg(pc + 0); cntk[1] = __ldg(pc + 1);
+	cntk[2] = __ldg(pc + 2); cntk[3] = __ldg(pc + 3);
+	p += 8;
+	const uint32_t *endk = p + ((k >> 4) - ((k & ~D_OCC_INTV_MASK) >> 4));
+	const uint32_t *endl = p + ((l >> 4) - ((l & ~D_OCC_INTV_MASK) >> 4));
+	uint64_t x = 0, y;
+	for (; p < endk; ++p) x += d_occ_aux4(__ldg(p));
+	y = x;
+	{ uint32_t tmp = __ldg(p) & ~((1U << ((~k & 15) << 1)) - 1); x += (uint64_t)d_occ_aux4(tmp) - (~k & 15); }
+	for (; p < endl; ++p) y += d_occ_aux4(__ldg(p));
+	{ uint32_t tmp = __ldg(p) & ~((1U << ((~l & 15) << 1)) - 1); y += (uint64_t)d_occ_aux4(tmp) - (~l & 15); }
+	cntl[0] = cntk[0]; cntl[1] = cntk[1]; cntl[2] = cntk[2]; cntl[3] = cntk[3];
+	cntk[0] += x & 0xff; cntk[1] += (x >> 8) & 0xff; cntk[2] += (x >> 16) & 0xff; cntk[3] += x >> 24;
+	cntl[0] += y & 0xff; cntl[1] += (y >> 8) & 0xff; cntl[2] += (y >> 16) & 0xff; cntl[3] += y >> 24;
 }
 
 /* mirror of bwt_occ() for a single character c. occ4(seq_len) already yields the
@@ -115,14 +136,14 @@ __device__ __forceinline__ int d_bwt_match_exact_alt(const fmidx_dev fm,
                                                       const uint8_t *str, int len,
                                                       uint64_t *k0, uint64_t *l0)
 {
-	uint64_t k = *k0, l = *l0, ok, ol;
+	uint64_t k = *k0, l = *l0;
 	for (int i = len - 1; i >= 0; --i) {
 		uint8_t c = str[i];
 		if (c > 3) return 0;
-		ok = d_bwt_occ1(fm.bwt, fm.primary, k - 1, c);
-		ol = d_bwt_occ1(fm.bwt, fm.primary, l,     c);
-		k = c_L2[c] + ok + 1;
-		l = c_L2[c] + ol;
+		uint64_t ck[4], cl[4];
+		d_bwt_2occ4(fm.bwt, fm.primary, k - 1, l, ck, cl); /* shared-bucket fast path */
+		k = c_L2[c] + ck[c] + 1;
+		l = c_L2[c] + cl[c];
 		if (k > l) return 0;
 	}
 	*k0 = k; *l0 = l;
