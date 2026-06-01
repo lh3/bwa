@@ -19,6 +19,46 @@ more versatile, more accurate and produces better base-level alignment.
 	./bwa mem ref.fa read-se.fq.gz | gzip -3 > aln-se.sam.gz
 	./bwa mem ref.fa read1.fq read2.fq | gzip -3 > aln-pe.sam.gz
 
+## GPU acceleration: `bwa gpualn` (this fork)
+
+This fork adds **`gpualn`**, a CUDA implementation of BWA-backtrack (`bwa aln`)
+for single-end reads, targeting **ancient DNA (aDNA)** where seeding is disabled
+(`-l 1024`) — the regime where seed-and-extend aligners (and the older BarraCUDA)
+struggle. It produces a **bit-exact** `.sai`/SAM (byte-identical to CPU
+`bwa aln`/`samse`) while running **~5x faster than 16 CPU threads** on a single
+NVIDIA RTX 3090 (full 3.95M-read aDNA file: 161 s vs 895 s; `.sai` md5 identical).
+
+Build (needs the CUDA toolkit + an NVIDIA GPU; the default `make` is unchanged
+and has **no** CUDA dependency):
+
+	make bwa-gpu          # CUDA-enabled `bwa` with the `gpualn` subcommand
+	# CUDA_ARCH defaults to sm_86 (RTX 30xx); e.g. `make bwa-gpu CUDA_ARCH=sm_80`
+
+Usage — drop-in for `bwa aln` (writes a `.sai`):
+
+	./bwa-gpu gpualn -l 1024 -n 0.01 -o 2 -t 16 ref.fa reads.fq.gz > out.sai
+	./bwa-gpu samse -r '@RG\tID:S\tSM:S' ref.fa out.sai reads.fq.gz | samtools sort -o out.bam -
+
+Or the **fused alnse** mode (`-S`): aln + samse in one command, no intermediate
+`.sai`, the FASTQ read once, multithreaded `samse`, SAM to stdout:
+
+	./bwa-gpu gpualn -S -r '@RG\tID:S\tSM:S\tPL:illumina' ref.fa reads.fq.gz \
+	    | samtools sort -@16 -O bam -o out.bam -
+
+Options mirror `bwa aln`: `-l` seed length (`-l 1024` disables seeding for aDNA),
+`-n` max diff / missing-prob, `-o` max gap opens, `-t` CPU threads (preprocessing
++ the small CPU reconcile), `-f` output file; plus `-S` (SAM/alnse) and `-r`
+(read-group line).
+
+Why it is bit-exact: the GPU runs the BWA-backtrack search as a warp-cooperative
+depth-first traversal of the FM-index (one read per warp, a two-level
+shared+global stack) and detects which reads have a hit; the ~0.5% that map are
+reconciled on the CPU with the **unmodified** `bwt_match_gap`, so output matches
+stock `bwa`. The standard `bwa index` is used as-is (the suffix array is only
+needed by `samse`, not on the GPU); ~3.1 GB of GPU memory for a human-genome
+index (fits an 8 GB card). Design, profiling and validation:
+[cuda/PROGRESS.md](cuda/PROGRESS.md).
+
 ## Introduction
 
 BWA is a software package for mapping DNA sequences against a large reference
