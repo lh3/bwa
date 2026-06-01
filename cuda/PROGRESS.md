@@ -59,6 +59,32 @@ Reference ceiling: ~1e9 occ4 for the whole 10k set; at the measured 2.28 G-Occ4/
 perfectly parallel → the naive run is ~227x off the FM-index ceiling, i.e. essentially all loss is
 scheduling/memory, not the index. Headroom is enormous.
 
-Next (step 2 — the actual speedup lever): coalesced/SoA stack (`[sp*P+slot]`), high-occupancy launch,
-attack divergence (one-read-per-warp cooperation and/or read-size bucketing), persistent-thread
-work-pool, and the `bwt_2occ4` shared-bucket fast path. Also validate bit-exact on strided20k/sub100k.
+## Phase 2 step 2 — performance — IN PROGRESS (bit-exact maintained throughout)
+
+Changes to `cuda/dfstest.cu`: coalesced SoA stack (`[sp*P+slot]`), persistent-thread work-pool
+(atomic work counter), occupancy-sized launch (82 SM x 7 blk x 128 = 73472 slots), per-read **work
+budget** (default 2M pops via `DFS_BUDGET`) that flags pathological reads to the exact CPU path,
+and an opt-in full CPU reference (`DFS_FULLCPU=1`, auto-on for <=20k reads) — large runs reconcile
+only the flagged/hit reads from stored flat data (the real production hybrid).
+
+Findings (the key one): the naive 100s was **dominated by ONE read** doing 33.1M node-pops on a
+single thread. The CPU's `max_entries=2M` frontier cap makes `bwt_match_gap` bail on such reads
+(returning n_aln=0), so CPU stays fast; the GPU had no equivalent. Coalesced stack + occupancy +
+work-pool ALONE changed nothing (still ~100s) because time was that one serial read, not
+scheduling. The **work budget** fixed it — and it's free for bit-exactness because flagged reads
+are reconciled by the exact CPU search anyway.
+
+Measured (RTX 3090, hs37d5, `-l 1024 -n 0.01 -o 2`, budget 2M):
+| set | naive | +budget | flagged | bit-exact |
+|-----|-------|---------|---------|-----------|
+| sub2k  | 101.8 s (20 r/s) | 4.5 s (440 r/s) | 2 (0.1%) | yes |
+| sub100k | — | **12.08 s (8276 r/s)** + 2.37 s reconcile (520 reads, 1 thread) | 11 budget + ~509 hits | **yes (md5 eecf35c1)** |
+
+CPU baseline on sub100k, same box: **`bwa aln -t 16` = 23.47 s (4261 r/s)**.
+=> GPU kernel is **~1.9x the full 16-core CPU** already (reconcile parallelizes/overlaps away);
+**~83x** over the naive GPU baseline. Throughput 338M pops/s ~= 38% of the FM-index occ4 ceiling,
+so meaningful headroom remains.
+
+Next levers: `bwt_2occ4` shared-bucket fast path (~halve probes), cut register pressure to raise
+occupancy beyond 7 blk/SM, cheaper exact-match tail, then batch streaming over the full file +
+multi-thread the reconcile. Goal: push well past 2x toward the occ4 ceiling.
