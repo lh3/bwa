@@ -122,3 +122,51 @@ streaming with overlapped, multithreaded CPU reconcile. References saved in cuda
 - A per-*thread* full shared stack can't fit (128 thr * 386 * 20 B ~= 1 MB/block). So the shared
   stack **requires one read per warp** (one stack/warp) -> which forces lane cooperation = Idea #1.
   Decision: implement the warp-cooperative engine with a per-warp shared-memory stack.
+
+## Phase 2 step 2 — WARP-COOPERATIVE engine (Idea #1+#2) — DONE (kernel), bit-exact
+`DFS_ENGINE=warp` in `cuda/dfstest.cu`: one read per warp; 32 lanes co-explore the tree as a
+frontier; per-warp stack in SHARED memory (SoA). Wave = pop up to 32 top nodes -> expand in
+parallel -> warp prefix-sum compact children -> push to shared stack; hit via `__any_sync`;
+budget/overflow -> CPU reconcile. Removes global stack traffic.
+
+**sub100k GPU kernel: 29,708 reads/s** (CAP=640, 4 warps/blk) = **3x the thread engine (9934),
+~7x the 16-core CPU (4261 r/s)**; bit-exact (md5 eecf35c1). sub2k: 6304 vs 547 r/s (11.5x) —
+monster reads now spread across 32 lanes instead of serializing on one thread.
+
+### CURRENT BOTTLENECK (documented) — CPU reconcile of overflow-flagged reads
+The warp wave pops 32 nodes and pushes ALL their children, so the live frontier is **BFS-wide**,
+not bounded by the serial DFS depth (386). With the shared stack CAP=640 it **overflows for 4.6%
+of reads**, which are flagged to the CPU. Reconciling those 4,835 bushy reads on **one CPU thread
+takes 84 s** — it now *dwarfs* the 3.4 s GPU kernel (end-to-end 3.4 + 84 = 87 s, worse than CPU's
+23.5 s). So the bottleneck has MOVED from "GPU global-stack traffic" to "CPU reconcile of
+overflow-flagged reads"; the GPU itself is no longer the limiter.
+
+Levers (both needed):
+1. **Cut the overflow flag rate** toward the real-hit floor (~0.5%): raise CAP (bounded by shared
+   mem -> occupancy), and/or bound the warp frontier so it stays near the serial DFS depth (e.g.
+   pop fewer per wave / drain depth-first when near capacity) so CAP=512 suffices.
+2. **Multithread + GPU-overlap the reconcile** (Idea #5): the flagged-read CPU work is embarrassingly
+   parallel; 16 threads -> ~5x, and it can overlap the next GPU batch via streams. Even at 4.6%,
+   84 s/16 ~= 5.3 s; with flag rate driven to ~0.5% it becomes negligible and the engine is
+   GPU-bound at ~29.7k r/s (~7x CPU).
+Added `DFS_NORECON` to skip reconcile during perf sweeps.
+
+### Resolution of the bottleneck (CAP tuning + multithreaded reconcile)
+CAP sweep (sub100k, warp, 4 warps/blk): CAP=640 -> 4.6% flagged; CAP=1024 (80 KB) -> 0.28%;
+CAP=1216 (95 KB) -> 0.065%. Larger CAP = GPU does the bushy reads itself (fewer flags) but is a
+bit slower (more GPU work); the CAP=640 "34k r/s" was illusory (it punted bushy reads to a 84 s
+CPU reconcile). Default CAP set to 1024.
+**Multithreaded the reconcile** (std::thread, per-thread gap_stack; bwt_match_gap is thread-safe):
+751 flagged reads reconciled in **1.57 s wall on 16 threads** (was 12.1 s single-thread).
+
+**Engine standing (sub100k, RTX 3090, bit-exact md5 eecf35c1):**
+- Warp GPU kernel: **21,432 reads/s** (CAP=1024).
+- End-to-end GPU + 16-thread reconcile (sequential): 4.67 + 1.57 = 6.24 s = **16,026 reads/s**.
+- With streaming overlap (reconcile hidden behind next GPU batch): GPU-bound ~**21,432 r/s**.
+- CPU `bwa aln -t 16` = 4,261 r/s on the same box -> **~3.8x (sequential) to ~5x (overlapped)**.
+- vs the naive GPU baseline (100 r/s): ~210x.
+
+Remaining levers: (a) shared(small)+global-backing two-level stack -> high occupancy (currently
+only 4 warps/SM due to the 80 KB shared stack) without flagging, to push the GPU beyond 21k;
+(b) full-file streaming engine with double-buffered batches + reconcile overlapping the next
+kernel (to realize the GPU-bound rate and process the whole 3.95M-read file end-to-end).

@@ -21,6 +21,8 @@
 #include <vector>
 #include <algorithm>
 #include <ctime>
+#include <thread>
+#include <chrono>
 #include <cuda_runtime.h>
 
 extern "C" {
@@ -445,7 +447,7 @@ int main(int argc, char **argv)
 	CK(cudaEventRecord(t0));
 	if (strcmp(engine, "warp") == 0) {
 		int wpb = getenv("DFS_WARP_WPB") ? atoi(getenv("DFS_WARP_WPB")) : 4;
-		int CAPW = getenv("DFS_WARP_CAP") ? atoi(getenv("DFS_WARP_CAP")) : 640;
+		int CAPW = getenv("DFS_WARP_CAP") ? atoi(getenv("DFS_WARP_CAP")) : 1024;
 		int bdim = wpb * 32;
 		size_t shbytes = (size_t)wpb * CAPW * (8 + 8 + 4);
 		CK(cudaFuncSetAttribute(k_dfs_warp, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)shbytes));
@@ -511,24 +513,40 @@ int main(int argc, char **argv)
 			gpu_hit, fn, fp);
 	}
 
+	if (getenv("DFS_NORECON")) { fprintf(stderr, "[hybrid] reconcile skipped (DFS_NORECON); gpu_hit=%ld\n", gpu_hit); return 0; }
+
 	/* the real production hybrid: reconcile the GPU-flagged reads via the exact CPU search,
 	 * reconstructing each read's pristine width from the stored flat arrays. */
 	std::vector<int> n_aln_hyb(n_seqs, 0);
 	std::vector<bwt_aln1_t*> aln_hyb(n_seqs, NULL);
-	std::vector<bwt_width_t> wtmp(max_len + 1);
-	clock_t rc0 = clock();
-	for (int i = 0; i < n_seqs; ++i) {
-		if (!has_hit[i]) continue;
-		int len = rp[i].len;
-		for (int j = 0; j <= len; ++j) { wtmp[j].w = w_flat[rp[i].w_off + j]; wtmp[j].bid = bid_flat[rp[i].w_off + j]; }
-		gap_opt_t lo = base; lo.max_diff = rp[i].max_diff;
-		lo.seed_len = opt->seed_len < len ? opt->seed_len : 0x7fffffff;
-		int na = 0;
-		aln_hyb[i] = bwt_match_gap(bwt, len, seq_flat.data() + rp[i].seq_off, wtmp.data(), (bwt_width_t*)0, &lo, &na, stack);
-		n_aln_hyb[i] = na;
-	}
-	double rcs = (double)(clock() - rc0) / CLOCKS_PER_SEC;
-	fprintf(stderr, "[hybrid] CPU reconcile of %ld flagged reads: %.2f s (1 thread; parallelizable)\n", gpu_hit, rcs);
+	std::vector<int> flagged_idx;
+	for (int i = 0; i < n_seqs; ++i) if (has_hit[i]) flagged_idx.push_back(i);
+
+	/* reconcile is embarrassingly parallel (independent bwt_match_gap calls, each thread its own
+	 * stack); in the streaming engine this also overlaps the next GPU batch. */
+	int nT = opt->n_threads > 0 ? opt->n_threads : 1;
+	int stack_maxdiff = (opt->fnr > 0.0) ? bwa_cal_maxdiff(max_len, BWA_AVG_ERR, opt->fnr) : base.max_diff;
+	if (stack_maxdiff < base.max_gapo) stack_maxdiff = base.max_gapo; /* match driver stack sizing */
+	auto t_rc = std::chrono::steady_clock::now();
+	std::vector<std::thread> ths;
+	for (int t = 0; t < nT; ++t) ths.emplace_back([&, t]() {
+		gap_stack_t *st = gap_init_stack(stack_maxdiff, base.max_gapo, base.max_gape, &base);
+		std::vector<bwt_width_t> wt(max_len + 1);
+		for (size_t x = t; x < flagged_idx.size(); x += nT) {
+			int i = flagged_idx[x], len = rp[i].len;
+			for (int j = 0; j <= len; ++j) { wt[j].w = w_flat[rp[i].w_off + j]; wt[j].bid = bid_flat[rp[i].w_off + j]; }
+			gap_opt_t lo = base; lo.max_diff = rp[i].max_diff;
+			lo.seed_len = opt->seed_len < len ? opt->seed_len : 0x7fffffff;
+			int na = 0;
+			aln_hyb[i] = bwt_match_gap(bwt, len, seq_flat.data() + rp[i].seq_off, wt.data(), (bwt_width_t*)0, &lo, &na, st);
+			n_aln_hyb[i] = na;
+		}
+		gap_destroy_stack(st);
+	});
+	for (auto &th : ths) th.join();
+	double rcs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t_rc).count();
+	fprintf(stderr, "[hybrid] CPU reconcile of %zu flagged reads: %.2f s wall (%d threads)\n",
+		flagged_idx.size(), rcs, nT);
 
 	write_sai("/tmp/dfstest.hybrid.sai", opt, n_seqs, n_aln_hyb.data(), aln_hyb.data());
 	if (golden) { fprintf(stderr, "[check2] hybrid .sai vs golden:\n"); md5cmp("/tmp/dfstest.hybrid.sai", golden); }
