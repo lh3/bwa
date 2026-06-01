@@ -190,3 +190,23 @@ To break the ~22k ceiling, the bushy reads must run ON THE GPU AT HIGH OCCUPANCY
 **shared(small, e.g. 256 -> 16 warps/SM) + per-warp global-backing** stack: 95%+ of reads stay in
 shared (59k base rate); the 2-5% bushy reads spill their deep frontier to global (handled on GPU,
 NOT flagged). Only true 2M-budget reads -> CPU. This is the next build.
+
+## Phase 2 step 2 — TWO-LEVEL stack engine (`DFS_ENGINE=warp2`) — DONE, bit-exact
+Per-warp shared top-window (CAP_SM) + pre-allocated per-warp GLOBAL backing; warp-parallel
+coalesced spill/unspill of 128-entry chunks (invariant: global=oldest bottom, shared=newest top).
+Bushy reads spill to global and STAY ON THE GPU instead of flagging to CPU.
+
+Result (sub100k, bit-exact md5 eecf35c1): **flag rate driven to ~0.015%** (vs 0.34% single-level)
+-> CPU reconcile negligible (520 reads, 0.61 s). CAP_SM sweep: 256->15.9k r/s (16 w/SM),
+384->18.8k (12), 512->21.5k (8), 768->22.1k (4).
+
+**KEY FINDING — we are at the FM-index occ4 ceiling, NOT occupancy-bound.** Occupancy from 4 to 16
+warps/SM does NOT raise throughput; all engines/configs plateau at **~22k reads/s**. This work is
+~8e9 occ4 (4.1e9 node-pops x ~2 probes); at the measured 2.28 G-occ4/s that is a ~3.6 s floor vs
+~4.5 s actual (~80% of ceiling, ~5x the 16-core CPU). The 40-50k target is not reachable on this
+GPU because the kernel is bound by FM-index probe throughput, not latency hiding. Raw speedup
+beyond this needs FEWER occ4 per node (algorithmic; constrained by bit-exactness) or a faster
+FM-index (k-step / occ caching) -- diminishing returns. Default CAP_SM=512.
+
+**warp2 is the engine to ship**: same ceiling speed as warp1 but ~0 CPU reconcile tail, which keeps
+the streaming engine clean. Next: full-file streaming (#2) -- the deliverable, not a speed lever.
