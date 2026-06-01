@@ -45,6 +45,26 @@ threads and overlaps the kernel. Do when building the end-to-end streaming engin
 The DFS is a tree, not a length-bounded loop, so templating read length gives little. The bounded
 inner loops (within-bucket occ, 0..8) are already unrollable. Revisit only if profiling shows it.
 
+## Round 2 (post-ceiling) ideas + verdicts — tested by the occ4 locality sweep
+The occ4 memory-hierarchy sweep (FMTEST_KRANGE) settles these empirically:
+L1/L2-resident occ4 = ~9.9 G/s; HBM (full 3.14 GB) = ~2.3 G/s -> a 4.3x locality ceiling EXISTS in
+cache. BUT the warp2 kernel already runs at ~1.8 G occ4/s = the HBM-random rate (not the L2 rate),
+because the FM-index DFS is pure scatter: ~40k probes/read over ~49M 64-byte buckets => ~0.04%
+within-read block reuse (birthday bound). So:
+- #1 SMEM BWT block cache: REJECTED. Per-warp cache captures only within-warp reuse, of which there
+  is ~none; cross-read hot-root blocks are <0.1% of probes and already L2-resident. The 4.3x ceiling
+  is unreachable for this access pattern.
+- #2 warp address-sort/dedup: REJECTED. 32 probes over 49M buckets ~never share a DRAM row; sort
+  cost > benefit.
+- #3 bit-matrix popc (drop cnt_table): REJECTED for speed. Memory-bound, not compute-bound
+  (cnt_table is constant-cache); same bytes/probe -> no bandwidth change.
+- #4 multi-GPU round-robin: REAL ~2x (doubles HBM bandwidth); embarrassingly parallel across the
+  0x40000 chunks. Needs a 2nd GPU (not present). Worth scaffolding.
+- #5 CPU/GPU double-buffer overlap: REAL ~10% wall-clock (hide ~18s preprocess+reconcile behind the
+  ~154s GPU). The only single-GPU win left. Bit-exact-safe if samse stays a single ordered consumer.
+CONCLUSION: kernel is at the HBM random-access BANDWIDTH wall. Only more bandwidth (multi-GPU) or
+fewer probes (k-step FM-index; marginal for a branching search, risks bit-exactness) move it.
+
 ## Order of execution
 1) #1+#2 warp-cooperative DFS with shared-memory stack (biggest lever).
 2) #5 streaming + multithreaded overlapped reconcile (end-to-end wall-clock).
