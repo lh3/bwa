@@ -56,9 +56,9 @@ __device__ int d_dfs_has_hit(const fmidx_dev fm, const uint8_t *seq, int len,
                              int max_gapo, int max_gape, int mode, int indel_end_skip,
                              int max_del_occ, uint64_t *sk, uint64_t *sl, uint32_t *sn,
                              int P, int slot, int cap, int *overflow,
-                             unsigned long long budget, int *nflag, unsigned long long &nn)
+                             unsigned long long budget, int *nflag, unsigned long long &nn, int &maxsp)
 {
-	nn = 0;
+	nn = 0; maxsp = 0;
 	int nN = 0;
 	for (int j = 0; j < len; ++j) if (seq[j] > 3) ++nN;
 	if (nN > max_diff) return 0;
@@ -115,7 +115,8 @@ __device__ int d_dfs_has_hit(const fmidx_dev fm, const uint8_t *seq, int len,
 		uint64_t nk_=0, nl_=0; int ni_=0, nmm_=0, ngo_=0, nge_=0, nst_=0;
 		#define EMIT(_i,_k,_l,_mm,_go,_ge,_st) do { \
 			if (have_next) { if (sp >= cap) { *overflow = 1; return 1; } \
-				sk[SIDX(sp)]=nk_; sl[SIDX(sp)]=nl_; sn[SIDX(sp)]=pack_node(ni_,nmm_,ngo_,nge_,nst_); ++sp; } \
+				sk[SIDX(sp)]=nk_; sl[SIDX(sp)]=nl_; sn[SIDX(sp)]=pack_node(ni_,nmm_,ngo_,nge_,nst_); ++sp; \
+				if (sp > maxsp) maxsp = sp; } \
 			nk_=(_k); nl_=(_l); ni_=(_i); nmm_=(_mm); ngo_=(_go); nge_=(_ge); nst_=(_st); have_next=true; \
 		} while (0)
 
@@ -168,20 +169,24 @@ __global__ void k_dfs(fmidx_dev fm, const uint8_t *seq, const uint64_t *w_w, con
                       const ReadParam *rp, int nreads, int max_gapo, int max_gape, int mode,
                       int indel_end_skip, int max_del_occ, uint64_t *sk, uint64_t *sl, uint32_t *sn,
                       int cap, uint8_t *has_hit, int *overflow, int *workctr, unsigned long long *npop,
-                      unsigned long long budget, int *nflag)
+                      unsigned long long budget, int *nflag, int *maxsp_out)
 {
-	int slot = blockIdx.x * blockDim.x + threadIdx.x;
-	int P = gridDim.x * blockDim.x;
+	/* block-local stack: this block's slice is contiguous; within it, depth levels are
+	 * blockDim apart (a warp's 32 lanes stay coalesced AND a thread's adjacent depths stay
+	 * close -> L1-friendly), instead of the global stride-P layout that thrashed L2. */
+	int tib = threadIdx.x, stride = blockDim.x;
+	size_t bb = (size_t)blockIdx.x * (size_t)blockDim.x * cap;
+	uint64_t *bsk = sk + bb, *bsl = sl + bb; uint32_t *bsn = sn + bb;
 	for (;;) {
 		int r = atomicAdd(workctr, 1);
 		if (r >= nreads) break;
 		ReadParam p = rp[r];
-		unsigned long long nn = 0;
+		unsigned long long nn = 0; int maxsp = 0;
 		has_hit[r] = (uint8_t)d_dfs_has_hit(fm, seq + p.seq_off, p.len,
 			w_w + p.w_off, w_bid + p.w_off, p.max_diff,
 			max_gapo, max_gape, mode, indel_end_skip, max_del_occ,
-			sk, sl, sn, P, slot, cap, overflow, budget, nflag, nn);
-		npop[r] = nn;
+			bsk, bsl, bsn, stride, tib, cap, overflow, budget, nflag, nn, maxsp);
+		npop[r] = nn; maxsp_out[r] = maxsp;
 	}
 }
 
@@ -293,7 +298,7 @@ int main(int argc, char **argv)
 	CK(cudaMemcpy(d_wbid, bid_flat.data(), bid_flat.size() * 4, cudaMemcpyHostToDevice));
 	CK(cudaMemcpy(d_rp, rp.data(), n_seqs * sizeof(ReadParam), cudaMemcpyHostToDevice));
 
-	int blockDim = 128, cap = 1024;
+	int blockDim = 128, cap = 512; /* DFS depth max ~386; overflow -> CPU reconcile (safe) */
 	int numSM = 0, maxBlocks = 0;
 	CK(cudaDeviceGetAttribute(&numSM, cudaDevAttrMultiProcessorCount, 0));
 	CK(cudaOccupancyMaxActiveBlocksPerMultiprocessor(&maxBlocks, k_dfs, blockDim, 0));
@@ -308,6 +313,7 @@ int main(int argc, char **argv)
 	CK(cudaMalloc(&d_wc, 4)); CK(cudaMemset(d_wc, 0, 4));
 	unsigned long long *d_npop; CK(cudaMalloc(&d_npop, (size_t)n_seqs * 8)); CK(cudaMemset(d_npop, 0, (size_t)n_seqs * 8));
 	int *d_nflag; CK(cudaMalloc(&d_nflag, 4)); CK(cudaMemset(d_nflag, 0, 4));
+	int *d_maxsp; CK(cudaMalloc(&d_maxsp, (size_t)n_seqs * 4)); CK(cudaMemset(d_maxsp, 0, (size_t)n_seqs * 4));
 	unsigned long long budget = getenv("DFS_BUDGET") ? strtoull(getenv("DFS_BUDGET"), NULL, 10) : 2000000ULL;
 	fprintf(stderr, "[gpu] per-read work budget = %llu pops (overflow -> CPU reconcile)\n", budget);
 
@@ -315,7 +321,7 @@ int main(int argc, char **argv)
 	CK(cudaEventRecord(t0));
 	k_dfs<<<nblocks, blockDim>>>(fm, d_seq, d_ww, d_wbid, d_rp, n_seqs,
 		local_opt.max_gapo, local_opt.max_gape, local_opt.mode, local_opt.indel_end_skip,
-		local_opt.max_del_occ, d_sk, d_sl, d_sn, cap, d_hit, d_ovf, d_wc, d_npop, budget, d_nflag);
+		local_opt.max_del_occ, d_sk, d_sl, d_sn, cap, d_hit, d_ovf, d_wc, d_npop, budget, d_nflag, d_maxsp);
 	CK(cudaEventRecord(t1)); CK(cudaEventSynchronize(t1)); CK(cudaGetLastError());
 	float ms = 0; CK(cudaEventElapsedTime(&ms, t0, t1));
 	{ int nflag = 0; CK(cudaMemcpy(&nflag, d_nflag, 4, cudaMemcpyDeviceToHost));
@@ -329,6 +335,12 @@ int main(int argc, char **argv)
 	  std::vector<int> idx(n_seqs); for(int i=0;i<n_seqs;i++) idx[i]=i;
 	  std::sort(idx.begin(), idx.end(), [&](int a,int b){return np[a]>np[b];});
 	  fprintf(stderr, "[gpu] heaviest reads (pops): "); for(int t=0;t<5&&t<n_seqs;t++) fprintf(stderr,"%llu ", np[idx[t]]); fprintf(stderr,"\n"); }
+
+	{ std::vector<int> ms(n_seqs); CK(cudaMemcpy(ms.data(), d_maxsp, (size_t)n_seqs*4, cudaMemcpyDeviceToHost));
+	  int mx=0; double mean=0; std::vector<int> b(13,0); /* log2 bins */
+	  for(int i=0;i<n_seqs;i++){ int v=ms[i]; if(v>mx)mx=v; mean+=v; int bb=0; while((1<<bb)<v && bb<12)++bb; b[bb]++; }
+	  fprintf(stderr, "[gpu] DFS stack DEPTH: mean=%.1f max=%d  (sizes per-warp shared stack)\n", mean/n_seqs, mx);
+	  fprintf(stderr, "[gpu] depth histogram <=2^b: "); for(int bb=0;bb<13;bb++) if(b[bb]) fprintf(stderr,"[%d]=%d ", 1<<bb, b[bb]); fprintf(stderr,"\n"); }
 
 	std::vector<uint8_t> has_hit(n_seqs); int ovf = 0;
 	CK(cudaMemcpy(has_hit.data(), d_hit, n_seqs, cudaMemcpyDeviceToHost));

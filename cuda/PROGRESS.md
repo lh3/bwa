@@ -111,3 +111,14 @@ Next big levers (toward "massive"): (1) **one-read-per-warp / subtree-per-warp c
 hot stack in shared memory (the literature's recommended structure; should cut both divergence and
 the L2-thrashing stack); (2) shared-memory hot-stack window backing the global spill; (3) full-file
 streaming with overlapped, multithreaded CPU reconcile. References saved in cuda/REFERENCES.md.
+
+### step-2 cont. (data that pins down the next move)
+- **DFS stack DEPTH (sub100k): mean 111, max 386.** Histogram concentrated at <=128 (90,876 reads),
+  <=256 (7,612), <=512 (223). So a **512-entry stack covers every read** -> a per-warp shared-memory
+  stack is feasible (~512*20 B = 10 KB/warp). Reduced cap 1024->512 (0 overflow).
+- **Block-local stack re-striding ([blockIdx*blockDim*cap + d*blockDim + tib]): NO win** (9165 vs
+  9934 r/s, bit-exact). Negative result -> the global stack is bound by traffic VOLUME/bandwidth,
+  not layout/locality. Re-striding can't reduce volume; only removing global stack traffic can.
+- A per-*thread* full shared stack can't fit (128 thr * 386 * 20 B ~= 1 MB/block). So the shared
+  stack **requires one read per warp** (one stack/warp) -> which forces lane cooperation = Idea #1.
+  Decision: implement the warp-cooperative engine with a per-warp shared-memory stack.
