@@ -52,6 +52,10 @@ int main_shm(int argc, char *argv[]);
 
 int main_pemerge(int argc, char *argv[]);
 int main_maxk(int argc, char *argv[]);
+
+#ifdef HAVE_CUDA
+int bwa_alnse_gpu(int argc, char *argv[]); /* GPU BWA-backtrack (cuda/aln_gpu.cu) */
+#endif
 	
 static int usage()
 {
@@ -65,6 +69,9 @@ static int usage()
 	fprintf(stderr, "         fastmap       identify super-maximal exact matches\n");
 	fprintf(stderr, "         pemerge       merge overlapping paired ends (EXPERIMENTAL)\n");
 	fprintf(stderr, "         aln           gapped/ungapped alignment\n");
+#ifdef HAVE_CUDA
+	fprintf(stderr, "         gpualn        GPU BWA-backtrack: aln (.sai) or fused alnse (-S, SAM); single-end, CUDA\n");
+#endif
 	fprintf(stderr, "         samse         generate alignment (single ended)\n");
 	fprintf(stderr, "         sampe         generate alignment (paired ended)\n");
 	fprintf(stderr, "         bwasw         BWA-SW for long queries (DEPRECATED)\n");
@@ -102,6 +109,9 @@ int main(int argc, char *argv[])
 	else if (strcmp(argv[1], "bwt2sa") == 0) ret = bwa_bwt2sa(argc-1, argv+1);
 	else if (strcmp(argv[1], "index") == 0) ret = bwa_index(argc-1, argv+1);
 	else if (strcmp(argv[1], "aln") == 0) ret = bwa_aln(argc-1, argv+1);
+#ifdef HAVE_CUDA
+	else if (strcmp(argv[1], "gpualn") == 0) ret = bwa_alnse_gpu(argc-1, argv+1);
+#endif
 	else if (strcmp(argv[1], "samse") == 0) ret = bwa_sai2sam_se(argc-1, argv+1);
 	else if (strcmp(argv[1], "sampe") == 0) ret = bwa_sai2sam_pe(argc-1, argv+1);
 	else if (strcmp(argv[1], "bwtsw2") == 0) ret = bwa_bwtsw2(argc-1, argv+1);

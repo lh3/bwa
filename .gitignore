@@ -9,6 +9,7 @@ bwamem-lite
 fmtest
 dfstest
 bwa-aln-gpu
+bwa-gpu
 bwa-prof
 bwtgap_prof.o
 test_data/

@@ -55,7 +55,9 @@ struct Chunk {
 	gap_opt_t base; int stack_maxdiff, max_len;
 };
 
-int main(int argc, char **argv)
+/* C-callable entry: usable as a bwa subcommand (`bwa gpualn ...`) or standalone (ALN_GPU_MAIN).
+ * argv[0] is the program/subcommand name; options are parsed from argv[1..] (bwa convention). */
+extern "C" int bwa_alnse_gpu(int argc, char **argv)
 {
 	gap_opt_t *opt = gap_init_opt();
 	opt->seed_len = 1024; opt->fnr = 0.01; opt->max_diff = -1; opt->max_gapo = 2; opt->n_threads = 16;
@@ -111,7 +113,7 @@ int main(int argc, char **argv)
 		bwt_restore_sa(sa_fn, bwt);                /* SA for bwa_sa2pos; bwt kept (not destroyed) */
 		pacseq = (ubyte_t*)calloc(bns->l_pac/4+1, 1);
 		err_rewind(bns->fp_pac); err_fread_noeof(pacseq, 1, bns->l_pac/4+1, bns->fp_pac);
-		{ /* @PG provenance line */
+		if (!bwa_pg) { /* @PG provenance (standalone only; as a bwa subcommand, main.c sets bwa_pg) */
 			char pg[8192]; int o = snprintf(pg, sizeof pg, "@PG\tID:bwa-aln-gpu\tPN:bwa-aln-gpu\tVN:gpu\tCL:");
 			for (int i=0;i<argc && o<(int)sizeof pg-2;i++) o += snprintf(pg+o, sizeof pg-o, "%s%s", i?" ":"", argv[i]);
 			bwa_pg = strdup(pg);
@@ -250,3 +252,7 @@ int main(int argc, char **argv)
 	bwt_destroy(bwt);
 	return 0;
 }
+
+#ifdef ALN_GPU_MAIN
+int main(int argc, char **argv) { return bwa_alnse_gpu(argc, argv); }
+#endif

@@ -54,14 +54,23 @@ dfstest:libbwa.a $(DFSDEPS) cuda/dfstest.cu cuda/fm_device.cuh
 		$(NVCC) $(NVCCFLAGS) -I. cuda/dfstest.cu $(DFSDEPS) -o $@ -L. -lbwa $(LIBS)
 
 ALNDEPS=	$(DFSDEPS) bwase.o
+# standalone GPU tool (its own main via -DALN_GPU_MAIN)
 bwa-aln-gpu:libbwa.a $(ALNDEPS) cuda/aln_gpu.cu cuda/fm_device.cuh cuda/dfs_engine.cuh
-		$(NVCC) $(NVCCFLAGS) -I. cuda/aln_gpu.cu $(ALNDEPS) -o $@ -L. -lbwa $(LIBS)
+		$(NVCC) $(NVCCFLAGS) -DALN_GPU_MAIN -I. cuda/aln_gpu.cu $(ALNDEPS) -o $@ -L. -lbwa $(LIBS)
+
+# CUDA-enabled bwa with the `gpualn` subcommand (default `make` stays CPU-only / CUDA-free)
+aln_gpu.o:cuda/aln_gpu.cu cuda/fm_device.cuh cuda/dfs_engine.cuh
+		$(NVCC) $(NVCCFLAGS) -I. -c cuda/aln_gpu.cu -o $@
+main_cuda.o:main.c
+		$(CC) -c $(CFLAGS) $(DFLAGS) -DHAVE_CUDA $(INCLUDES) main.c -o $@
+bwa-gpu:libbwa.a $(AOBJS) main_cuda.o aln_gpu.o
+		$(NVCC) $(NVCCFLAGS) $(AOBJS) main_cuda.o aln_gpu.o -o $@ -L. -lbwa $(LIBS)
 
 libbwa.a:$(LOBJS)
 		$(AR) -csru $@ $(LOBJS)
 
 clean:
-		rm -f gmon.out *.o a.out $(PROG) *~ *.a fmtest
+		rm -f gmon.out *.o a.out $(PROG) *~ *.a fmtest dfstest bwa-aln-gpu bwa-gpu
 
 depend:
 	( LC_ALL=C ; export LC_ALL; makedepend -Y -- $(CFLAGS) $(DFLAGS) $(CPPFLAGS) -- *.c )

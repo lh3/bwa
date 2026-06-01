@@ -257,6 +257,19 @@ of the ~18s CPU tail), records BIT-EXACT (md5 e2a6e1c9). Both modes re-verified 
 pipeline (sub100k .sai eecf35c1, SAM records identical). vs CPU `bwa aln -t16`+samse = 895 s ->
 **~5.56x end-to-end.**
 
+## Phase 3c — native `bwa gpualn` subcommand — DONE
+`cuda/aln_gpu.cu`'s entry is now `extern "C" int bwa_alnse_gpu(int,char**)`; `main.c` dispatches
+`bwa gpualn` under `#ifdef HAVE_CUDA`. Builds:
+- `make`           -> CPU-only `bwa` (NO CUDA dependency; `gpualn` absent) -- fork still builds anywhere.
+- `make bwa-gpu`   -> CUDA `bwa` with the `gpualn` subcommand (main.c -DHAVE_CUDA + nvcc aln_gpu.o,
+                      linked via nvcc; reuses the existing AOBJS for samse/aln CPU functions).
+- `make bwa-aln-gpu` -> standalone tool (unchanged; -DALN_GPU_MAIN).
+Usage:
+  bwa gpualn [-l 1024 -n 0.01 -o 2 -t 16] ref.fa reads.fq.gz > out.sai           # .sai (like bwa aln)
+  bwa gpualn -S -r '@RG\t...' ref.fa reads.fq.gz | samtools sort -O bam -o out.bam -   # fused alnse -> BAM
+Verified: `bwa gpualn` .sai md5 == golden (eecf35c1); `bwa gpualn -S` SAM records == `bwa samse`;
+@PG is proper bwa provenance (ID:bwa). CPU-only `bwa` regression-checked (no gpualn, no CUDA link).
+
 ## STATUS: GOAL ACHIEVED
 GPU `bwa aln` (BWA-backtrack) for ancient DNA at `-l 1024 -n 0.01 -o 2`, single-end:
 **~5x the 16-core CPU on a full real file, byte-identical .sai, GPU-bound at the FM-index ceiling.**
