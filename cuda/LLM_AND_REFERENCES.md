@@ -70,6 +70,17 @@ optimization decisions (adopted and rejected, with reasons) are in
 - NVIDIA CUDA Ampere GPU Architecture Tuning Guide — https://docs.nvidia.com/cuda/ampere-tuning-guide/
 - NVIDIA, *Using CUDA Warp-Level Primitives* — https://developer.nvidia.com/blog/using-cuda-warp-level-primitives/
 
+## License
+This GPU code is **GPLv3** (same as bwa). The `gpualn` port is a derivative work
+of bwa's GPL-licensed core — it `#include`s and links `bwtgap.c` (`bwt_match_gap`),
+`bwtaln.c` (`bwt_cal_width` etc.), `bwase.c` (the `samse` functions) and
+`bwaseqio.c`, which carry no separate MIT header and so fall under bwa's GPLv3
+(`COPYING`). The new CUDA source files (`cuda/fm_device.cuh`, `cuda/dfs_engine.cuh`,
+`cuda/aln_gpu.cu`, `cuda/dfstest.cu`, `cuda/fmtest.cu`) carry the standard GPLv3
+header; the full license text is in `COPYING`. (Some bwa files are MIT-licensed,
+but a work that derives from and links the GPL parts is GPLv3 as a whole.)
+This is an engineering reading of the file headers, not legal advice.
+
 ## Reproducibility / disclosure
 LLM-generated and LLM-assisted code and analysis were reviewed and empirically
 validated against stock `bwa` before acceptance (bit-exact `.sai`/SAM checks at

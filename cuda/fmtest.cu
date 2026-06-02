@@ -1,3 +1,21 @@
+/* Device FM-index validation harness -- part of the bwa `gpualn` GPU
+   BWA-backtrack port for ancient DNA.
+   Copyright (C) 2026  teepean  <https://github.com/teepean>
+   Derived from bwa (Heng Li; Broad Institute / Dana-Farber / Genome Research Ltd.).
+
+   This program is free software: you can redistribute it and/or modify
+   it under the terms of the GNU General Public License as published by
+   the Free Software Foundation, either version 3 of the License, or
+   (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful,
+   but WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+   GNU General Public License for more details.
+
+   You should have received a copy of the GNU General Public License
+   along with this program.  If not, see <https://www.gnu.org/licenses/>. */
+
 /* Phase 1 validation harness for the device FM-index.
  *
  * Loads a real bwa .bwt index, uploads bwt->bwt + cnt_table + L2 to the GPU, then:
