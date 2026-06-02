@@ -73,7 +73,8 @@ reconciled on the CPU with the **unmodified** `bwt_match_gap`, so output matches
 stock `bwa`. The standard `bwa index` is used as-is (the suffix array is only
 needed by `samse`, not on the GPU); ~3.1 GB of GPU memory for a human-genome
 index (fits an 8 GB card). Design, profiling and validation:
-[cuda/PROGRESS.md](cuda/PROGRESS.md).
+[cuda/PROGRESS.md](cuda/PROGRESS.md). How it was built (LLM-assisted) and the
+references it drew on: [cuda/LLM_AND_REFERENCES.md](cuda/LLM_AND_REFERENCES.md).
 
 ## Introduction
 
