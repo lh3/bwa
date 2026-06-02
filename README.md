@@ -50,6 +50,22 @@ Options mirror `bwa aln`: `-l` seed length (`-l 1024` disables seeding for aDNA)
 + the small CPU reconcile), `-f` output file; plus `-S` (SAM/alnse) and `-r`
 (read-group line).
 
+**Performance (short-read alignment, `gpualn` vs CPU `bwa aln`+`samse`, single
+RTX 3090 vs 16 CPU threads, `-l 1024 -n 0.01 -o 2`, hs37d5):**
+
+| sample (single-end aDNA) | reads | `gpualn` | CPU `bwa aln`+`samse` | speedup |
+|--------------------------|-------|----------|-----------------------|---------|
+| low-endogenous (~0.5% mapped)    | 3,948,528  | 174 s (≈22.7k reads/s) | ~895 s            | **~5.1×** |
+| higher-endogenous (~2% mapped)   | 40,571,012 | 1,947 s (≈20.8k reads/s) | ~9,790 s (wall) | **~5.0×** |
+
+Throughput is ~20,000–28,000 reads/s depending on how much backtracking each
+read needs — damaged/non-matching reads (the bulk of aDNA, and seeding is off)
+explore larger search trees, so a sample's effective rate tracks its tree sizes,
+not just read count. The result is **bit-exact**: on the 40.6 M-read sample all
+944,922 mapped records were byte-identical to CPU `bwa aln`. The kernel sits at
+~80% of the GPU's random-access FM-index `Occ` bandwidth ceiling, i.e. it is
+memory-bound on the index probes rather than compute- or scheduling-bound.
+
 Why it is bit-exact: the GPU runs the BWA-backtrack search as a warp-cooperative
 depth-first traversal of the FM-index (one read per warp, a two-level
 shared+global stack) and detects which reads have a hit; the ~0.5% that map are
