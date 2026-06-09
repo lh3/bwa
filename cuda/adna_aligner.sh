@@ -57,7 +57,7 @@ INDNAME=""
 POPNAME="unknown"
 THREADS=8
 ALIGNER="mem"
-SPLIT=70
+SPLIT=auto                        # "auto" (default) = pick from the AdapterRemoval length report; or an INT in bp
 REF="hs37d5.fa"
 MEM_OPTS="-k 19 -r 2.5 -L 15"     # ancient bwa mem / mem3 params (DNAharvester defaults)
 DEDUP=0
@@ -76,7 +76,7 @@ Usage:
   -p NAME   population name (for the log only)            [default: unknown]
   -t INT    threads                                       [default: 8]
   -a TOOL   long-read aligner: mem | mem3 | fq2bam        [default: mem]
-  -s INT    short/long split length in bp                 [default: 70]
+  -s VAL    short/long split length: an INT in bp, or 'auto' [default: auto]
   -r FILE   reference fasta                               [default: hs37d5.fa]
   -O STR    long-read bwa mem / mem3 options              [default: "-k 19 -r 2.5 -L 15"]
   -g        map SHORT reads on the GPU (bwa gpualn) instead of CPU bwa aln [CPU]
@@ -86,6 +86,13 @@ Usage:
 Short reads (< split) map with BWA-backtrack (-l 1024 -n 0.01 -o 2): on the CPU
 (bwa aln + samse) by default, or on the GPU with -g (bwa gpualn, bit-exact, ~5x
 faster on an RTX 3090; needs the CUDA-enabled bwa-gpu, override path via BWA_GPU).
+
+Split length (-s): 'auto' (the default) picks the cutoff from AdapterRemoval3's
+post-trimming read-length report ({sample}.json) using bwa's own max_diff-vs-length
+curve -- it keeps the backtracking 'aln' work on the cheap side of the cost cliff
+(reads whose max_diff would reach 5, ~64 bp at -n 0.01, are sent to mem) and bounds
+the aln runtime via a tree-cost budget (override with PICK_SPLIT_BUDGET, default 2e14).
+Pass an integer (e.g. -s 50) to force a fixed cutoff instead.
 The long-read aligner is selected with -a. Note: parabricks fq2bam only
 accepts a subset of bwa mem flags (-M -Y -C -T -B -U -L -I -K), so the
 ancient '-k 19 -r 2.5' seeding params are dropped for fq2bam.
@@ -125,6 +132,12 @@ case "$ALIGNER" in
     mem|mem3|fq2bam) ;;
     *) echo "ERROR: -a must be one of: mem, mem3, fq2bam (got '$ALIGNER')" >&2; exit 1 ;;
 esac
+case "$SPLIT" in
+    auto) ;;
+    ''|*[!0-9]*) echo "ERROR: -s must be a positive integer or 'auto' (got '$SPLIT')" >&2; exit 1 ;;
+esac
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [ "$GPU_ALN" -eq 1 ] && ! command -v "$BWA_GPU" >/dev/null 2>&1; then
     echo "ERROR: -g given but '$BWA_GPU' not found on PATH (build with 'make bwa-gpu' or set \$BWA_GPU)" >&2
     exit 1
@@ -141,7 +154,11 @@ echo "            *** adna_aligner.sh ***"
 echo "  Sample      : $INDNAME   (population: $POPNAME)"
 echo "  Mode        : $MODE-end"
 echo "  Reference   : $REF"
-echo "  Split length: $SPLIT bp   (short -> $SHORT_ALN_DESC, long -> $ALIGNER)"
+if [ "$SPLIT" = "auto" ]; then
+    echo "  Split length: auto   (chosen from the AdapterRemoval length report; short -> $SHORT_ALN_DESC, long -> $ALIGNER)"
+else
+    echo "  Split length: $SPLIT bp   (short -> $SHORT_ALN_DESC, long -> $ALIGNER)"
+fi
 echo "  Threads     : $THREADS"
 echo ""
 
@@ -260,6 +277,14 @@ else
 fi
 
 [ -s "$PROC_FQ" ] || { echo "ERROR: processed fastq $PROC_FQ is empty" >&2; exit 1; }
+
+# Resolve an automatic split length from the AdapterRemoval length report.
+# (-n 0.01 below must match the fnr used by the short-read aln step.)
+if [ "$SPLIT" = "auto" ]; then
+    AR_JSON="${INDNAME}/${INDNAME}.json"
+    SPLIT="$(python3 "$SCRIPT_DIR/pick_split.py" "$AR_JSON" 0.01 ${PICK_SPLIT_BUDGET:+$PICK_SPLIT_BUDGET})"
+    echo ">>> auto split length: ${SPLIT} bp  (from $AR_JSON; reads <${SPLIT} -> $SHORT_ALN_DESC, >=${SPLIT} -> $ALIGNER)"
+fi
 
 # ===========================================================================
 # 2. Split short vs long reads at $SPLIT bp
