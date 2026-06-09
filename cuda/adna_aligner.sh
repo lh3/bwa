@@ -294,11 +294,16 @@ echo ""; echo ">>> [2/5] Splitting reads at ${SPLIT} bp"; echo ""
 SHORT_FQ="${INDNAME}/${INDNAME}.short.fq.gz"
 LONG_FQ="${INDNAME}/${INDNAME}.long.fq.gz"
 
-: | gzip > "$SHORT_FQ"
-: | gzip > "$LONG_FQ"
+# Compress the (transient, deleted-after-alignment) split fastqs with parallel BGZF
+# instead of single-threaded gzip -- ~6x faster on a many-core box, and BGZF is valid
+# gzip so bwa / mem3 / fq2bam read it natively. Two bgzip pipes run at once, so give
+# each half the threads.
+BGZIP_T=$(( THREADS > 1 ? THREADS / 2 : 1 ))
+: | bgzip -@ "$BGZIP_T" > "$SHORT_FQ"
+: | bgzip -@ "$BGZIP_T" > "$LONG_FQ"
 
 zcat -f "$PROC_FQ" | awk -v minlen="$SPLIT" \
-    -v short_out="gzip > $SHORT_FQ" -v long_out="gzip > $LONG_FQ" '
+    -v short_out="bgzip -@ $BGZIP_T -l 2 > $SHORT_FQ" -v long_out="bgzip -@ $BGZIP_T -l 2 > $LONG_FQ" '
     {
         if      (NR%4==1) header=$0;
         else if (NR%4==2) seq=$0;
