@@ -10,11 +10,17 @@
 # `aln` work on the cheap side of the cost cliff. Tree-cost per read ~ C(len,d)*3^d with
 # d = bwa_cal_maxdiff(len, 0.02, fnr); cost explodes once d crosses 5.
 #
-# Rule: largest L such that  (a) all reads < L have max_diff <= 4  (hard cliff guard),
-#                            (b) cumulative aln tree-cost(< L) <= budget  (runtime guard).
-# Falls back to 50 on any error so the pipeline never breaks.
+# Rule: largest L such that  (a) all reads < L have max_diff <= 4  (hard cliff guard, ~64),
+#                            (b) cumulative aln tree-cost(< L) <= budget  (runtime guard),
+#       then clamped UP to a FLOOR of 60. The floor protects precision: Oliva et al. show the
+#       aln-vs-mem precision gap is worst for 30-60bp reads (the bulk of aDNA), so those MUST stay
+#       on aln -- never let the budget guard drop the cutoff into that band and exile them to mem.
+# Net: auto returns a value in [60, ~64]. (The pipeline default is now a FIXED 64; this auto path
+# only runs on an explicit `-s auto`.) Falls back to 60 on any error so the pipeline never breaks.
 import json, sys, math
 from math import comb
+
+FLOOR = 60   # precision floor: keep the 30-60bp band on aln regardless of the cost/budget guard
 
 def maxdiff(l, fnr, err=0.02):
     if l < 1: return 0
@@ -53,10 +59,10 @@ def main():
             cum += cost(L-1) * hist.get(L-1, 0)   # cost of reads of length L-1 (i.e. < L now)
             if cum <= budget: best = L
             else: break
-        print(max(best, 1))
+        print(max(best, FLOOR))
     except Exception as e:
-        sys.stderr.write(f"[pick_split] warning: {e}; falling back to 50\n")
-        print(50)
+        sys.stderr.write(f"[pick_split] warning: {e}; falling back to {FLOOR}\n")
+        print(FLOOR)
 
 if __name__ == "__main__":
     main()
