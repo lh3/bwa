@@ -76,6 +76,60 @@ index (fits an 8 GB card). Design, profiling and validation:
 [cuda/PROGRESS.md](cuda/PROGRESS.md). How it was built (LLM-assisted) and the
 references it drew on: [cuda/LLM_AND_REFERENCES.md](cuda/LLM_AND_REFERENCES.md).
 
+### Pipeline integration and the short/long split cutoff
+
+`gpualn` is a bit-exact drop-in for the short-read aligner in the aDNA mapping
+pipeline ([cuda/adna_aligner.sh](cuda/adna_aligner.sh), `-g`): reads **below** a
+length cutoff go to `gpualn` (BWA-backtrack), reads **at/above** it to
+`bwa mem`/`mem3`. The cutoff **defaults to a fixed 64 bp**; `-s auto` instead
+picks it from the AdapterRemoval3 length report (clamped to a **floor of 60**),
+and `-s INT` forces a value.
+
+Why 64 with a floor of 60: BWA-backtrack (`aln`) is most precise on short reads,
+and `bwa mem -k19 -r2.5` *loses* precision / inflates reference bias for reads
+**< 70 bp**, worst at **30–60 bp** — the bulk of aDNA (Oliva et al. 2021). A
+cutoff of 64 keeps that precision-critical band on `aln`/`gpualn` while sitting at
+backtrack's cost cliff (`max_diff` reaches 5 at ~64 bp for `-n 0.01`). A real-data
+check (VILA01, 11.06 M reads, hs37d5) confirmed that *raising* the cutoff is
+counter-productive here: 64 → 70 → 75 monotonically **lost mappings**
+(389,722 → 385,453 → 376,414) and **added wall time** (240 → 326 → 470 s) — the
+64+ band is slow on `gpualn`'s d=5 search and `mem` recovers more of it (at lower
+precision). The floor of 60 stops `auto` from ever exiling the precision-critical
+band to `mem`. Use `-s 70` only for a study that is specifically reference-bias-
+sensitive and will pay the ~+36% runtime.
+
+### GPU alignment *generation* (investigation, not shipped)
+
+Production `gpualn` is GPU hit-*detection* + a small CPU reconcile. For the
+expensive d=5 band (64–70 bp) the CPU reconcile of every mapped read is a floor
+that pins `gpualn` at *parity* with CPU `bwa aln` on that band. We investigated
+generating the alignments on the GPU to remove that floor:
+
+- `bwt_match_gap`'s output is **order-sensitive** (best-first + the `gap_shadow`
+  bound mutation), and order-sensitivity turns out to be **equivalent to
+  multi-mapping** (`c1>1`, the `XT:A:R` reads) — validated *with gaps* against a
+  brute-force edit-distance oracle at ~99.97–100 % recall. So unique-best reads
+  (86 % overall, 90 % of the 64–69 band on real data) are order-free and *can* be
+  generated bit-exactly on the GPU.
+- A **warp-cooperative collect-and-sort prototype is bit-exact but
+  throughput-counter-productive**: unique reads have small search trees that waste
+  31/32 lanes, while the big-tree reads warp-cooperation would help are exactly
+  the multi-mappers routed to the CPU anyway. Per-thread best-first is the right
+  mapping and is only a modest ~1.2–1.4× over CPU on a cache-resident benchmark.
+
+Conclusion: bit-exact GPU *generation* of the 64–70 band is achievable but the
+realistic speedup is modest — the **cutoff above is the practical lever**, not a
+new engine. Full scoping:
+[GPU_ALIGN_GENERATION_SCOPING.md](GPU_ALIGN_GENERATION_SCOPING.md); domain-neutral
+engine writeup: [GPU_BOUNDED_DFS_REPORT.md](GPU_BOUNDED_DFS_REPORT.md). Opt-in
+per-length-band instrumentation: run `gpualn` with `GPUALN_HISTO=1` (prints a
+node-pop/flag histogram by read length + GPU-kernel-vs-CPU-reconcile timing).
+Self-contained CUDA self-tests of the engines (build with `nvcc`, no other deps):
+[cuda/fmdfs_selftest.cu](cuda/fmdfs_selftest.cu) (existence search, bit-exact vs a
+CPU oracle + brute force) and
+[cuda/bestfirst_selftest.cu](cuda/bestfirst_selftest.cu) (order-sensitive
+best-first + the warp-cooperative prototype + the `c1>1` validation).
+
 ## Introduction
 
 BWA is a software package for mapping DNA sequences against a large reference
