@@ -155,7 +155,7 @@ __global__ void k_dfs_warp2(fmidx_dev fm, const uint8_t *seq, const uint64_t *w_
                             int indel_end_skip, int max_del_occ, int CAP_SM, int CAP_GL,
                             uint64_t *Gk, uint64_t *Gl, uint32_t *Gn, uint8_t *has_hit,
                             int *workctr, unsigned long long *npop, unsigned long long budget,
-                            int *nflag, int wpb)
+                            int *nflag, int wpb, uint8_t *flag_out)
 {
 	extern __shared__ unsigned char smem[];
 	int warp_in_block = threadIdx.x >> 5, lane = threadIdx.x & 31;
@@ -176,7 +176,7 @@ __global__ void k_dfs_warp2(fmidx_dev fm, const uint8_t *seq, const uint64_t *w_
 		int hh = d_dfs_has_hit_warp2(fm, seq + p.seq_off, p.len, w_w + p.w_off, w_bid + p.w_off,
 			p.max_diff, max_gapo, max_gape, mode, indel_end_skip, max_del_occ, sk, sl, sn, CAP_SM,
 			gk, gl, gn, CAP_GL, budget, &flagged, &nn);
-		if (lane == 0) { has_hit[r] = (uint8_t)hh; npop[r] = nn; if (flagged) atomicAdd(nflag, 1); }
+		if (lane == 0) { has_hit[r] = (uint8_t)hh; npop[r] = nn; if (flag_out) flag_out[r] = (uint8_t)flagged; if (flagged) atomicAdd(nflag, 1); }
 	}
 }
 

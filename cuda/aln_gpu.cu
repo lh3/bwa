@@ -97,6 +97,7 @@ extern "C" int bwa_alnse_gpu(int argc, char **argv)
 	if (getenv("DFS_WARP_GCAP")) CAP_GL = atoi(getenv("DFS_WARP_GCAP"));
 	unsigned long long budget = getenv("DFS_BUDGET") ? strtoull(getenv("DFS_BUDGET"),NULL,10) : 2000000ULL;
 	int nT = opt->n_threads > 0 ? opt->n_threads : 1;
+	int do_histo = getenv("GPUALN_HISTO") != NULL;   /* opt-in per-length-band node-pop/flag histogram */
 
 	char bwt_fn[4096]; snprintf(bwt_fn, sizeof bwt_fn, "%s.bwt", prefix);
 	fprintf(stderr, "[aln-gpu] loading %s\n", bwt_fn);
@@ -150,9 +151,19 @@ extern "C" int bwa_alnse_gpu(int argc, char **argv)
 	/* reusable device buffers, grown on demand */
 	uint8_t *d_seq=NULL; uint64_t *d_ww=NULL; int *d_wbid=NULL; ReadParam *d_rp=NULL;
 	uint8_t *d_hit=NULL; unsigned long long *d_npop=NULL; int *d_wc=NULL, *d_nflag=NULL;
+	uint8_t *d_flag=NULL;                       /* per-read flag bit (histo mode only) */
 	size_t cap_seq=0, cap_w=0, cap_n=0;
 
 	long long tot=0, tot_flag=0; double t0=now_s();
+
+	/* opt-in instrumentation (GPUALN_HISTO=1): per-read-length stats to decide GPU/CPU routing.
+	 * gpu_work_s = wall in the kernel section; recon_s = wall in the CPU bwt_match_gap reconcile.
+	 * The routing question is whether a band's flag rate (and thus recon load) stays small. */
+	const int MAXL = 256;
+	std::vector<unsigned long long> H_n(MAXL,0), H_hit(MAXL,0), H_flag(MAXL,0), H_sum(MAXL,0), H_max(MAXL,0);
+	std::vector<int> H_d(MAXL,-1);
+	std::vector<unsigned long long> h_npop; std::vector<uint8_t> h_flag;   /* host scratch */
+	double gpu_work_s = 0, recon_s = 0;
 
 	/* ---- CPU/GPU overlap (#5): the main thread owns the GPU (read -> preprocess -> upload ->
 	 * kernel -> download has_hit, serial on one stream so the shared global backing is never
@@ -174,6 +185,7 @@ extern "C" int bwa_alnse_gpu(int argc, char **argv)
 			tot_flag += idx.size();
 			std::vector<int> n_aln(nseq,0); std::vector<bwt_aln1_t*> aln(nseq,NULL);
 			std::vector<std::thread> ths;
+			double _rc0 = now_s();
 			for (int t=0;t<nT;t++) ths.emplace_back([&,t](){
 				gap_stack_t *st = gap_init_stack(c->stack_maxdiff, c->base.max_gapo, c->base.max_gape, &c->base);
 				std::vector<bwt_width_t> w(c->max_len+1);
@@ -187,6 +199,7 @@ extern "C" int bwa_alnse_gpu(int argc, char **argv)
 				gap_destroy_stack(st);
 			});
 			for (auto&th:ths) th.join();
+			if (do_histo) recon_s += now_s() - _rc0;   /* single consumer thread -> race-free */
 			if (!sam_mode) {
 				for (int i=0;i<nseq;i++){ err_fwrite(&n_aln[i],4,1,out); if (n_aln[i]) err_fwrite(aln[i],sizeof(bwt_aln1_t),n_aln[i],out); free(aln[i]); }
 			} else {
@@ -242,19 +255,32 @@ extern "C" int bwa_alnse_gpu(int argc, char **argv)
 		/* GPU stage (serial on main thread) */
 		if (so>cap_seq){ if(d_seq)cudaFree(d_seq); CK(cudaMalloc(&d_seq, so)); cap_seq=so; }
 		if (wo>cap_w){ if(d_ww)cudaFree(d_ww); if(d_wbid)cudaFree(d_wbid); CK(cudaMalloc(&d_ww,wo*8)); CK(cudaMalloc(&d_wbid,wo*4)); cap_w=wo; }
-		if ((size_t)n_seqs>cap_n){ if(d_rp)cudaFree(d_rp); if(d_hit)cudaFree(d_hit); if(d_npop)cudaFree(d_npop);
-			CK(cudaMalloc(&d_rp,n_seqs*sizeof(ReadParam))); CK(cudaMalloc(&d_hit,n_seqs)); CK(cudaMalloc(&d_npop,n_seqs*8)); cap_n=n_seqs; }
+		if ((size_t)n_seqs>cap_n){ if(d_rp)cudaFree(d_rp); if(d_hit)cudaFree(d_hit); if(d_npop)cudaFree(d_npop); if(d_flag)cudaFree(d_flag);
+			CK(cudaMalloc(&d_rp,n_seqs*sizeof(ReadParam))); CK(cudaMalloc(&d_hit,n_seqs)); CK(cudaMalloc(&d_npop,n_seqs*8));
+			if (do_histo) CK(cudaMalloc(&d_flag,n_seqs)); cap_n=n_seqs; }
 		if (!d_wc){ CK(cudaMalloc(&d_wc,4)); CK(cudaMalloc(&d_nflag,4)); }
 		CK(cudaMemcpy(d_seq, c->seq_flat.data(), so, cudaMemcpyHostToDevice));
 		CK(cudaMemcpy(d_ww, c->w_flat.data(), wo*8, cudaMemcpyHostToDevice));
 		CK(cudaMemcpy(d_wbid, c->bid_flat.data(), wo*4, cudaMemcpyHostToDevice));
 		CK(cudaMemcpy(d_rp, c->rp.data(), n_seqs*sizeof(ReadParam), cudaMemcpyHostToDevice));
 		CK(cudaMemset(d_wc,0,4)); CK(cudaMemset(d_nflag,0,4));
+		double _gk0 = now_s();
 		k_dfs_warp2<<<nblocks, bdim, shbytes>>>(fm, d_seq, d_ww, d_wbid, d_rp, n_seqs,
 			c->base.max_gapo, c->base.max_gape, c->base.mode, c->base.indel_end_skip, c->base.max_del_occ,
-			CAP_SM, CAP_GL, Gk, Gl, Gn, d_hit, d_wc, d_npop, budget, d_nflag, wpb);
+			CAP_SM, CAP_GL, Gk, Gl, Gn, d_hit, d_wc, d_npop, budget, d_nflag, wpb, d_flag);
 		CK(cudaDeviceSynchronize()); CK(cudaGetLastError());
+		if (do_histo) gpu_work_s += now_s() - _gk0;
 		CK(cudaMemcpy(c->has_hit.data(), d_hit, n_seqs, cudaMemcpyDeviceToHost));
+
+		if (do_histo) {   /* per-read-length accumulation (node-pops + flag), bucketed by read length */
+			h_npop.resize(n_seqs); h_flag.resize(n_seqs);
+			CK(cudaMemcpy(h_npop.data(), d_npop, (size_t)n_seqs*8, cudaMemcpyDeviceToHost));
+			CK(cudaMemcpy(h_flag.data(), d_flag, n_seqs, cudaMemcpyDeviceToHost));
+			for (int i=0;i<n_seqs;i++){ int L=c->rp[i].len; if (L<0||L>=MAXL) continue;
+				unsigned long long p=h_npop[i];
+				H_n[L]++; if (c->has_hit[i]) H_hit[L]++; if (h_flag[i]) H_flag[L]++;
+				H_sum[L]+=p; if (p>H_max[L]) H_max[L]=p; if (H_d[L]<0) H_d[L]=c->rp[i].max_diff; }
+		}
 
 		{ std::unique_lock<std::mutex> lk(qmu); q_free.wait(lk, [&]{ return Q.size() < QCAP; }); Q.push(c); }
 		q_ready.notify_one();
@@ -264,6 +290,21 @@ extern "C" int bwa_alnse_gpu(int argc, char **argv)
 	double total = now_s()-t0;
 	fprintf(stderr, "\n[aln-gpu] DONE: %lld reads in %.1f s = %.0f reads/s; flagged->CPU %lld (%.3f%%)\n",
 		tot, total, tot/total, tot_flag, 100.0*tot_flag/tot);
+
+	if (do_histo) {   /* per-length-band routing report (budget = %llu) */
+		fprintf(stderr, "[histo] budget=%llu  GPU-kernel %.1fs  CPU-reconcile %.1fs  (reconcile/GPU = %.2fx; <1 means it hides under overlap)\n",
+			budget, gpu_work_s, recon_s, gpu_work_s>0 ? recon_s/gpu_work_s : 0.0);
+		fprintf(stderr, "[histo] %4s %3s %12s %7s %8s %12s %12s\n", "len","d","reads","hit%","flag%","mean_pops","max_pops");
+		unsigned long long agg_n=0, agg_flag=0;
+		for (int L=0; L<MAXL; L++) {
+			if (!H_n[L]) continue;
+			agg_n += H_n[L]; agg_flag += H_flag[L];
+			fprintf(stderr, "[histo] %4d %3d %12llu %7.2f %8.4f %12.0f %12llu\n",
+				L, H_d[L], H_n[L], 100.0*H_hit[L]/H_n[L], 100.0*H_flag[L]/H_n[L],
+				(double)H_sum[L]/H_n[L], H_max[L]);
+		}
+		fprintf(stderr, "[histo] TOTAL reads=%llu  overall flag%%=%.4f\n", agg_n, agg_n? 100.0*agg_flag/agg_n : 0.0);
+	}
 
 	if (out_fn) fclose(out);
 	bwa_seq_close(ks);
