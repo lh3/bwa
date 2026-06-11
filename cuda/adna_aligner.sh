@@ -34,6 +34,7 @@
 #   -r FILE   reference fasta                               [default: hs37d5.fa]
 #   -O STR    long-read bwa mem / mem3 options              [default: "-k 19 -r 2.5 -L 15"]
 #   -g        map SHORT reads on the GPU (bwa gpualn) instead of CPU bwa aln
+#   -A        skip the aln step: map ALL reads with the -a aligner (quick first pass)
 #   -d        run duplicate marking (sambamba markdup) on the merged BAM
 #   -h        show this help
 #
@@ -62,6 +63,7 @@ REF="hs37d5.fa"
 MEM_OPTS="-k 19 -r 2.5 -L 15"     # ancient bwa mem / mem3 params (DNAharvester defaults)
 DEDUP=0
 GPU_ALN=0                         # -g : map SHORT reads on the GPU (bwa gpualn) instead of CPU bwa aln
+SKIP_ALN=0                        # -A : skip the short-read aln step; map ALL reads with the -a aligner
 
 usage() {
     cat <<'EOF'
@@ -80,6 +82,9 @@ Usage:
   -r FILE   reference fasta                               [default: hs37d5.fa]
   -O STR    long-read bwa mem / mem3 options              [default: "-k 19 -r 2.5 -L 15"]
   -g        map SHORT reads on the GPU (bwa gpualn) instead of CPU bwa aln [CPU]
+  -A        skip the short-read aln step entirely: map ALL reads with the -a
+            aligner (mem/mem3/fq2bam). Fast first pass for a new sample with no
+            prior data; ignores -s and -g (no reads go to aln/gpualn).
   -d        run duplicate marking (sambamba markdup) on the merged BAM
   -h        show this help
 
@@ -108,7 +113,7 @@ EOF
 }
 
 # --- Parse options ----------------------------------------------------------
-while getopts ":1:2:i:p:t:a:s:r:O:gdh" opt; do
+while getopts ":1:2:i:p:t:a:s:r:O:gAdh" opt; do
     case "$opt" in
         1) FASTQ1="$OPTARG" ;;
         2) FASTQ2="$OPTARG" ;;
@@ -120,6 +125,7 @@ while getopts ":1:2:i:p:t:a:s:r:O:gdh" opt; do
         r) REF="$OPTARG" ;;
         O) MEM_OPTS="$OPTARG" ;;
         g) GPU_ALN=1 ;;
+        A) SKIP_ALN=1 ;;
         d) DEDUP=1 ;;
         h) usage 0 ;;
         :) echo "ERROR: -$OPTARG requires an argument" >&2; usage 1 ;;
@@ -156,7 +162,9 @@ echo "            *** adna_aligner.sh ***"
 echo "  Sample      : $INDNAME   (population: $POPNAME)"
 echo "  Mode        : $MODE-end"
 echo "  Reference   : $REF"
-if [ "$SPLIT" = "auto" ]; then
+if [ "$SKIP_ALN" -eq 1 ]; then
+    echo "  Split length: (none -- aln skipped with -A; ALL reads -> $ALIGNER)"
+elif [ "$SPLIT" = "auto" ]; then
     echo "  Split length: auto   (chosen from the AdapterRemoval length report; short -> $SHORT_ALN_DESC, long -> $ALIGNER)"
 else
     echo "  Split length: $SPLIT bp   (short -> $SHORT_ALN_DESC, long -> $ALIGNER)"
@@ -282,7 +290,7 @@ fi
 
 # Resolve an automatic split length from the AdapterRemoval length report.
 # (-n 0.01 below must match the fnr used by the short-read aln step.)
-if [ "$SPLIT" = "auto" ]; then
+if [ "$SKIP_ALN" -ne 1 ] && [ "$SPLIT" = "auto" ]; then
     AR_JSON="${INDNAME}/${INDNAME}.json"
     SPLIT="$(python3 "$SCRIPT_DIR/pick_split.py" "$AR_JSON" 0.01 ${PICK_SPLIT_BUDGET:+$PICK_SPLIT_BUDGET})"
     echo ">>> auto split length: ${SPLIT} bp  (from $AR_JSON; reads <${SPLIT} -> $SHORT_ALN_DESC, >=${SPLIT} -> $ALIGNER)"
@@ -291,41 +299,48 @@ fi
 # ===========================================================================
 # 2. Split short vs long reads at $SPLIT bp
 # ===========================================================================
-echo ""; echo ">>> [2/5] Splitting reads at ${SPLIT} bp"; echo ""
-
 SHORT_FQ="${INDNAME}/${INDNAME}.short.fq.gz"
 LONG_FQ="${INDNAME}/${INDNAME}.long.fq.gz"
-
-# Compress the (transient, deleted-after-alignment) split fastqs with parallel BGZF
-# instead of single-threaded gzip -- ~6x faster on a many-core box, and BGZF is valid
-# gzip so bwa / mem3 / fq2bam read it natively. Two bgzip pipes run at once, so give
-# each half the threads.
-BGZIP_T=$(( THREADS > 1 ? THREADS / 2 : 1 ))
-: | bgzip -@ "$BGZIP_T" > "$SHORT_FQ"
-: | bgzip -@ "$BGZIP_T" > "$LONG_FQ"
-
-zcat -f "$PROC_FQ" | awk -v minlen="$SPLIT" \
-    -v short_out="bgzip -@ $BGZIP_T -l 2 > $SHORT_FQ" -v long_out="bgzip -@ $BGZIP_T -l 2 > $LONG_FQ" '
-    {
-        if      (NR%4==1) header=$0;
-        else if (NR%4==2) seq=$0;
-        else if (NR%4==3) plus=$0;
-        else if (NR%4==0) {
-            qual=$0;
-            rec = header "\n" seq "\n" plus "\n" qual;
-            if (length(seq) < minlen) print rec | short_out;
-            else                      print rec | long_out;
-        }
-    }'
-
 has_reads() { [ "$(zcat -f "$1" 2>/dev/null | head -n 1 | wc -l)" -gt 0 ]; }
-
 SHORT_HAS=0; LONG_HAS=0
-has_reads "$SHORT_FQ" && SHORT_HAS=1
-has_reads "$LONG_FQ"  && LONG_HAS=1
-echo "  short reads present: $([ $SHORT_HAS = 1 ] && echo yes || echo no)"
-echo "  long  reads present: $([ $LONG_HAS  = 1 ] && echo yes || echo no)"
-[ $SHORT_HAS = 0 ] && [ $LONG_HAS = 0 ] && { echo "ERROR: no reads after split" >&2; exit 1; }
+
+if [ "$SKIP_ALN" -eq 1 ]; then
+    # -A: no split -- every read goes to the long-read aligner (quick first pass, no aln).
+    echo ""; echo ">>> [2/5] Skipping the aln split (-A) -- mapping ALL reads with: $ALIGNER"; echo ""
+    LONG_FQ="$PROC_FQ"
+    has_reads "$LONG_FQ" && LONG_HAS=1
+    [ $LONG_HAS = 0 ] && { echo "ERROR: no reads to map" >&2; exit 1; }
+else
+    echo ""; echo ">>> [2/5] Splitting reads at ${SPLIT} bp"; echo ""
+
+    # Compress the (transient, deleted-after-alignment) split fastqs with parallel BGZF
+    # instead of single-threaded gzip -- ~6x faster on a many-core box, and BGZF is valid
+    # gzip so bwa / mem3 / fq2bam read it natively. Two bgzip pipes run at once, so give
+    # each half the threads.
+    BGZIP_T=$(( THREADS > 1 ? THREADS / 2 : 1 ))
+    : | bgzip -@ "$BGZIP_T" > "$SHORT_FQ"
+    : | bgzip -@ "$BGZIP_T" > "$LONG_FQ"
+
+    zcat -f "$PROC_FQ" | awk -v minlen="$SPLIT" \
+        -v short_out="bgzip -@ $BGZIP_T -l 2 > $SHORT_FQ" -v long_out="bgzip -@ $BGZIP_T -l 2 > $LONG_FQ" '
+        {
+            if      (NR%4==1) header=$0;
+            else if (NR%4==2) seq=$0;
+            else if (NR%4==3) plus=$0;
+            else if (NR%4==0) {
+                qual=$0;
+                rec = header "\n" seq "\n" plus "\n" qual;
+                if (length(seq) < minlen) print rec | short_out;
+                else                      print rec | long_out;
+            }
+        }'
+
+    has_reads "$SHORT_FQ" && SHORT_HAS=1
+    has_reads "$LONG_FQ"  && LONG_HAS=1
+    echo "  short reads present: $([ $SHORT_HAS = 1 ] && echo yes || echo no)"
+    echo "  long  reads present: $([ $LONG_HAS  = 1 ] && echo yes || echo no)"
+    [ $SHORT_HAS = 0 ] && [ $LONG_HAS = 0 ] && { echo "ERROR: no reads after split" >&2; exit 1; }
+fi
 
 BAMS=()
 
@@ -451,7 +466,11 @@ rm -f "${INDNAME}/${INDNAME}.short.sai" "$SHORT_FQ" "$LONG_FQ" "$PROC_FQ"
     echo "adna_aligner.sh run on $(date)"
     echo "Mode: $MODE-end"
     echo "Reference: $REF"
-    echo "Split length: $SPLIT bp (short->$SHORT_ALN_DESC, long->$ALIGNER)"
+    if [ "$SKIP_ALN" -eq 1 ]; then
+        echo "Split length: none (aln skipped with -A; ALL reads->$ALIGNER)"
+    else
+        echo "Split length: $SPLIT bp (short->$SHORT_ALN_DESC, long->$ALIGNER)"
+    fi
     echo "Long-read options: $MEM_OPTS"
     echo "Dedup: $([ $DEDUP -eq 1 ] && echo yes || echo no)"
     echo "Command: $0 $*"
