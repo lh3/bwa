@@ -3,13 +3,15 @@
 [![GitHub Downloads](https://img.shields.io/github/downloads/lh3/bwa/total.svg?style=flat&label=GitHub%20downloads)](https://github.com/lh3/bwa/releases)
 [![BioConda Install](https://img.shields.io/conda/dn/bioconda/bwa.svg?style=flag&label=BioConda%20install)](https://anaconda.org/bioconda/bwa)
 
-**Note: [minimap2][minimap2] has replaced BWA-MEM for __PacBio and Nanopore__ read
-alignment.** It retains all major BWA-MEM features, but is ~50 times as fast,
-more versatile, more accurate and produces better base-level alignment.
-[BWA-MEM2][bwa-mem2] is 50-100% faster than BWA-MEM and outputs identical alignments.
+> [!Note]
+> BWA-MEM has been replaced by [minimap2][minimap2] for long reads
+> and will be replaced by [minibwa][minibwa] for short reads.
+> If you still prefer the exact legacy output of BWA-MEM, give [BWA-MEM2][bwa-mem2] a try.
+> The original bwa-aln algorithm is still unique due to its sensitivity to very short reads.
 
 [minimap2]: https://github.com/lh3/minimap2
 [bwa-mem2]: https://github.com/bwa-mem2/bwa-mem2
+[minibwa]: https://github.com/lh3/minibwa
 
 ## Getting started
 
