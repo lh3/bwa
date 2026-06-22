@@ -477,6 +477,8 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 				}
 			}
 		}
+		if (p->comment)
+			err_printf("\t%s", p->comment);
 		err_putchar('\n');
 	} else { // this read has no match
 		//ubyte_t *s = p->strand? p->rseq : p->seq;
@@ -494,6 +496,8 @@ void bwa_print_sam1(const bntseq_t *bns, bwa_seq_t *p, const bwa_seq_t *mate, in
 		if (bwa_rg_id[0]) err_printf("\tRG:Z:%s", bwa_rg_id);
 		if (p->bc[0]) err_printf("\tBC:Z:%s", p->bc);
 		if (p->clip_len < p->full_len) err_printf("\tXC:i:%d", p->clip_len);
+		if (p->comment)
+			err_printf("\t%s", p->comment);
 		err_putchar('\n');
 	}
 }
@@ -580,7 +584,8 @@ int bwa_sai2sam_se(int argc, char *argv[])
 {
 	int c, n_occ = 3;
 	char *prefix, *rg_line = 0;
-	while ((c = getopt(argc, argv, "hn:f:r:")) >= 0) {
+	extern int copy_comment;
+	while ((c = getopt(argc, argv, "hn:f:r:C")) >= 0) {
 		switch (c) {
 		case 'h': break;
 		case 'r':
@@ -588,12 +593,13 @@ int bwa_sai2sam_se(int argc, char *argv[])
 			break;
 		case 'n': n_occ = atoi(optarg); break;
 		case 'f': xreopen(optarg, "w", stdout); break;
+		case 'C': copy_comment = 1; break;
 		default: return 1;
 		}
 	}
 
 	if (optind + 3 > argc) {
-		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] <prefix> <in.sai> <in.fq>\n");
+		fprintf(stderr, "Usage: bwa samse [-n max_occ] [-f out.sam] [-r RG_line] [-C] <prefix> <in.sai> <in.fq>\n");
 		return 1;
 	}
 	if ((prefix = bwa_idx_infer_prefix(argv[optind])) == 0) {

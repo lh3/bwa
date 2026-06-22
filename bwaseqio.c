@@ -13,6 +13,7 @@ KSEQ_DECLARE(gzFile)
 
 extern unsigned char nst_nt4_table[256];
 static char bam_nt16_nt4_table[] = { 4, 0, 1, 4, 2, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4 };
+int copy_comment = 0;
 
 struct __bwa_seqio_t {
 	// for BAM input
@@ -199,6 +200,8 @@ bwa_seq_t *bwa_read_seq(bwa_seqio_t *bs, int n_needed, int *n, int mode, int tri
 			p->qual = (ubyte_t*)strdup((char*)seq->qual.s);
 			if (trim_qual >= 1) n_trimmed += bwa_trim_read(trim_qual, p);
 		}
+		if (copy_comment && seq->comment.l)
+			p->comment = strdup(seq->comment.s);
 		p->rseq = (ubyte_t*)calloc(p->full_len, 1);
 		memcpy(p->rseq, p->seq, p->len);
 		seq_reverse(p->len, p->seq, 0); // *IMPORTANT*: will be reversed back in bwa_refine_gapped()
@@ -228,6 +231,8 @@ void bwa_free_read_seq(int n_seqs, bwa_seq_t *seqs)
 		for (j = 0; j < p->n_multi; ++j)
 			if (p->multi[j].cigar) free(p->multi[j].cigar);
 		free(p->name);
+		if (p->comment)
+			free(p->comment);
 		free(p->seq); free(p->rseq); free(p->qual); free(p->aln); free(p->md); free(p->multi);
 		free(p->cigar);
 	}

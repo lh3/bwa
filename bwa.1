@@ -513,6 +513,12 @@ written. [3]
 .TP
 .BI -r \ STR
 Specify the read group in a format like `@RG\\tID:foo\\tSM:bar'. [null]
+.TP
+.BI -C
+Append FASTA/Q comment to SAM output. This option can be used to
+transfer read meta information (e.g. barcode) to the SAM output. Note that the
+FASTA/Q comment (the string after a space in the header line) must conform the SAM
+spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
 .RE
 
 .TP
@@ -553,6 +559,12 @@ XA tag will not be written. [10]
 .TP
 .BI -r \ STR
 Specify the read group in a format like `@RG\\tID:foo\\tSM:bar'. [null]
+.TP
+.BI -C
+Append FASTA/Q comment to SAM output. This option can be used to
+transfer read meta information (e.g. barcode) to the SAM output. Note that the
+FASTA/Q comment (the string after a space in the header line) must conform the SAM
+spec (e.g. BC:Z:CGTAC). Malformated comments lead to incorrect SAM output.
 .RE
 
 .TP
