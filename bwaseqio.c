@@ -104,9 +104,9 @@ static bwa_seq_t *bwa_read_bam(bwa_seqio_t *bs, int n_needed, int *n, int is_com
 	while ((res = bam_read1(bs->fp, b)) >= 0) {
 		uint8_t *s, *q;
 		int go = 0;
-		if ((bs->which & 1) && (b->core.flag & BAM_FREAD1)) go = 1;
-		if ((bs->which & 2) && (b->core.flag & BAM_FREAD2)) go = 1;
-		if ((bs->which & 4) && !(b->core.flag& BAM_FREAD1) && !(b->core.flag& BAM_FREAD2))go = 1;
+		if ((bs->which & 1) && ((b->core.flag&(BAM_FPAIRED|BAM_FREAD1)) == (BAM_FPAIRED|BAM_FREAD1))) go = 1;
+		if ((bs->which & 2) && ((b->core.flag&(BAM_FPAIRED|BAM_FREAD2)) == (BAM_FPAIRED|BAM_FREAD2))) go = 1;
+		if ((bs->which & 4) && ((b->core.flag&(BAM_FPAIRED|BAM_FREAD1)) != (BAM_FPAIRED|BAM_FREAD1)) && ((b->core.flag&(BAM_FPAIRED|BAM_FREAD2)) != (BAM_FPAIRED|BAM_FREAD2)))go = 1;
 		if (go == 0) continue;
 		l = b->core.l_qseq;
 		p = &seqs[n_seqs++];
