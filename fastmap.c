@@ -50,9 +50,10 @@ typedef struct {
 	kseq_t *ks, *ks2;
 	mem_opt_t *opt;
 	mem_pestat_t *pes0;
-	int64_t n_processed;
-	int copy_comment, actual_chunk_size;
+	int64_t n_processed, actual_chunk_size;
+	int copy_comment;
 	bwaidx_t *idx;
+	int **global_ins_size_dist;
 } ktp_aux_t;
 
 typedef struct {
@@ -96,18 +97,18 @@ static void *process(void *shared, int step, void *_data)
 				fprintf(stderr, "[M::%s] %d single-end sequences; %d paired-end sequences\n", __func__, n_sep[0], n_sep[1]);
 			if (n_sep[0]) {
 				tmp_opt.flag &= ~MEM_F_PE;
-				mem_process_seqs(&tmp_opt, idx->bwt, idx->bns, idx->pac, aux->n_processed, n_sep[0], sep[0], 0);
+				mem_process_seqs(&tmp_opt, idx->bwt, idx->bns, idx->pac, aux->n_processed, n_sep[0], sep[0], 0, 0);
 				for (i = 0; i < n_sep[0]; ++i)
 					data->seqs[sep[0][i].id].sam = sep[0][i].sam;
 			}
 			if (n_sep[1]) {
 				tmp_opt.flag |= MEM_F_PE;
-				mem_process_seqs(&tmp_opt, idx->bwt, idx->bns, idx->pac, aux->n_processed + n_sep[0], n_sep[1], sep[1], aux->pes0);
+				mem_process_seqs(&tmp_opt, idx->bwt, idx->bns, idx->pac, aux->n_processed + n_sep[0], n_sep[1], sep[1], aux->pes0, aux->global_ins_size_dist);
 				for (i = 0; i < n_sep[1]; ++i)
 					data->seqs[sep[1][i].id].sam = sep[1][i].sam;
 			}
 			free(sep[0]); free(sep[1]);
-		} else mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, aux->n_processed, data->n_seqs, data->seqs, aux->pes0);
+		} else mem_process_seqs(opt, idx->bwt, idx->bns, idx->pac, aux->n_processed, data->n_seqs, data->seqs, aux->pes0, aux->global_ins_size_dist);
 		aux->n_processed += data->n_seqs;
 		return data;
 	} else if (step == 2) {
@@ -142,7 +143,7 @@ int main_mem(int argc, char *argv[])
 {
 	mem_opt_t *opt, opt0;
 	int fd, fd2, i, c, ignore_alt = 0, no_mt_io = 0;
-	int fixed_chunk_size = -1;
+	int64_t fixed_chunk_size = -1;
 	gzFile fp, fp2 = 0;
 	char *p, *rg_line = 0, *hdr_line = 0;
 	const char *mode = 0;
@@ -190,7 +191,7 @@ int main_mem(int argc, char *argv[])
 		else if (c == 'W') opt->min_chain_weight = atoi(optarg), opt0.min_chain_weight = 1;
 		else if (c == 'y') opt->max_mem_intv = atol(optarg), opt0.max_mem_intv = 1;
 		else if (c == 'C') aux.copy_comment = 1;
-		else if (c == 'K') fixed_chunk_size = atoi(optarg);
+		else if (c == 'K') fixed_chunk_size = atol(optarg);
 		else if (c == 'X') opt->mask_level = atof(optarg);
 		else if (c == 'F') bwa_dbg = atoi(optarg);
 		else if (c == 'h') {
@@ -256,6 +257,11 @@ int main_mem(int argc, char *argv[])
 						__func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);
 		}
 		else return 1;
+	}
+
+	if (!aux.pes0) {
+	  aux.global_ins_size_dist = malloc(sizeof(int *)*4);
+	  for (i = 0; i < 4; ++i) aux.global_ins_size_dist[i] = calloc(opt->max_ins, sizeof(int));
 	}
 
 	if (rg_line) {
@@ -391,10 +397,20 @@ int main_mem(int argc, char *argv[])
 		}
 	}
 	bwa_print_sam_hdr(aux.idx->bns, hdr_line);
-	aux.actual_chunk_size = fixed_chunk_size > 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
+	aux.actual_chunk_size = fixed_chunk_size >= 0? fixed_chunk_size : opt->chunk_size * opt->n_threads;
 	kt_pipeline(no_mt_io? 1 : 2, process, &aux, 3);
 	free(hdr_line);
 	free(opt);
+	if (aux.global_ins_size_dist) {
+		for (i = 0; i < 4; ++i) pes[i].failed = 0;
+		mem_pestat(opt, aux.global_ins_size_dist, pes);
+		if (pes[1].failed)
+		  fprintf(stderr, "[E:%s] failed to estimate insert size for direction FR from all reads.\n", __func__);
+		else
+		  fprintf(stderr, "[E:%s] option to specify insert size based on estimate for direction FR from all reads: -I %.2f,%.2f,%d,%d\n", __func__, pes[1].avg, pes[1].std, pes[1].high, pes[1].low);
+		for (i = 0; i < 4 ; ++i) free(aux.global_ins_size_dist[i]);
+		free(aux.global_ins_size_dist);
+	}
 	bwa_idx_destroy(aux.idx);
 	kseq_destroy(aux.ks);
 	err_gzclose(fp); kclose(ko);
