@@ -122,6 +122,7 @@ typedef struct {
 	int n_multi, N_multi;
 	int type, is_sw, is_preload;
 	double ap_prior;
+	int clip_score;
 } pe_opt_t;
 
 struct __bwa_seqio_t;
