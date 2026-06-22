@@ -61,7 +61,7 @@ while ((c = getopt(arguments, "vdl:n:f:")) != null) {
 if (arguments.length == getopt.ind) {
 	print("");
 	print("Usage:   k8 typeHLA.js [options] <exon-to-contig.sam>\n");
-	print("Options: -n INT     drop a contig if the edit distance to the closest gene is >INT ["+thres_nm+"]");
+	print("Options: -n INT     drop a contig if the edit distance to the closest allele is >INT ["+thres_nm+"]");
 	print("         -l INT     drop a contig if its match too short ["+thres_len+"]");
 	print("         -f FLOAT   drop inconsistent contigs if their length <FLOAT fraction of total length ["+thres_ratio.toFixed(2)+"]");
 	print("         -d         output extra info for debugging");
@@ -126,11 +126,11 @@ file.close();
  * Prepare data structures for typing *
  **************************************/
 
-// identify the primary exons, the exons associated with most genes
+// identify the primary exons, the exons associated with most alleles
 var pri_exon = [], n_pri_exons;
 {
 	var cnt = [], max = 0;
-	// count the number of genes per exon and track the max
+	// count the number of alleles per exon and track the max
 	for (var e = 0; e < gcnt.length; ++e) {
 		if (gcnt[e] != null) {
 			var c = 0, h = gcnt[e];
@@ -139,7 +139,7 @@ var pri_exon = [], n_pri_exons;
 			max = max > c? max : c;
 		} else cnt[e] = 0;
 	}
-	warn("- Number of genes for each exon: [" +cnt.join(",") + "]");
+	warn("- Number of alleles for each exon: [" +cnt.join(",") + "]");
 	// find primary exons
 	var pri_list = [];
 	for (var e = 0; e < cnt.length; ++e) {
@@ -229,7 +229,7 @@ var perf_genes = [];
 for (var g in pg_aux_cnt)
 	if (pg_aux_cnt[g] == n_pri_exons)
 		perf_genes.push(parseInt(g));
-warn("- Found " +perf_genes.length+ " genes fully covered by perfect matches on the primary exon(s)");
+warn("- Found " +perf_genes.length+ " alleles fully covered by perfect matches on the primary exon(s)");
 
 var h_perf_genes = {};
 for (var i = 0; i < perf_genes.length; ++i) {
@@ -277,7 +277,7 @@ for (var c = 0; c < clist.length; ++c)
 	if (flt_flag[c]&2) l_cons += ovlp_len[c];
 	else if (flt_flag[c] == 1) l_incons += ovlp_len[c];
 
-warn("- Total length of contigs consistent/inconsistent with perfect genes: " +l_cons+ "/" +l_incons);
+warn("- Total length of contigs consistent/inconsistent with perfect alleles: " +l_cons+ "/" +l_incons);
 var attempt_perf = (l_incons/(l_cons+l_incons) < thres_frac);
 
 /********************************
@@ -323,7 +323,7 @@ function type_gene(perf_mode)
 		score[e] = []; ctg[e] = [];
 		if (exons[e] == null) return;
 		var ee = exons[e], is_pri = pri_exon[e]? 1 : 0;
-		// find contigs and genes associated with the current exon
+		// find contigs and alleles associated with the current exon
 		var ch = {}, gh = {};
 		for (var i = 0; i < ee.length; ++i)
 			if (elist[ee[i][1]][e] != null)
@@ -333,7 +333,7 @@ function type_gene(perf_mode)
 		for (var g in gh) ga.push(parseInt(g));
 		var named_ca = [];
 		for (var i = 0; i < ca.length; ++i) named_ca.push(clist[ca[i]]);
-		warn("    - Processing exon "+(e+1)+" (" +ga.length+ " genes; " +ca.length+ " contigs: [" +named_ca.join(", ")+ "])...");
+		warn("    - Processing exon "+(e+1)+" (" +ga.length+ " alleles; " +ca.length+ " contigs: [" +named_ca.join(", ")+ "])...");
 		// set unmapped entries to high mismatch
 		var sc = score[e];
 		for (var k = 0; k < ga.length; ++k) {
