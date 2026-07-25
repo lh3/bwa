@@ -7,7 +7,7 @@
 > BWA-MEM has been replaced by [minimap2][minimap2] for long reads
 > and will be replaced by [minibwa][minibwa] for short reads.
 > If you still prefer the exact legacy output of BWA-MEM, give [BWA-MEM2][bwa-mem2] a try.
-> The original bwa-aln algorithm is still unique due to its sensitivity to very short reads.
+> BWA-MEM3 is not recommended as it significantly diverges from BWA-MEM in output.
 
 [minimap2]: https://github.com/lh3/minimap2
 [bwa-mem2]: https://github.com/bwa-mem2/bwa-mem2
