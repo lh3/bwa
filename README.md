@@ -6,11 +6,11 @@
 > [!Note]
 > BWA-MEM has been replaced by [minimap2][minimap2] for long reads
 > and will be replaced by [minibwa][minibwa] for short reads.
-> If you still prefer the exact legacy output of BWA-MEM, give [BWA-MEM2][bwa-mem2] a try.
-> BWA-MEM3 is not recommended as it significantly diverges from BWA-MEM in output.
+> If you still prefer the exact legacy output of BWA-MEM, try [BWA-MEM2][bwa-mem2] or the compatibility mode of [BWA-MEM3][bwa-mem3].
 
 [minimap2]: https://github.com/lh3/minimap2
 [bwa-mem2]: https://github.com/bwa-mem2/bwa-mem2
+[bwa-mem3]: https://github.com/fg-labs/bwa-mem3
 [minibwa]: https://github.com/lh3/minibwa
 
 ## Getting started
