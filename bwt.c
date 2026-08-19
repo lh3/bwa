@@ -95,7 +95,7 @@ bwtint_t bwt_sa(const bwt_t *bwt, bwtint_t k)
 	return sa + bwt->sa[k/bwt->sa_intv];
 }
 
-static inline int __occ_aux(uint64_t y, int c)
+static inline int __occ_aux_old(uint64_t y, int c)
 {
 	// reduce nucleotide counting to bits counting
 	y = ((c&2)? y : ~y) >> 1 & ((c&1)? y : ~y) & 0x5555555555555555ull;
@@ -103,6 +103,22 @@ static inline int __occ_aux(uint64_t y, int c)
 	y = (y & 0x3333333333333333ull) + (y >> 2 & 0x3333333333333333ull);
 	return ((y + (y >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56;
 }
+
+static inline int __occ_aux(uint64_t y, int c){
+  switch(c){
+  case 0:
+    return __occ_aux_old(y, 0);
+  case 1:
+    return __occ_aux_old(y, 1);
+  case 2:
+    return __occ_aux_old(y, 2);
+  case 3:
+    return __occ_aux_old(y, 3);
+  default:
+    return __occ_aux_old(y, c);
+  }
+}
+
 
 bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 {
@@ -119,7 +135,7 @@ bwtint_t bwt_occ(const bwt_t *bwt, bwtint_t k, ubyte_t c)
 
 	// calculate Occ up to the last k/32
 	end = p + (((k>>5) - ((k&~OCC_INTV_MASK)>>5))<<1);
-	for (; p < end; p += 2) n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+	for (; p < end; p += 2) n += __occ_aux(*((uint64_t*)p), c);
 
 	// calculate Occ
 	n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
@@ -147,7 +163,7 @@ void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok,
 		// calculate *ok
 		j = k >> 5 << 5;
 		for (i = k/OCC_INTERVAL*OCC_INTERVAL; i < j; i += 32, p += 2)
-			n += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+		  n += __occ_aux(*((uint64_t*)p), c);
 		m = n;
 		n += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~k&31)<<1)) - 1), c);
 		if (c == 0) n -= ~k&31; // corrected for the masked bits
@@ -155,7 +171,7 @@ void bwt_2occ(const bwt_t *bwt, bwtint_t k, bwtint_t l, ubyte_t c, bwtint_t *ok,
 		// calculate *ol
 		j = l >> 5 << 5;
 		for (; i < j; i += 32, p += 2)
-			m += __occ_aux((uint64_t)p[0]<<32 | p[1], c);
+		  m += __occ_aux(*((uint64_t*)p), c);
 		m += __occ_aux(((uint64_t)p[0]<<32 | p[1]) & ~((1ull<<((~l&31)<<1)) - 1), c);
 		if (c == 0) m -= ~l&31; // corrected for the masked bits
 		*ol = m;
