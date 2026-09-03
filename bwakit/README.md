@@ -40,6 +40,10 @@ The last mapping command line will generate the following files:
 
 * `out.log.*`: bwa-mem, samblaster and HLA typing log files.
 
+The format of `out.hla.top` and `out.hla.all` output files is TAB delimited with
+each GT line consisting of allele1, allele2, #mismatches/gaps on primary exons, #mismatches/gaps
+on other exons and #exons used in typing. If unsure, use the first GT line as the final genotype.
+
 Bwakit can be [downloaded here][res]. It is only available to x86_64-linux. The
 scripts in the package are available in the [bwa/bwakit][kit] directory.
 Packaging is done manually for now.
@@ -74,7 +78,7 @@ bwa.kit
 |-- README.md                  This README file.
 |-- run-bwamem                 *Entry script* for the entire mapping pipeline.
 |-- bwa                        *BWA binary*
-|-- k8                         Interpretor for *.js scripts.
+|-- k8                         Interpreter for *.js scripts.
 |-- bwa-postalt.js             Post-process alignments to ALT contigs/decoys/HLA genes.
 |-- htsbox                     Used by run-bwamem for shuffling BAMs and BAM=>FASTQ.
 |-- samblaster                 MarkDuplicates for reads from the same library. v0.1.20
