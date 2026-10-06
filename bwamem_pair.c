@@ -377,6 +377,21 @@ int mem_sam_pe(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *pac, co
 				aa[i][n_aa[i]++] = g[i];
 			}
 		}
+		// Might be less work if we installed these earlier
+		h[0].pair_score = h[1].pair_score = o;
+		h[0].pair_sub = h[1].pair_sub = subo;
+		h[0].pair_nsub = h[1].pair_nsub = n_sub;
+		h[0].pair_frac_rep = h[1].pair_frac_rep = a[0].a[0].frac_rep + a[1].a[0].frac_rep;
+		h[0].pair_seedcov = h[1].pair_seedcov = ((float)(a[0].a[0].seedcov + a[1].a[0].seedcov)) / (s[0].l_seq + s[1].l_seq);
+		for (j = 0; j < 2; ++j) {
+			for (i = 0; i < n_aa[j]; ++i) {
+				aa[j][i].pair_score = h[j].pair_score;
+				aa[j][i].pair_sub = h[j].pair_sub;
+				aa[j][i].pair_nsub = h[j].pair_nsub;
+				aa[j][i].pair_frac_rep = h[j].pair_frac_rep;
+				aa[j][i].pair_seedcov = h[j].pair_seedcov;
+			}
+		}
 		for (i = 0; i < n_aa[0]; ++i)
 			mem_aln2sam(opt, bns, &str, &s[0], n_aa[0], aa[0], i, &h[1]); // write read1 hits
 		s[0].sam = strdup(str.s); str.l = 0;

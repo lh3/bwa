@@ -531,6 +531,8 @@ static void mem_mark_primary_se_core(const mem_opt_t *opt, int n, mem_alnreg_t *
 			int e_min = a[j].qe < a[i].qe? a[j].qe : a[i].qe;
 			if (e_min > b_max) { // have overlap
 				int min_l = a[i].qe - a[i].qb < a[j].qe - a[j].qb? a[i].qe - a[i].qb : a[j].qe - a[j].qb;
+				a[j].osub = a[j].osub < a[i].score ? a[i].score : a[j].osub;
+				a[j].osub_n++;
 				if (e_min - b_max >= min_l * opt->mask_level) { // significant overlap
 					if (a[j].sub == 0) a[j].sub = a[i].score;
 					if (a[j].score - a[i].score <= tmp && (a[j].is_alt || !a[i].is_alt))
@@ -972,6 +974,52 @@ void mem_aln2sam(const mem_opt_t *opt, const bntseq_t *bns, kstring_t *str, bseq
 		for (i = tmp; i < str->l; ++i) // replace TAB in the comment to SPACE
 			if (str->s[i] == '\t') str->s[i] = ' ';
 	}
+	if ((p->flag & 4) == 0) {
+		kputsn("\tZT:Z:", 6, str);
+		kputw(p->score, str); // same as AS:i, ztz0
+		kputc(',', str);
+		if(p->n_cigar) {
+			kputw(p->NM, str); // ztz1
+		} else {
+			kputsn("NA", 2, str);
+		}
+		kputc(',', str);
+		if(p->sub >= 0) {
+			kputw(p->score - p->sub, str); // ztz2
+		} else {
+			kputsn("NA", 2, str);
+		}
+		kputc(',', str);
+		if(p->osub >= 0) {
+			kputw(p->score - p->osub, str); // ztz3
+		} else {
+			kputsn("NA", 2, str);
+		}
+		kputc(',', str);
+		kputw(p->pair_score, str); // ztz4
+		kputc(',', str);
+		if(p->pair_sub >= 0) {
+			kputw(p->pair_score - p->pair_sub, str); // ztz5
+		} else {
+			kputsn("NA", 2, str);
+		}
+		kputc(',', str);
+		kputw(p->seedlen0, str); // ztz6
+		kputc(',', str);
+		kputw(p->sub_n, str); // ztz7
+		kputc(',', str);
+		kputw(p->osub_n, str); // ztz8
+		kputc(',', str);
+		kputw(p->pair_nsub, str); // ztz9
+		kputc(',', str);
+		kputw((int)(p->frac_rep * 1000.0), str); // ztz10
+		kputc(',', str);
+		kputw((int)(p->pair_frac_rep * 1000.0), str); // ztz11
+		kputc(',', str);
+		kputw((int)(p->seedcov * 1000.0), str); // ztz12
+		kputc(',', str);
+		kputw((int)(p->pair_seedcov * 1000.0), str); // ztz13
+	}
 	kputc('\n', str);
 }
 
@@ -1182,8 +1230,17 @@ mem_aln_t mem_reg2aln(const mem_opt_t *opt, const bntseq_t *bns, const uint8_t *
 	a.rid = bns_pos2rid(bns, pos);
 	assert(a.rid == ar->rid);
 	a.pos = pos - bns->anns[a.rid].offset;
-	a.score = ar->score; a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
+	a.score = ar->score;
+	a.sub = ar->sub > ar->csub? ar->sub : ar->csub;
+	a.osub = ar->osub;
 	a.is_alt = ar->is_alt; a.alt_sc = ar->alt_sc;
+	a.seedlen0 = ar->seedlen0;
+	a.n_comp = ar->n_comp;
+	a.seedcov = ((float)ar->seedcov) / l_query;
+	a.frac_rep = ar->frac_rep;
+	a.sub_n = ar->sub_n; a.osub_n = ar->osub_n;
+	a.pair_score = a.pair_sub = a.pair_nsub = 0;
+	a.pair_frac_rep = a.pair_seedcov = 0.;
 	free(query);
 	return a;
 }
