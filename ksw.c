@@ -27,6 +27,15 @@
 #include <stdint.h>
 #include <assert.h>
 #if defined __SSE2__
+#define KSW_SSE2 1
+#include <emmintrin.h>
+#elif defined __powerpc64__ && defined _ARCH_PWR8
+/* GCC and Clang implement the SSE2 intrinsics on POWER8 and later with
+ * VSX; without this, ksw.c would fall back to scalar_sse.h. */
+#ifndef NO_WARN_X86_INTRINSICS
+#define NO_WARN_X86_INTRINSICS 1
+#endif
+#define KSW_SSE2 1
 #include <emmintrin.h>
 #elif defined __ARM_NEON
 #include "neon_sse.h"
@@ -126,7 +135,7 @@ kswr_t ksw_u8(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_del
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, shift, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
-#if defined __SSE2__
+#if defined KSW_SSE2
 #define __max_16(ret, xx) do { \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epu8((xx), _mm_srli_si128((xx), 4)); \
@@ -259,7 +268,7 @@ kswr_t ksw_i16(kswq_t *q, int tlen, const uint8_t *target, int _o_del, int _e_de
 	__m128i zero, oe_del, e_del, oe_ins, e_ins, *H0, *H1, *E, *Hmax;
 	kswr_t r;
 
-#if defined __SSE2__
+#if defined KSW_SSE2
 #define __max_8(ret, xx) do { \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 8)); \
 		(xx) = _mm_max_epi16((xx), _mm_srli_si128((xx), 4)); \
